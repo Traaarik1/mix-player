@@ -163,6 +163,8 @@
           if (el.tagName === 'SCRIPT') show('Не загрузился код плеера: ' + el.src + '. Если стоит блокировщик рекламы, отключи его для этой страницы.');
           return;
         }
+        // «Script error.» без файла — чужой скрипт, например расширение браузера: плеер от него не ломается
+        if (e.message === 'Script error.' && !e.filename) { console.warn(e.message); return; }
         show(e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''));
       }, true);
       addEventListener('unhandledrejection', function (e) {
