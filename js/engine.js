@@ -109,10 +109,6 @@ export class Engine extends EventTarget {
     let node = this.bus;
     for (const f of this.filters) { node.connect(f); node = f; }
     node.connect(this.master);
-    // для визуала: берём сигнал до громкости, иначе на тихой громкости всё замирает
-    this.analyser = ctx.createAnalyser();
-    this.analyser.fftSize = 1024; this.analyser.smoothingTimeConstant = .72;
-    node.connect(this.analyser);
     this.route = audioRoute();
     if (this.route === 'stream') {
       const out = ctx.createMediaStreamDestination();

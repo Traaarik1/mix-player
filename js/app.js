@@ -7,7 +7,6 @@ import { identify, cleanName, sameName, findOriginal, IDENT_VER } from './identi
 import { buildTaste, nextWave, artistParts, sameTrack } from './wave.js';
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
-import { startVisual } from './visual.js';
 import { openMini, canMini } from './mini.js';
 import { setupGestures } from './gestures.js';
 
@@ -52,10 +51,34 @@ async function coverUrl(id) {
   coverUrls.set(id, u);
   return u;
 }
+const thumbUrls = new Map();
+let thumbChain = Promise.resolve();
+function thumbUrl(id) {
+  if (thumbUrls.has(id)) return thumbUrls.get(id);
+  const p = (async () => {
+    let b = await db.get('covers', 'th:' + id);
+    if (!b) {
+      const full = await db.get('covers', id);
+      if (!full) return null;
+      // по одной, чтобы при быстрой прокрутке не забить процессор
+      b = await (thumbChain = thumbChain.catch(() => {}).then(async () => {
+        const bmp = await createImageBitmap(full, { resizeWidth: 112, resizeHeight: 112, resizeQuality: 'medium' });
+        const c = document.createElement('canvas'); c.width = c.height = 112;
+        c.getContext('2d').drawImage(bmp, 0, 0); bmp.close?.();
+        return new Promise(r => c.toBlob(r, 'image/jpeg', .8));
+      })).catch(() => full);
+      db.put('covers', 'th:' + id, b);
+    }
+    return URL.createObjectURL(b);
+  })();
+  thumbUrls.set(id, p);
+  return p;
+}
 async function setCover(t, blob) {
   await db.put('covers', t.id, blob);
   const old = coverUrls.get(t.id); if (old) URL.revokeObjectURL(old);
   coverUrls.delete(t.id);
+  thumbUrls.delete(t.id); db.del('covers', 'th:' + t.id);
   t.cover = true;
   try { t.tone = await toneOf(blob); } catch {}
   await saveTrack(t);
@@ -88,22 +111,19 @@ function setToneVars(h, s) {
   r.setProperty('--h', h.toFixed(1)); r.setProperty('--s', s.toFixed(1) + '%');
 }
 const applyTone = t => setToneVars(...toneFor(t));
-function mixTone(a, b, k) {
-  let d = ((b[0] - a[0] + 540) % 360) - 180;
-  return [(a[0] + d * k + 360) % 360, a[1] + (b[1] - a[1]) * k];
-}
 function coverHTML(t, cls = 'cov') {
   const ch = toneFor(t)[0], letter = esc((t.artist || t.title || '♪').trim()[0]?.toUpperCase() || '♪');
-  if (!t.cover && t.art) return `<img class="${cls}" src="${esc(t.art)}" alt="" style="--ch:${ch}">`;
-  return t.cover ? `<img class="${cls}" data-cid="${esc(t.id)}" alt="" style="--ch:${ch}">`
+  if (!t.cover && t.art) return `<img class="${cls}" src="${esc(t.art)}" alt="" decoding="async" style="--ch:${ch}">`;
+  return t.cover ? `<img class="${cls}" data-cid="${esc(t.id)}" alt="" decoding="async" style="--ch:${ch}">`
     : `<span class="${cls}" style="--ch:${ch}">${letter}</span>`;
 }
-// подставляем картинки, когда строка появляется на экране
-const io = new IntersectionObserver(es => {
-  for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); hydrate(e.target); }
-}, { rootMargin: '400px' });
-async function hydrate(img) { const u = await coverUrl(img.dataset.cid); if (u) img.src = u; }
-function hydrateIn(el, now = false) { for (const img of $$('img[data-cid]:not([src])', el)) now ? hydrate(img) : io.observe(img); }
+// Подставляем картинки в только что нарисованные строки; большая нужна только в большом плеере
+async function hydrate(img, big) {
+  const id = img.dataset.cid;
+  const u = await (big ? coverUrl(id) : thumbUrl(id));
+  if (u && img.dataset.cid === id) img.src = u;
+}
+function hydrateIn(el, big = false) { for (const img of $$('img[data-cid]:not([src])', el)) hydrate(img, big); }
 
 // ---------- библиотека ----------
 function rebuildOrder() { order = [...tracks.values()].sort((a, b) => b.addedAt - a.addedAt).map(t => t.id); }
@@ -187,6 +207,7 @@ function render() {
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
   $('#sort').hidden = view === 'artists' || view === 'recent';
   $('#sort').value = settings.sort;
+  if (['fix', 'wave', 'wish', 'artists'].includes(view)) clearList();
   if (view === 'fix') { renderFix(); renderNav(); return; }
   if (view === 'wave') { renderWave(); renderNav(); return; }
   if (view === 'wish') { renderWish(); renderNav(); return; }
@@ -200,9 +221,9 @@ function render() {
   empty.hidden = !!ids.length;
   if (!ids.length) empty.innerHTML = emptyHTML();
   const rows = $('#rows');
-  rows.innerHTML = ids.map((id, i) => rowHTML(tracks.get(id), i + 1)).join('');
-  hydrateIn(rows);
+  listIds = ids; listFrom = -1;
   renderShelf();
+  paintList();
   renderNav();
 }
 // Полка наверху «Всей музыки»: вход в Волну и то, что слушал недавно
@@ -211,9 +232,29 @@ function renderShelf() {
   const recent = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id)).slice(0, 10);
   el.hidden = view !== 'all' || !!query || !tracks.size;
   if (el.hidden) { el.innerHTML = ''; return; }
-  el.innerHTML = `<button class="tile wavetile" data-view="wave"><span class="tileorb"><i></i><i></i></span><b>Моя волна</b><small>Твоё и похожее</small></button>`
+  el.innerHTML = `<button class="tile wavetile" data-view="wave"><span class="tileorb"><svg><use href="#i-wave"/></svg></span><b>Моя волна</b><small>Твоё и похожее</small></button>`
     + recent.map(id => { const t = tracks.get(id); return `<button class="tile" data-play="${esc(id)}">${coverHTML(t)}<b>${esc(t.title)}</b><small>${esc(t.artist || 'Неизвестный артист')}</small></button>`; }).join('');
   hydrateIn(el);
+}
+// Виртуальный список: при тысячах треков в странице лежат только те строки, что видно на экране
+let listIds = [], listFrom = -1, listTo = -1, listTick = false;
+const BUFFER = 12;
+function clearList() { listIds = []; listFrom = -1; const r = $('#rows'); r.style.paddingTop = r.style.paddingBottom = ''; }
+function paintList() {
+  const rows = $('#rows'), main = $('#main');
+  if (!listIds.length) { rows.style.paddingTop = rows.style.paddingBottom = ''; if (listFrom !== -2) rows.innerHTML = ''; listFrom = -2; return; }
+  const rowH = isPhone() ? 66 : 62;
+  const top = rows.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop;
+  const from = Math.max(0, Math.floor((main.scrollTop - top) / rowH) - BUFFER);
+  const to = Math.min(listIds.length, Math.ceil((main.scrollTop - top + main.clientHeight) / rowH) + BUFFER);
+  if (from === listFrom && to === listTo) return;
+  listFrom = from; listTo = to;
+  rows.style.paddingTop = from * rowH + 'px';
+  rows.style.paddingBottom = (listIds.length - to) * rowH + 'px';
+  let html = '';
+  for (let i = from; i < to; i++) html += rowHTML(tracks.get(listIds[i]), i + 1);
+  rows.innerHTML = html;
+  hydrateIn(rows);
 }
 function emptyHTML() {
   if (query) return `<h2>Ничего не нашлось</h2><p>По запросу «${esc(query)}» треков нет. Попробуй часть названия или имя артиста.</p>`;
@@ -232,7 +273,7 @@ function updateRow(id) {
   if (!el) return;
   const n = el.querySelector('.num').textContent;
   el.outerHTML = rowHTML(tracks.get(id), n);
-  hydrateIn($(`.row[data-id="${CSS.escape(id)}"]`), true);
+  hydrateIn($(`.row[data-id="${CSS.escape(id)}"]`));
 }
 function markCurrent() {
   $$('.row.on').forEach(r => r.classList.remove('on'));
@@ -319,7 +360,7 @@ engine.addEventListener('track', () => {
   if (t) listening = { id: t.id, played: 0 };
   curId = t?.id || null;
   if (waveMode) refillWave();
-  markCurrent(); paintNow(); applyTone(t); paintOrb(); animateSwap();
+  markCurrent(); paintNow(); applyTone(t); paintOrb();
   if (t?.source === 'preview' && !t.tone && t.art) fetchArt(t.art).then(toneOf).then(v => { t.tone = v; if (engine.track === t) applyTone(t); }).catch(() => {});
   if (t && t.source !== 'preview') { lib.history.unshift({ id: t.id, at: Date.now() }); lib.history.length = Math.min(lib.history.length, 300); saveLib(); }
   mediaMeta(t);
@@ -505,7 +546,7 @@ function openAddMenu(btn, t = engine.track) {
         if (t.source === 'preview') { const k = 'l:' + fxKey(t.artist, t.title); if (lib.likes.has(real.id)) delete waveFx[k]; else waveFx[k] = { artist: t.artist, title: t.title, at: Date.now(), seed: t.seed }; }
         const had = lib.likes.has(real.id);
         toggleLike(real.id);
-        popLike(); toast(had ? 'Убрано из любимого' : 'Добавлено в любимое');
+        toast(had ? 'Убрано из любимого' : 'Добавлено в любимое');
       } else if (a === 'new') { const p = await newPlaylist(real.id); if (p) toast(`Добавлено в «${p.name}»`); }
       else if (pid) {
         const p = lib.playlists.find(x => x.id === pid);
@@ -515,17 +556,6 @@ function openAddMenu(btn, t = engine.track) {
       }
     } catch (err) { console.warn(err); toast('Не получилось, проверь интернет'); }
   };
-}
-function animateRows() {
-  const rows = $('#rows');
-  [...rows.children].slice(0, 18).forEach((li, i) => li.style.setProperty('--i', i));
-  rows.classList.remove('enter'); void rows.offsetWidth; rows.classList.add('enter');
-  clearTimeout(animateRows.t); animateRows.t = setTimeout(() => rows.classList.remove('enter'), 900);
-}
-function popLike() { for (const b of $$('#npLike, #fLike')) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } }
-// Смена трека: название и обложка мягко въезжают
-function animateSwap() {
-  for (const el of $$('.np .ttl, #openFull, .fmeta .ftitle, .fmeta .fartist, #fNext')) { el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); }
 }
 
 const sug = { items: [], loading: false, at: 0 };
@@ -658,7 +688,7 @@ let cloudStatus = null;
 async function initCloud() {
   if (cloud || !tgCfg?.session) return;
   const [{ createSync }, tg] = await Promise.all([import('./sync.js'), tgLib()]);
-  cloud ??= createSync({ tg, getLocal, applyMerged, store: { get: () => db.get('kv', 'sync'), set: v => db.put('kv', 'sync', v) }, onStatus: s => { cloudStatus = s; updateUsage(); } });
+  cloud ??= createSync({ tg, getLocal, applyMerged, debounceMs: 30000, maxWaitMs: 180000, store: { get: () => db.get('kv', 'sync'), set: v => db.put('kv', 'sync', v) }, onStatus: s => { cloudStatus = s; updateUsage(); } });
   cloud.push();
 }
 
@@ -706,27 +736,19 @@ function paintState() {
   paintNext();
 }
 function paintMixChip() {
-  const live = !!engine.mix;
-  const c = $('#mixChip');
-  c.classList.toggle('live', live);
-  c.textContent = live ? 'Переход' : settings.cf ? `Микс ${settings.cf} с` : 'Без перехода';
+  const text = settings.cf ? `Микс ${settings.cf} с` : 'Без перехода';
+  if (text === lastChip) return;
+  lastChip = text;
+  $('#mixChip').textContent = text;
 }
 
-// стопка обложек на большом экране: во время перехода одна растворяется в другой
 let stackKey = '';
-async function paintStack() {
-  const m = engine.mix, cur = engine.track;
-  const ids = m?.from ? [m.from, m.to] : cur ? [cur] : [];
-  const key = ids.map(t => t.id).join('>');
+function paintStack() {
+  const cur = engine.track, key = cur?.id || '';
   if (key === stackKey) return;
   stackKey = key;
-  $('#stack').innerHTML = ids.map(t => coverHTML(t)).join('');
+  $('#stack').innerHTML = cur ? coverHTML(cur) : '';
   hydrateIn($('#stack'), true);
-  const [a, b] = await Promise.all(ids.map(t => t.cover ? coverUrl(t.id) : t.art || null));
-  const bg = (u, t) => u ? `url("${u}")` : `radial-gradient(circle, hsl(${toneFor(t)[0]} 70% 50%), transparent 70%)`;
-  $('#glowA').style.backgroundImage = ids[0] ? bg(a, ids[0]) : '';
-  $('#glowB').style.backgroundImage = ids[1] ? bg(b, ids[1]) : '';
-  $('#glowB').style.opacity = ids[1] ? 0 : '';
 }
 function paintNext() {
   const n = engine.nextTrack || (curId && getT(neighbour(curId, 1)));
@@ -736,45 +758,33 @@ function paintNext() {
   hydrateIn(el, true);
 }
 
-let dragging = null;
-function frame() {
+// Прогресс обновляем четыре раза в секунду и только то, что изменилось
+let dragging = null, lastPos = '', lastDur = '', lastPct = -1, lastChip = '';
+const posEls = $$('[data-pos]'), durEls = $$('[data-dur]');
+const seekEls = $$('[data-seek]').map(tr => [tr.querySelector('.fill'), tr.querySelector('.knob')]);
+function paintProgress() {
   const pos = dragging ? dragging.pos : engine.position, dur = engine.duration;
-  const p = dur ? pos / dur * 100 : 0, mixAt = engine.mixAt;
-  for (const el of $$('[data-pos]')) el.textContent = fmt(pos);
-  for (const el of $$('[data-dur]')) el.textContent = fmt(dur);
-  for (const tr of $$('[data-seek]')) {
-    tr.querySelector('.fill').style.width = p + '%';
-    tr.querySelector('.knob').style.left = p + '%';
-    const z = tr.querySelector('.zone');
-    if (mixAt != null && dur && settings.cf) { z.style.display = 'block'; z.style.left = Math.max(p, mixAt / dur * 100) + '%'; }
-    else z.style.display = 'none';
+  const a = fmt(pos), b = fmt(dur), pct = dur ? Math.round(pos / dur * 1000) / 10 : 0;
+  if (a !== lastPos) { lastPos = a; for (const el of posEls) el.textContent = a; }
+  if (b !== lastDur) { lastDur = b; for (const el of durEls) el.textContent = b; }
+  if (pct !== lastPct) {
+    lastPct = pct;
+    for (const [fill, knob] of seekEls) { fill.style.transform = `scaleX(${pct / 100})`; knob.style.left = pct + '%'; }
   }
-  const m = engine.mix;
-  if (m?.from) {
-    paintStack();
-    const [a, b] = $$('#stack > *');
-    if (a && b) {
-      b.style.opacity = m.k; b.style.transform = `scale(${.94 + .06 * m.k})`;
-      a.style.opacity = 1 - m.k * .6; a.style.transform = `scale(${1 - .05 * m.k})`;
-    }
-    $('#glowB').style.opacity = m.k;
-    setToneVars(...mixTone(toneFor(m.from), toneFor(m.to), m.k));
-    $('#fLabel').innerHTML = '<b>Переход</b> в следующий трек';
-  } else {
-    if (stackKey.includes('>')) { paintStack(); applyTone(engine.track); }
-    const left = mixAt != null && !engine.paused ? mixAt - pos : null;
-    $('#fLabel').innerHTML = left != null && left < 30 && left > 0 ? `Переход через <b>${Math.ceil(left)} с</b>` : (engine.track ? 'Сейчас играет' : '');
-  }
+  return pos;
+}
+function frame() {
+  if (document.hidden) return;
+  const pos = paintProgress();
   paintMixChip();
   tickLyrics(pos);
-  requestAnimationFrame(frame);
 }
 
 // перемотка перетаскиванием
 for (const tr of $$('[data-seek]')) {
   const at = e => { const r = tr.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * engine.duration; };
   tr.addEventListener('pointerdown', e => { if (!engine.track) return; tr.setPointerCapture(e.pointerId); tr.classList.add('drag'); dragging = { pos: at(e) }; });
-  tr.addEventListener('pointermove', e => { if (dragging) dragging.pos = at(e); });
+  tr.addEventListener('pointermove', e => { if (dragging) { dragging.pos = at(e); paintProgress(); } });
   tr.addEventListener('pointerup', () => { if (!dragging) return; tr.classList.remove('drag'); engine.seek(dragging.pos); dragging = null; });
   tr.addEventListener('pointercancel', () => { tr.classList.remove('drag'); dragging = null; });
 }
@@ -1013,6 +1023,7 @@ async function identHunt() {
   try {
     for (;;) {
       while (sugFetching) await new Promise(r => setTimeout(r, 1000)); // у iTunes общий лимит запросов с подборкой Волны
+      await new Promise(r => setTimeout(r, engine.paused ? 100 : 700)); // пока играет музыка, не торопимся
       const todo = order.map(id => tracks.get(id)).filter(t => t && t.downloaded && !t.verified && !t.ident);
       identState.total = identState.done + todo.length;
       if (!todo.length) {
@@ -1406,7 +1417,7 @@ async function startSync() {
       const meta = cloud?.trackMeta(id);
       if (meta) Object.assign(t, { title: meta.title, artist: meta.artist, album: meta.album, verified: meta.verified }, meta.verified ? { ident: { status: 'done' } } : {});
       tracks.set(id, t); await saveTrack(t);
-      if (Date.now() - lastPaint > 800) { lastPaint = Date.now(); rebuildOrder(); render(); renderTgCard(); }
+      if (Date.now() - lastPaint > 4000) { lastPaint = Date.now(); rebuildOrder(); if (view === 'all') render(); renderTgCard(); }
     }
     rebuildOrder(); render();
     const todo = order.map(id => tracks.get(id)).filter(t => t.source === 'tg' && !t.downloaded);
@@ -1623,7 +1634,7 @@ document.addEventListener('click', async e => {
   }
   const v = e.target.closest('[data-view]')?.dataset.view;
   if (v) {
-    view = v; $('#main').scrollTop = 0; render(); animateRows();
+    view = v; $('#main').scrollTop = 0; render();
     if (v === 'wave' && !sug.items.length && tracks.size && navigator.onLine) loadSuggestions();
   }
 });
@@ -1714,14 +1725,14 @@ $('#npLike').onclick = $('#fLike').onclick = async () => {
   try {
     const real = libIdOf(t) ? tracks.get(libIdOf(t)) : await keepPreview(t);
     if (t.source === 'preview') { const k = 'l:' + fxKey(t.artist, t.title); if (lib.likes.has(real.id)) delete waveFx[k]; else waveFx[k] = { artist: t.artist, title: t.title, at: Date.now(), seed: t.seed }; }
-    toggleLike(real.id); popLike();
+    toggleLike(real.id);
   } catch { toast('Не получилось, проверь интернет'); }
 };
 $('#miniBtn').hidden = !canMini();
 $('#miniBtn').onclick = () => openMini(engine, { toggle, next, prev }, async t => t.cover ? coverUrl(t.id) : t.art || null).then(ok => { if (ok === false) toast('Браузер заблокировал окно мини-плеера. Разреши всплывающие окна для этой страницы'); });
 $('#npAdd').onclick = e => openAddMenu(e.currentTarget);
 $('#fAdd').onclick = e => openAddMenu(e.currentTarget);
-$('#sort').onchange = e => { settings.sort = e.target.value; saveSettings(); render(); animateRows(); };
+$('#sort').onchange = e => { settings.sort = e.target.value; saveSettings(); render(); };
 $('#playAll').onclick = () => {
   const ids = viewIds(); if (!ids.length) return;
   settings.shuffle = true; saveSettings(); waveMode = false;
@@ -1729,7 +1740,12 @@ $('#playAll').onclick = () => {
   buildQueue(first, ids); playId(first); paintState();
 };
 $('#addFiles').onclick = () => $('#fileInput').click();
-$('#main').addEventListener('scroll', e => $('.head').classList.toggle('stuck', e.target.scrollTop > 8), { passive: true });
+$('#main').addEventListener('scroll', e => {
+  if (listTick) return;
+  listTick = true;
+  requestAnimationFrame(() => { listTick = false; $('.head').classList.toggle('stuck', e.target.scrollTop > 8); if (listIds.length) paintList(); });
+}, { passive: true });
+addEventListener('resize', () => { listFrom = -1; if (listIds.length) paintList(); });
 $('#fileInput').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 let qT; $('#search').oninput = e => { clearTimeout(qT); qT = setTimeout(() => { query = e.target.value.trim(); render(); }, 120); };
 $('#mixChip').onclick = () => layer.querySelector('.mixviz') ? closeLayer() : openMix();
@@ -1764,11 +1780,11 @@ document.addEventListener('keydown', e => {
 
 // ---------- запуск ----------
 window.__mixReady = true;
+setInterval(frame, 250);
 async function boot() {
   // сначала рисуем интерфейс, потом читаем сохранённое — чтобы кнопки работали сразу
   render(); renderTgCard(); paintState(); paintMixChip();
   registerSW({ onUpdate: () => toast('Новая версия включится при следующем запуске') });
-  startVisual(engine);
   try {
     Object.assign(settings, await db.get('kv', 'settings') || {});
     const l = await db.get('kv', 'library');
@@ -1784,15 +1800,13 @@ async function boot() {
     }
   } catch (e) {
     window.__mixErr?.('Не открывается хранилище: ' + e.message + '. Без него плеер не сможет сохранять музыку.');
-    requestAnimationFrame(frame);
-    return;
+      return;
   }
   rebuildOrder();
   handlePairLink();
   engine.cf = settings.cf; engine.trim = settings.trim; engine.eqGains = settings.eq.slice(); engine.volume = settings.vol / 100;
   $('#vol').value = settings.vol; $('#vol').style.setProperty('--p', settings.vol + '%');
   render(); renderTgCard(); paintState(); paintNow(); updateUsage();
-  requestAnimationFrame(frame);
   db.persist();
   if (tgCfg?.session && tgCfg.chatId && navigator.onLine) { startSync(); if ([...tracks.values()].some(t => t.chanPending)) chanQueue(); }
   identHunt();

@@ -13,7 +13,7 @@
   <title>Mix</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -46,8 +46,6 @@
     <symbol id="i-mini" viewBox="0 0 24 24"><path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm1 2v10h16V7H4Zm8 4h7v5h-7v-5Z"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 11h12.2l-5.6-5.6L12 4l8 8-8 8-1.4-1.4 5.6-5.6H4v-2Z"/></symbol>
   </svg>
-
-  <div class="ambient"></div>
 
   <div class="app">
     <aside class="rail">
@@ -88,7 +86,6 @@
   <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
 
   <footer class="bar" id="bar">
-    <canvas class="viz" id="vizBar" aria-hidden="true"></canvas>
     <div class="np">
       <button class="np-cover" id="openFull" title="Сейчас играет"></button>
       <div class="ttl"><span class="t" id="npTitle">Ничего не играет</span><span class="a" id="npArtist">Выбери трек</span></div>
@@ -103,7 +100,7 @@
         <button class="ib next" data-act="next" title="Дальше"><svg><use href="#i-next"/></svg></button>
         <button class="ib" data-act="repeat" title="Повторять"><svg><use href="#i-repeat"/></svg></button>
       </div>
-      <div class="prog"><span data-pos>0:00</span><div class="track" data-seek><div class="zone"></div><div class="fill"></div><div class="knob"></div></div><span data-dur>0:00</span></div>
+      <div class="prog"><span data-pos>0:00</span><div class="track" data-seek><div class="fill"></div><div class="knob"></div></div><span data-dur>0:00</span></div>
     </div>
     <div class="side">
       <button class="mixchip" id="mixChip" title="Переход между треками"></button>
@@ -116,8 +113,6 @@
   </footer>
 
   <section class="full" id="full" aria-label="Сейчас играет">
-    <div class="glow"><i id="glowA"></i><i id="glowB"></i></div>
-    <canvas class="viz vizfull" id="vizFull" aria-hidden="true"></canvas>
     <div class="grab fullgrab"></div>
     <button class="close" id="closeFull" title="Свернуть"><svg style="margin:auto"><use href="#i-down"/></svg></button>
     <div class="stack" id="stack"></div>
@@ -130,7 +125,7 @@
         <button class="ib like" id="fLike" title="В любимое"><svg><use href="#i-heart-o"/></svg></button>
         <button class="btn" id="fAdd" title="Добавить в любимое, альбом или мою музыку"><svg><use href="#i-plus"/></svg>Добавить</button>
       </div>
-      <div class="prog"><span data-pos>0:00</span><div class="track" data-seek><div class="zone"></div><div class="fill"></div><div class="knob"></div></div><span data-dur>0:00</span></div>
+      <div class="prog"><span data-pos>0:00</span><div class="track" data-seek><div class="fill"></div><div class="knob"></div></div><span data-dur>0:00</span></div>
       <div class="btns">
         <button class="ib" data-act="shuffle" title="Перемешивать"><svg><use href="#i-shuffle"/></svg></button>
         <button class="ib" data-act="prev" title="Назад"><svg><use href="#i-prev"/></svg></button>
