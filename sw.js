@@ -2,7 +2,7 @@
 // Свои файлы: сначала сеть (так обновления приходят сами), при её отсутствии или задержке — кэш.
 // Шрифты и зафиксированные модули esm.sh: сначала кэш. Всё остальное (Telegram, LRCLIB, iTunes, AcoustID, аудио) не трогаем.
 // VERSION и список ниже обновляет deploy.ps1.
-const VERSION = '2026-11-06-0022';
+const VERSION = '2026-11-06-0028';
 // PRECACHE:BEGIN
 const APP = [
   'index.html',
@@ -22,6 +22,7 @@ const APP = [
   'js/identify.js',
   'js/listen.js',
   'js/lyrics.js',
+  'js/mini.js',
   'js/pwa.js',
   'js/similar.js',
   'js/sync.js',
@@ -29,6 +30,7 @@ const APP = [
   'js/visual.js',
   'js/wave.js',
   'vendor/chromaprint/chromaprint.js',
+  'vendor/qrcode/qrcode.js',
   'vendor/chromaprint/chromaprint.wasm',
 ];
 // PRECACHE:END

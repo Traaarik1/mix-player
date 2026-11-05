@@ -8,7 +8,12 @@ $types = @{
 }
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$Port/")
-$listener.Start()
+try { $listener.Start() }
+catch {
+  # Mix уже запущен: просто открываем его ещё раз
+  if (-not $NoOpen) { Start-Process "http://localhost:$Port" }
+  exit 0
+}
 Write-Host "Mix: http://localhost:$Port  (Ctrl+C - stop)"
 if (-not $NoOpen) { Start-Process "http://localhost:$Port" }
 while ($listener.IsListening) {

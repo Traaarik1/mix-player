@@ -547,3 +547,14 @@ body:has(.full.open) .app { transform: scale(.94); filter: brightness(.6); }
 .sug:hover [data-wish=play] { opacity: 1; }
 .wishfind { padding: 8px 16px; font-size: 13px; margin-right: 4px; }
 @media (pointer: coarse) { .sug [data-wish=play], .sug [data-sug=play] { opacity: 1; background: rgb(0 0 0 / .28); } }
+
+/* ---------- подключить телефон ---------- */
+.qrbox { width: 240px; max-width: 100%; margin: 4px auto 16px; padding: 10px; background: #fff; border-radius: var(--r-md); color: #000; }
+.qrbox svg { width: 100%; height: auto; display: block; fill: initial; }
+.dialog .warn { font-size: 13px; color: var(--amber); }
+.pairin { background: hsl(var(--h) var(--s) 62% / .14); border-radius: var(--r-md); padding: 14px; margin-bottom: 16px; }
+.pairin b { display: block; color: var(--paper); margin-bottom: 2px; }
+.pairin span { color: var(--mist); font-size: 13px; }
+.pairrow { display: flex; gap: 8px; margin-top: 10px; }
+.pairrow .inp { flex: 1; min-width: 0; }
+.pairbtn { margin-top: 8px; width: 100%; justify-content: center; }

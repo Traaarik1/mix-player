@@ -8,6 +8,7 @@ import { buildTaste, nextWave, artistParts, sameTrack } from './wave.js';
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { startVisual } from './visual.js';
+import { openMini, canMini } from './mini.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -1233,6 +1234,62 @@ function setLyrics(on) {
 $('#lyrics').addEventListener('click', e => { const p = e.target.closest('p[data-t]'); if (p) { engine.seek(+p.dataset.t); lyrTouched = 0; } });
 for (const ev of ['wheel', 'touchmove']) $('#lyrics').addEventListener(ev, () => lyrTouched = Date.now(), { passive: true });
 
+// ---------- подключить телефон: ключи и канал передаются QR-кодом, вход в Telegram каждый раз свой ----------
+const SITE_URL = 'https://traaarik1.github.io/mix-player/';
+// Сессию не передаём: одна сессия на двух устройствах ломается, и такой код равнялся бы доступу к аккаунту.
+// После # адрес на сервер не уходит, так что ключи остаются только у тебя.
+const b64 = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64 = s => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
+const pairCode = () => 'MIX1.' + b64(JSON.stringify({ i: tgCfg.apiId, h: tgCfg.apiHash, c: tgCfg.chatId, t: tgCfg.chatTitle }));
+function parsePair(text) {
+  const m = String(text || '').match(/(?:MIX1\.|pair=)([\w-]+)/);
+  if (!m) return null;
+  try {
+    const p = JSON.parse(unb64(m[1]));
+    return /^\d+$/.test(p.i) && /^[0-9a-f]{32}$/i.test(p.h) ? p : null;
+  } catch { return null; }
+}
+let pendingPair = null;
+function loadQr() {
+  return window.qrcode ? Promise.resolve() : new Promise((res, rej) => {
+    const el = document.createElement('script'); el.src = 'vendor/qrcode/qrcode.js'; el.onload = res; el.onerror = rej; document.head.append(el);
+  });
+}
+async function openPair() {
+  const code = pairCode(), url = SITE_URL + '#pair=' + code.slice(5);
+  const d = modal(`<h2>Подключить телефон</h2><div class="qrbox" id="qr"></div>
+    <ol><li>Наведи камеру iPhone на код и открой ссылку.</li><li>Следуй подсказкам на телефоне: иконка на экран «Домой», затем вход.</li><li>Telegram спросит только номер и код. Лайки, плейлисты и исправленные названия приедут сами, а музыка скачается из канала.</li></ol>
+    <p class="warn">В этом коде твои ключи Telegram. Сам по себе он не даёт войти в аккаунт, но никому его не показывай.</p>
+    <div class="acts"><button class="btn" id="pairCopy">Скопировать код</button><button class="btn primary" data-x>Готово</button></div>`);
+  $('[data-x]', d).onclick = closeLayer;
+  $('#pairCopy', d).onclick = async () => { try { await navigator.clipboard.writeText(code); toast('Код скопирован'); } catch { toast('Не получилось скопировать'); } };
+  try {
+    await loadQr();
+    const q = window.qrcode(0, 'M'); q.addData(url); q.make();
+    $('#qr', d).innerHTML = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true });
+  } catch { $('#qr', d).textContent = 'QR-код не загрузился, воспользуйся кнопкой «Скопировать код»'; }
+}
+// Ссылка из QR-кода открылась на устройстве
+function handlePairLink() {
+  const p = parsePair(location.hash);
+  if (!location.hash.startsWith('#pair=')) return;
+  const code = location.hash.slice(6);
+  history.replaceState(null, '', location.pathname);
+  if (!p || tgCfg?.session) { if (tgCfg?.session) toast('Это устройство уже подключено'); return; }
+  if (!needsIosInstallHint()) { pendingPair = p; openTg(); return; }
+  const d = modal(`<h2>Почти готово</h2><p>На iPhone у приложения с иконки своё хранилище, поэтому код нужно перенести туда.</p>
+    <ol><li><button class="btn primary" id="pairCopy">Скопировать код</button></li>
+    <li>Нажми «Поделиться», затем <b>«На экран “Домой”»</b> и «Добавить».</li>
+    <li>Открой <b>Mix с новой иконки</b>, нажми «Подключить Telegram» и вставь код.</li>
+    <li>Введи номер и код из Telegram. Всё остальное подтянется само.</li></ol>
+    <div class="acts"><button class="btn" data-x>Закрыть</button></div>`);
+  $('[data-x]', d).onclick = closeLayer;
+  $('#pairCopy', d).onclick = async e => {
+    try { await navigator.clipboard.writeText('MIX1.' + code); e.target.textContent = 'Скопировано'; }
+    catch { e.target.textContent = 'MIX1.' + code; e.target.style.cssText = 'white-space:normal;word-break:break-all;user-select:all;font-size:12px'; }
+  };
+}
+
 // ---------- Telegram ----------
 let tgMod = null, tgReady = null;
 const tgItems = new Map();
@@ -1361,7 +1418,8 @@ function renderTgCard() {
   }
   const when = tgCfg.lastSync ? new Date(tgCfg.lastSync).toLocaleString('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   c.innerHTML = `<b>${esc(tgCfg.chatTitle)}</b><p>${sync.error ? esc(sync.error) : chan.error ? esc(chan.error) : tracksWord(count) + (when ? ', обновлено ' + when : '')}</p>
-    <button class="btn" data-act="${sync.error.includes('войти') ? 'tg' : 'tgSync'}">${sync.error.includes('войти') ? 'Войти' : 'Обновить'}</button>`;
+    <button class="btn" data-act="${sync.error.includes('войти') ? 'tg' : 'tgSync'}">${sync.error.includes('войти') ? 'Войти' : 'Обновить'}</button>
+    ${matchMedia('(pointer: fine)').matches ? '<button class="btn pairbtn" data-act="pair">Подключить телефон</button>' : ''}`;
 }
 
 // Пошаговое подключение: ключи → телефон → код → (пароль) → выбор канала
@@ -1369,7 +1427,9 @@ async function openTg() {
   const step = (html) => modal(html);
   const keysStep = () => new Promise(res => {
     const d = step(`<h2>Подключаем Telegram</h2>
-      <p>Mix заходит в Telegram от твоего имени, как обычное приложение. Для этого нужен бесплатный ключ разработчика, он делается один раз за пару минут.</p>
+      <div class="pairin"><b>Уже подключал Mix на компьютере?</b><span>Нажми там «Подключить телефон» и вставь код сюда.</span>
+        <div class="pairrow"><input class="inp" id="pairCode" placeholder="Код с компьютера" autocomplete="off"><button type="button" class="btn" id="pairPaste">Вставить</button></div></div>
+      <p>Первый раз? Mix заходит в Telegram от твоего имени, как обычное приложение. Для этого нужен бесплатный ключ разработчика, он делается один раз за пару минут.</p>
       <ol><li>Открой <a href="https://my.telegram.org/apps" target="_blank" rel="noopener">my.telegram.org</a> и войди по номеру телефона.</li>
       <li>Открой <b>API development tools</b> и создай приложение: название любое, например Mix, платформа <b>Web</b>.</li>
       <li>Скопируй сюда <b>App api_id</b> и <b>App api_hash</b>.</li></ol>
@@ -1379,6 +1439,18 @@ async function openTg() {
       <div class="acts"><button type="button" class="btn" data-x>Отмена</button><button class="btn primary">Дальше</button></div></form>`);
     $('[data-x]', d).onclick = () => { closeLayer(); res(null); };
     $('form', d).onsubmit = e => { e.preventDefault(); res({ apiId: e.target.id.value.trim(), apiHash: e.target.hash.value.trim(), d }); };
+    const usePair = p => {
+      pairChat = p;
+      const f = $('form', d); f.id.value = p.i; f.hash.value = p.h;
+      f.requestSubmit();
+    };
+    const tryCode = text => { const p = parsePair(text); if (p) usePair(p); else if (text.trim()) $('.err', d).textContent = 'Код не подошёл. Скопируй его на компьютере ещё раз.'; };
+    $('#pairCode', d).oninput = e => tryCode(e.target.value);
+    $('#pairPaste', d).onclick = async () => {
+      try { tryCode(await navigator.clipboard.readText()); }
+      catch { $('#pairCode', d).focus(); $('.err', d).textContent = 'Нажми на поле и вставь код вручную.'; }
+    };
+    if (pendingPair) { const p = pendingPair; pendingPair = null; usePair(p); }
   });
   const ask = (title, text, label, type = 'text') => () => new Promise((res, rej) => {
     const d = step(`<h2>${title}</h2><p>${text}</p><form><label>${label}</label><input class="inp" name="v" type="${type}" required autocomplete="off">
@@ -1388,7 +1460,7 @@ async function openTg() {
     $('[data-x]', d).onclick = () => { cancelled = true; closeLayer(); rej(new Error('cancel')); };
     $('form', d).onsubmit = e => { e.preventDefault(); $('button.primary', d).disabled = true; $('button.primary', d).textContent = 'Проверяю…'; res(e.target.v.value.trim()); };
   });
-  let lastErr = '', cancelled = false, fatal = '';
+  let lastErr = '', cancelled = false, fatal = '', pairChat = null;
 
   if (!tgCfg?.session) {
     const k = await keysStep(); if (!k) return;
@@ -1413,6 +1485,13 @@ async function openTg() {
       tgCfg = { ...(tgCfg || {}), apiId: k.apiId, apiHash: k.apiHash, session: tg.session() };
       await saveTg();
       tgReady = Promise.resolve(tg);
+      // канал уже выбран на компьютере
+      if (pairChat?.c) {
+        tgCfg.chatId = pairChat.c; tgCfg.chatTitle = pairChat.t; await saveTg();
+        closeLayer(); renderTgCard(); toast('Telegram подключён. Подтягиваю музыку и настройки');
+        startSync();
+        return;
+      }
     } catch (e) {
       if (cancelled) return;
       const d = step(`<h2>Не получилось подключиться</h2><p>${esc(fatal || e.message)}</p><div class="acts"><button class="btn primary" data-x>Понятно</button></div>`);
@@ -1488,6 +1567,7 @@ document.addEventListener('click', async e => {
     for (const t of list) await acceptFix(t, t.ident.cand);
     render(); toast('Исправлено: ' + tracksWord(list.length));
   }
+  else if (a === 'pair') openPair();
   else if (a === 'tg') openTg();
   else if (a === 'tgSync') startSync();
   else if (a === 'tgStop') { sync.stop = true; }
@@ -1599,6 +1679,8 @@ $('#npLike').onclick = $('#fLike').onclick = async () => {
     toggleLike(real.id); popLike();
   } catch { toast('Не получилось, проверь интернет'); }
 };
+$('#miniBtn').hidden = !canMini();
+$('#miniBtn').onclick = () => openMini(engine, { toggle, next, prev }, async t => t.cover ? coverUrl(t.id) : t.art || null).then(ok => { if (ok === false) toast('Браузер заблокировал окно мини-плеера. Разреши всплывающие окна для этой страницы'); });
 $('#npAdd').onclick = e => openAddMenu(e.currentTarget);
 $('#fAdd').onclick = e => openAddMenu(e.currentTarget);
 $('#sort').onchange = e => { settings.sort = e.target.value; saveSettings(); render(); animateRows(); };
@@ -1663,6 +1745,7 @@ async function boot() {
     return;
   }
   rebuildOrder();
+  handlePairLink();
   engine.cf = settings.cf; engine.trim = settings.trim; engine.eqGains = settings.eq.slice(); engine.volume = settings.vol / 100;
   $('#vol').value = settings.vol; $('#vol').style.setProperty('--p', settings.vol + '%');
   render(); renderTgCard(); paintState(); paintNow(); updateUsage();
