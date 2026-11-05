@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1C1530">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-180.png">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Mix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.1v13.8a1 1 0 0 0 1.5.9l10.8-6.9a1 1 0 0 0 0-1.7L9.5 4.2A1 1 0 0 0 8 5.1Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 6.2v11.6a1 1 0 0 0 1.6.8l8-5.8a1 1 0 0 0 0-1.6l-8-5.8A1 1 0 0 0 5 6.2Z"/><rect x="16.5" y="5" width="2.5" height="14" rx="1"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="M19 6.2v11.6a1 1 0 0 1-1.6.8l-8-5.8a1 1 0 0 1 0-1.6l8-5.8a1 1 0 0 1 1.6.8Z"/><rect x="5" y="5" width="2.5" height="14" rx="1"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M17 3l4 4-4 4V8h-2.1a3 3 0 0 0-2.4 1.2l-5.1 7A5 5 0 0 1 3.4 18H2v-2h1.4a3 3 0 0 0 2.4-1.2l5.1-7A5 5 0 0 1 14.9 6H17V3Zm0 10 4 4-4 4v-3h-2.1a5 5 0 0 1-3.7-1.6l1.4-1.5a3 3 0 0 0 2.3 1.1H17v-3ZM2 6h1.4a5 5 0 0 1 3.7 1.6L5.7 9.1A3 3 0 0 0 3.4 8H2V6Z"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4V6H7a2 2 0 0 0-2 2v3H3V8a4 4 0 0 1 4-4h10V1ZM7 23l-4-4 4-4v3h10a2 2 0 0 0 2-2v-3h2v3a4 4 0 0 1-4 4H7v3Z"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.3 10.6 19C5.4 14.4 2 11.3 2 7.6 2 4.5 4.4 2.2 7.5 2.2c1.7 0 3.4.8 4.5 2.1 1.1-1.3 2.8-2.1 4.5-2.1 3.1 0 5.5 2.3 5.5 5.4 0 3.7-3.4 6.8-8.6 11.4L12 20.3Z"/></symbol>
+    <symbol id="i-heart-o" viewBox="0 0 24 24"><path d="M16.5 2.2c-1.7 0-3.4.8-4.5 2.1-1.1-1.3-2.8-2.1-4.5-2.1C4.4 2.2 2 4.5 2 7.6c0 3.7 3.4 6.8 8.6 11.4L12 20.3l1.4-1.3C18.6 14.4 22 11.3 22 7.6c0-3.1-2.4-5.4-5.5-5.4Zm-4.4 15.3-.1.1-.1-.1C7.1 13.2 4 10.4 4 7.6c0-2 1.5-3.4 3.5-3.4 1.5 0 3 1 3.6 2.4h1.9c.5-1.4 2-2.4 3.5-2.4 2 0 3.5 1.4 3.5 3.4 0 2.8-3.1 5.6-7.9 9.9Z"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></symbol>
+    <symbol id="i-vol" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3Zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4ZM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6Z"/></symbol>
+    <symbol id="i-eq" viewBox="0 0 24 24"><path d="M6 3h2v8h2v2H8v8H6v-8H4v-2h2V3Zm6 0h2v4h2v2h-2v12h-2V9h-2V7h2V3Zm6 0h2v12h2v2h-2v4h-2v-4h-2v-2h2V3Z"/></symbol>
+    <symbol id="i-all" viewBox="0 0 24 24"><path d="M12 3v10.6A4 4 0 1 0 14 17V7h4V3h-6Z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7Z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 6h12v2H3V6Zm0 5h12v2H3v-2Zm0 5h8v2H3v-2Zm14-5v6.3A3 3 0 1 0 19 20v-7h3v-2h-5Z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></symbol>
+    <symbol id="i-lyrics" viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 1-2Zm3 5v2h10V8H7Zm0 4v2h7v-2H7Z"/></symbol>
+    <symbol id="i-wand" viewBox="0 0 24 24"><path d="m14.6 6.5 2.9 2.9L7.4 19.5l-2.9-2.9L14.6 6.5ZM19 2l.9 2.1L22 5l-2.1.9L19 8l-.9-2.1L16 5l2.1-.9L19 2ZM9 2l.6 1.4L11 4l-1.4.6L9 6l-.6-1.4L7 4l1.4-.6L9 2Zm11 9 .6 1.4L22 13l-1.4.6L20 15l-.6-1.4L18 13l1.4-.6L20 11Z"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12c2-5 4-7 6-7s3 3 4 7 2 7 4 7 4-2 6-7h-2.2c-1.500 3.200-2.800 4.800-3.800 4.800-.9 0-1.400-1.500-2.200-5C12.700 7.800 11 3 8 3 5.300 3 2.800 5.400 0 12h2Z"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.900V21h2v-3.100A7 7 0 0 0 19 11h-2Z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1Zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16h-9V7h9v14Z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.400 5 12 10.600 17.600 5 19 6.400 13.400 12l5.600 5.600-1.400 1.400-5.600-5.600L6.400 19 5 17.600l5.600-5.600L5 6.400 6.400 5Z"/></symbol>
+    <symbol id="i-artist" viewBox="0 0 24 24"><path d="M12 12a4.500 4.500 0 1 0 0-9 4.500 4.500 0 0 0 0 9Zm0 2c-3.900 0-8 1.900-8 4.500V21h16v-2.500c0-2.600-4.100-4.500-8-4.500Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m9.500 16.600-4.100-4.100L4 13.900l5.500 5.500L20.500 8.400 19.100 7z"/></symbol>
+    <symbol id="i-wish" viewBox="0 0 24 24"><path d="M11 3h2v9.200l3.300-3.300 1.400 1.400L12 16 6.300 10.300l1.400-1.400L11 12.200V3ZM4 19h16v2H4v-2Z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 11h12.2l-5.6-5.6L12 4l8 8-8 8-1.4-1.4 5.6-5.6H4v-2Z"/></symbol>
+  </svg>
+
+  <div class="ambient"></div>
+
+  <div class="app">
+    <aside class="rail">
+      <div class="logo"><span class="logo-mark"><span></span><span></span></span>Mix</div>
+      <nav class="nav" id="nav"></nav>
+      <div class="rail-foot">
+        <div class="tgcard" id="tgcard"></div>
+        <div class="store" id="store"></div>
+      </div>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="head">
+        <h1 id="viewTitle">Вся музыка<span class="sub" id="viewSub"></span></h1>
+        <div class="head-tools">
+          <input class="search" id="search" type="search" placeholder="Найти трек или артиста" autocomplete="off">
+          <select class="sortsel" id="sort" title="Сортировка">
+            <option value="added-desc">Сначала новые</option>
+            <option value="added-asc">Сначала старые</option>
+            <option value="title">По названию</option>
+            <option value="artist">По автору</option>
+            <option value="album">По альбому</option>
+            <option value="released-new">Дата выхода: новые</option>
+            <option value="released-old">Дата выхода: старые</option>
+            <option value="duration">Самые длинные</option>
+            <option value="plays">Чаще слушаю</option>
+          </select>
+          <button class="btn primary" id="playAll"><svg><use href="#i-shuffle"/></svg>Слушать вперемешку</button>
+          <button class="btn" id="addFiles" title="Добавить файлы с компьютера"><svg><use href="#i-plus"/></svg><span class="lbl">Файлы</span></button>
+        </div>
+      </div>
+      <section class="empty" id="empty" hidden></section>
+      <ul class="rows" id="rows"></ul>
+    </main>
+  </div>
+
+  <footer class="bar" id="bar">
+    <canvas class="viz" id="vizBar" aria-hidden="true"></canvas>
+    <div class="np">
+      <button class="np-cover" id="openFull" title="Сейчас играет"></button>
+      <div class="ttl"><span class="t" id="npTitle">Ничего не играет</span><span class="a" id="npArtist">Выбери трек</span></div>
+      <button class="ib like" id="npLike" title="В любимое" hidden><svg><use href="#i-heart-o"/></svg></button>
+      <button class="ib" id="npAdd" title="Добавить в любимое, альбом или мою музыку" hidden><svg><use href="#i-plus"/></svg></button>
+    </div>
+    <div class="ctrl">
+      <div class="btns">
+        <button class="ib" data-act="shuffle" title="Перемешивать"><svg><use href="#i-shuffle"/></svg></button>
+        <button class="ib" data-act="prev" title="Назад"><svg><use href="#i-prev"/></svg></button>
+        <button class="pp" data-act="toggle" title="Играть / пауза"><svg><use href="#i-play"/></svg></button>
+        <button class="ib next" data-act="next" title="Дальше"><svg><use href="#i-next"/></svg></button>
+        <button class="ib" data-act="repeat" title="Повторять"><svg><use href="#i-repeat"/></svg></button>
+      </div>
+      <div class="prog"><span data-pos>0:00</span><div class="track" data-seek><div class="zone"></div><div class="fill"></div><div class="knob"></div></div><span data-dur>0:00</span></div>
+    </div>
+    <div class="side">
+      <button class="mixchip" id="mixChip" title="Переход между треками"></button>
+      <button class="ib" data-act="lyrics" title="Текст песни"><svg><use href="#i-lyrics"/></svg></button>
+      <button class="ib" id="eqBtn" title="Эквалайзер"><svg><use href="#i-eq"/></svg></button>
+      <svg style="color:var(--mist);margin-left:6px"><use href="#i-vol"/></svg>
+      <input class="vol" id="vol" type="range" min="0" max="100" title="Громкость">
+    </div>
+  </footer>
+
+  <section class="full" id="full" aria-label="Сейчас играет">
+    <div class="glow"><i id="glowA"></i><i id="glowB"></i></div>
+    <canvas class="viz vizfull" id="vizFull" aria-hidden="true"></canvas>
+    <button class="close" id="closeFull" title="Свернуть"><svg style="margin:auto"><use href="#i-down"/></svg></button>
+    <div class="stack" id="stack"></div>
+    <div class="lyrics" id="lyrics" hidden></div>
+    <div class="fmeta">
+      <div class="label" id="fLabel"></div>
+      <h2 class="ftitle" id="fTitle"></h2>
+      <div class="fartist" id="fArtist"></div>
+      <div class="fadd">
+        <button class="ib like" id="fLike" title="В любимое"><svg><use href="#i-heart-o"/></svg></button>
+        <button class="btn" id="fAdd" title="Добавить в любимое, альбом или мою музыку"><svg><use href="#i-plus"/></svg>Добавить</button>
+      </div>
+      <div class="prog"><span data-pos>0:00</span><div class="track" data-seek><div class="zone"></div><div class="fill"></div><div class="knob"></div></div><span data-dur>0:00</span></div>
+      <div class="btns">
+        <button class="ib" data-act="shuffle" title="Перемешивать"><svg><use href="#i-shuffle"/></svg></button>
+        <button class="ib" data-act="prev" title="Назад"><svg><use href="#i-prev"/></svg></button>
+        <button class="pp" data-act="toggle" title="Играть / пауза"><svg><use href="#i-play"/></svg></button>
+        <button class="ib" data-act="next" title="Дальше"><svg><use href="#i-next"/></svg></button>
+        <button class="ib" data-act="repeat" title="Повторять"><svg><use href="#i-repeat"/></svg></button>
+        <button class="ib" data-act="lyrics" title="Текст песни"><svg><use href="#i-lyrics"/></svg></button>
+      </div>
+      <div class="fnext" id="fNext"></div>
+    </div>
+  </section>
+
+  <div id="layer"></div>
+  <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav" multiple hidden>
+  <script>
+    // Если плеер не запустился, показываем причину прямо на странице
+    (function () {
+      var errs = [];
+      function show(msg) {
+        var b = document.getElementById('bootErr');
+        if (!b) {
+          b = document.createElement('div'); b.id = 'bootErr';
+          b.style.cssText = 'position:fixed;left:16px;right:16px;top:16px;z-index:99;background:#3a1020;color:#ffd7de;border:1px solid #ff8f9f;border-radius:14px;padding:14px 18px;font:14px/1.5 system-ui;white-space:pre-wrap';
+          b.title = 'Нажми, чтобы скрыть';
+          b.onclick = function () { b.remove(); errs = []; };
+          document.body.appendChild(b);
+        }
+        errs.push(msg); console.error('MIXERR ' + msg);
+        b.textContent = 'Плеер сломался. Сделай скриншот этого сообщения и пришли его.\n\n' + errs.join('\n') + '\n\nБраузер: ' + navigator.userAgent;
+      }
+      window.__mixErr = show;
+      addEventListener('error', function (e) {
+        var el = e.target;
+        if (el && el !== window && (el.src || el.href)) {
+          // шрифты и картинки не критичны; ломает плеер только скрипт
+          if (el.tagName === 'SCRIPT') show('Не загрузился код плеера: ' + el.src + '. Если стоит блокировщик рекламы, отключи его для этой страницы.');
+          return;
+        }
+        show(e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''));
+      }, true);
+      addEventListener('unhandledrejection', function (e) {
+        var n = e.reason && e.reason.name;
+        if (n === 'AbortError' || n === 'NotAllowedError' || n === 'NotSupportedError') return; // браузер прервал звук — это не поломка
+        show(String(e.reason && (e.reason.stack || e.reason.message) || e.reason));
+      });
+      setTimeout(function () { if (!window.__mixReady) show('Код плеера не загрузился за 8 секунд.' + (location.protocol === 'file:' ? ' Страница открыта как файл, открой http://localhost:5173' : '')); }, 8000);
+    })();
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

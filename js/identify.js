@@ -1,0 +1,175 @@
+// Определяем, что это за трек. По порядку: по звуку (AcoustID), по названию (LRCLIB и iTunes), по звуку через AudD.
+import { searchItunes, norm } from './covers.js';
+import { normKey } from './wave.js';
+
+export const IDENT_VER = 2;
+export const AUTO_SCORE = .85; // с такой уверенностью название и обложка меняются сами, без проверки
+
+// Мусор, который каналы и сайты дописывают к именам файлов
+export function cleanName(s) {
+  return (s || '')
+    .replace(/\.(mp3|m4a|aac|flac|wav|ogg|opus)$/i, '')
+    .replace(/[_+]/g, ' ')
+    .replace(/https?:\/\/\S+|@\w+|\b[\w-]+\.(fm|ru|net|com|me|org|su|cc|io|to|online|site|pro|info|top|club|xyz|biz|tv|by|ua|kz|mobi|name|cool|live|music)\b/gi, ' ')
+    .replace(/[([](?:[^)\]]*?(official|video|audio|lyric|clip|клип|\bhd\b|\bhq\b|kbps|премьера|visuali[sz]er|mood video|текст|скачать)[^)\]]*?)[)\]]/gi, ' ')
+    .replace(/\b(320|256|192|128)\s*kbps\b|\bmp3\b|\bскачать\b|\bбесплатно\b/gi, ' ')
+    .replace(/[([]\s*[)\]]/g, ' ')
+    .replace(/^\s*\d{1,3}\s*[.\-_)]\s*/, '')
+    .replace(/^[\s\-–—]+|[\s\-–—]+$/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// track_0042, audio_2024-01-05 и подобное: искать по такому имени бессмысленно
+const JUNK_WORD = new Set(['track', 'audio', 'music', 'song', 'voice', 'unknown', 'new', 'file', 'трек', 'аудио', 'музыка', 'песня', 'неизвестен', 'неизвестный', 'исполнитель']);
+const isJunkName = s => !(s || '').toLowerCase().split(/[^\p{L}]+/u).filter(w => w && !JUNK_WORD.has(w)).length;
+
+// Обратный транслит: skriptonit polozhenie → скриптонит положение
+const CYR = [['shch', 'щ'], ['yo', 'ё'], ['zh', 'ж'], ['ch', 'ч'], ['sh', 'ш'], ['yu', 'ю'], ['ya', 'я'], ['kh', 'х'], ['ts', 'ц'], ['iy', 'ий'], ['yy', 'ый'], ['a', 'а'], ['b', 'б'], ['v', 'в'], ['g', 'г'], ['d', 'д'], ['e', 'е'], ['z', 'з'], ['i', 'и'], ['j', 'й'], ['y', 'ы'], ['k', 'к'], ['l', 'л'], ['m', 'м'], ['n', 'н'], ['o', 'о'], ['p', 'п'], ['r', 'р'], ['s', 'с'], ['t', 'т'], ['u', 'у'], ['f', 'ф'], ['h', 'х'], ['c', 'к'], ['w', 'в'], ['x', 'кс'], ['q', 'к']];
+export function toCyrillic(s) {
+  let out = s.toLowerCase();
+  for (const [lat, cyr] of CYR) out = out.split(lat).join(cyr);
+  return out;
+}
+const isLatin = s => /[a-z]/i.test(s) && !/[а-яё]/i.test(s);
+
+// Слова сравниваем в транслите: Кино = Kino. Одна опечатка в длинном слове не мешает.
+const words = s => [...new Set(norm(s).split(' ').map(normKey).filter(w => w && w.length > 1))];
+function near(a, b) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1 || Math.min(a.length, b.length) < 5) return false;
+  let i = 0, j = 0, miss = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++miss > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return miss + (a.length - i) + (b.length - j) <= 1;
+}
+const covered = (part, of) => part.length ? part.filter(w => of.some(x => near(w, x))).length / part.length : 0;
+
+const VERSION = /\b(edit|remix|mix|live|version|instrumental|acoustic|karaoke|cover|sped up|slowed|nightcore|remaster\w*|ремикс|версия|минус)\b/i;
+// Насколько кандидат похож на то, что написано в имени файла. Важно, чтобы нашлись и артист, и название:
+// иначе «Король и Шут - Лесник» совпадает с песней Ленинграда «Король и Шут».
+export function scoreCandidate(query, c, duration = 0) {
+  const q = words(query), title = words(c.title), artist = words(c.artist);
+  if (!q.length || !title.length) return 0;
+  let s = covered(title, q) * .5 + covered(artist, q) * .35 + covered(q, [...title, ...artist]) * .15;
+  if (VERSION.test(c.title) && !VERSION.test(query)) s -= .2;
+  if (duration && c.duration) {
+    const gap = Math.abs(c.duration - duration);
+    s += gap < 3 ? .15 : gap > 20 ? -.35 : 0;
+  }
+  return Math.max(0, Math.min(1, s));
+}
+
+async function lrclib(term) {
+  const r = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(term)}`);
+  if (!r.ok) return [];
+  const list = await r.json();
+  return (Array.isArray(list) ? list : []).slice(0, 15).map(x => ({ title: x.trackName, artist: x.artistName, album: x.albumName || '', duration: x.duration || 0, art: null, preview: null }));
+}
+
+async function acoustid(fp, duration, key) {
+  const body = new URLSearchParams({ client: key, meta: 'recordings releasegroups compress', duration: Math.round(duration), fingerprint: fp, format: 'json' });
+  const r = await fetch('https://api.acoustid.org/v2/lookup', { method: 'POST', body });
+  const j = await r.json();
+  if (j.status !== 'ok') {
+    const e = new Error(j.error?.message || 'acoustid'); e.code = j.error?.code; throw e;
+  }
+  for (const res of (j.results || []).sort((a, b) => b.score - a.score)) {
+    if (res.score < .5) break;
+    const recs = (res.recordings || []).filter(x => x.title && x.artists?.length);
+    const rec = recs.find(x => x.duration && Math.abs(x.duration - duration) < 5) || recs[0];
+    if (!rec) continue;
+    const artist = rec.artists.map(a => a.name + (a.joinphrase || '')).join('').trim();
+    const rg = rec.releasegroups || [];
+    const g = rg.find(x => x.type === 'Album') || rg.find(x => x.type === 'Single') || rg[0];
+    return { title: rec.title, artist, album: g?.title || '', score: res.score, rgid: g?.id || null };
+  }
+  return null;
+}
+
+// Оригинальная запись в каталоге iTunes: обложка и альбом для уже известных артиста и названия
+export async function findOriginal(artist, title, duration = 0) {
+  const query = `${artist} ${title}`.trim();
+  for (const country of ['RU', 'US']) {
+    const res = await searchItunes(query, 10, country).catch(() => []);
+    let best = null, top = 0;
+    for (const c of res) { const s = scoreCandidate(query, c, duration); if (s > top) { best = c; top = s; } }
+    if (best && top >= .7) return best;
+  }
+  const art = await coverFromMusicBrainz(artist, title).catch(() => null);
+  return art ? { title, artist, album: '', art, duration, preview: null } : null;
+}
+
+// Запасной источник обложек: MusicBrainz + Cover Art Archive (бесплатно, без ключа)
+async function coverFromMusicBrainz(artist, title) {
+  const esc = s => s.replace(/["\\]/g, ' ');
+  const q = `recording:"${esc(title)}"` + (artist ? ` AND artist:"${esc(artist)}"` : '');
+  const r = await fetch(`https://musicbrainz.org/ws/2/recording?query=${encodeURIComponent(q)}&fmt=json&limit=5`);
+  if (!r.ok) return null;
+  const { recordings = [] } = await r.json();
+  const ids = [...new Set(recordings.filter(x => x.score >= 90).flatMap(x => (x.releases || []).map(y => y['release-group']?.id)).filter(Boolean))].slice(0, 3);
+  for (const id of ids) {
+    const url = `https://coverartarchive.org/release-group/${id}/front-500`;
+    if ((await fetch(url, { method: 'HEAD' }).catch(() => null))?.ok) return url;
+  }
+  return null;
+}
+
+function queriesFor(t) {
+  const out = [];
+  const add = raw => {
+    const q = cleanName(raw);
+    if (q && !isJunkName(q) && !out.some(x => words(x).join() === words(q).join())) out.push(q);
+  };
+  if (t.artist && t.title) add(`${t.artist} - ${t.title}`);
+  add(t.fileName);
+  if (t.title) add(t.title);
+  return out.slice(0, 2);
+}
+
+// t — трек, blob — его аудио, key — ключ AcoustID (может быть пустым), audd — необязательное распознавание по куску звука
+export async function identify(t, blob, key, { audd } = {}) {
+  const duration = t.duration || t.bounds?.d || 0;
+  if (key && blob) {
+    // отдельный файл: сбой отпечатка не должен ронять плеер; файл, который не декодируется, ищем по имени
+    let fp = null, d = duration;
+    try { ({ fp, duration: d } = await (await import('./audiokey.js')).fingerprint(blob)); } catch (e) { console.warn('audiokey', e); }
+    const hit = fp ? await acoustid(fp, d, key) : null;
+    if (hit) {
+      const it = await findOriginal(hit.artist, hit.title, d);
+      const art = it?.art || (hit.rgid ? `https://coverartarchive.org/release-group/${hit.rgid}/front-500` : null);
+      return { title: hit.title, artist: hit.artist, album: hit.album || it?.album || '', art, source: 'sound', score: hit.score, auto: hit.score >= .8 };
+    }
+  }
+  let best = null, top = 0;
+  const consider = (query, list) => { for (const c of list) { const s = scoreCandidate(query, c, duration); if (s > top) { best = c; top = s; } } };
+  const done = () => top >= AUTO_SCORE && best.art;
+  search: for (const query of queriesFor(t)) {
+    // дефис между артистом и названием каталоги воспринимают как часть слова
+    const plain = query.replace(/\s+[-–—]\s+/g, ' ');
+    const parts = query.split(/\s+[-–—]\s+/);
+    const terms = isLatin(query) ? [plain, toCyrillic(plain)] : [plain];
+    if (parts.length > 1) terms.push(parts.at(-1)); // артист в имени часто записан неточно: ищем и по одному названию
+    for (const term of terms) {
+      consider(query, await searchItunes(term, 10, 'RU'));
+      if (done()) break search;
+      consider(query, await lrclib(term).catch(() => []));
+      if (top >= AUTO_SCORE) break search;
+    }
+    if (isLatin(query)) { consider(query, await searchItunes(plain, 10, 'US')); if (done()) break search; }
+  }
+  if (top >= AUTO_SCORE && best && !best.art) { // LRCLIB знает название, но обложек у него нет
+    const it = await findOriginal(best.artist, best.title, duration || best.duration);
+    if (it) best = { ...best, title: it.title, artist: it.artist, album: it.album || best.album, art: it.art, preview: it.preview };
+  }
+  if (top < AUTO_SCORE && audd && blob) {
+    const r = await audd(blob);
+    if (r) return { title: r.title, artist: r.artist, album: r.album || '', art: r.art || null, preview: r.preview || null, source: 'sound', score: .95, auto: true };
+  }
+  if (!best || top < .6) return null;
+  return { ...best, source: 'name', score: top, auto: top >= AUTO_SCORE };
+}
+
+export const sameName = (a, b) => norm(a.title) === norm(b.title) && norm(a.artist) === norm(b.artist);
