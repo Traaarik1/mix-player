@@ -1,0 +1,62 @@
+// Свайпы на телефоне: большой плеер закрывается вниз, обложка листает треки, мини-плеер открывается вверх.
+const IGNORE = 'button, input, select, a, .track, .lyrics, .menu, .pop';
+
+function drag(el, { onMove, onEnd, ignore = IGNORE }) {
+  let s = null;
+  el.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || e.target.closest(ignore)) return;
+    s = { x: e.clientX, y: e.clientY, t: Date.now(), axis: null };
+  });
+  el.addEventListener('pointermove', e => {
+    if (!s) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    // направление решаем один раз, когда палец сдвинулся заметно
+    if (!s.axis) { if (Math.hypot(dx, dy) < 10) return; s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; }
+    onMove?.(s.axis, dx, dy);
+  });
+  const finish = (e, cancelled) => {
+    if (!s) return;
+    const a = s, dx = e.clientX - a.x, dy = e.clientY - a.y, dt = Math.max(1, Date.now() - a.t);
+    s = null;
+    if (a.axis) onEnd(a.axis, cancelled ? 0 : dx, cancelled ? 0 : dy, Math.abs(a.axis === 'x' ? dx : dy) / dt);
+  };
+  el.addEventListener('pointerup', e => finish(e, false));
+  el.addEventListener('pointercancel', e => finish(e, true));
+}
+
+export function setupGestures({ full, stack, mini, onClose, onOpen, onNext, onPrev }) {
+  drag(full, {
+    onMove: (axis, dx, dy) => {
+      if (axis === 'y' && dy > 0) { full.style.transition = 'none'; full.style.transform = `translateY(${dy}px)`; full.style.borderRadius = '24px 24px 0 0'; }
+      if (axis === 'x') { stack.style.transition = 'none'; stack.style.translate = `${dx}px 0`; stack.style.opacity = Math.max(.4, 1 - Math.abs(dx) / 500); }
+    },
+    onEnd: (axis, dx, dy, speed) => {
+      if (axis === 'y') {
+        full.style.transition = ''; full.style.borderRadius = '';
+        if (dy > 130 || (dy > 40 && speed > .7)) { full.style.transform = ''; onClose(); }
+        else full.style.transform = '';
+        return;
+      }
+      const go = Math.abs(dx) > 70 || (Math.abs(dx) > 25 && speed > .6);
+      stack.style.transition = 'translate .28s cubic-bezier(.2,.8,.2,1), opacity .28s';
+      if (go) {
+        stack.style.translate = `${dx < 0 ? -110 : 110}% 0`; stack.style.opacity = 0;
+        setTimeout(() => {
+          (dx < 0 ? onNext : onPrev)();
+          stack.style.transition = 'none'; stack.style.translate = `${dx < 0 ? 40 : -40}% 0`;
+          requestAnimationFrame(() => requestAnimationFrame(() => { stack.style.transition = 'translate .35s cubic-bezier(.2,.8,.2,1), opacity .35s'; stack.style.translate = ''; stack.style.opacity = ''; }));
+        }, 220);
+      } else { stack.style.translate = ''; stack.style.opacity = ''; }
+    },
+  });
+  drag(mini, {
+    ignore: 'button, input, .track',
+    onMove: (axis, dx) => { if (axis === 'x') { mini.querySelector('.np').style.transition = 'none'; mini.querySelector('.np').style.translate = `${dx * .5}px 0`; } },
+    onEnd: (axis, dx, dy) => {
+      const np = mini.querySelector('.np');
+      np.style.transition = 'translate .25s'; np.style.translate = '';
+      if (axis === 'y' && dy < -30) onOpen();
+      if (axis === 'x' && Math.abs(dx) > 60) (dx < 0 ? onNext : onPrev)();
+    },
+  });
+}

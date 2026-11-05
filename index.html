@@ -79,10 +79,13 @@
           <button class="btn" id="addFiles" title="Добавить файлы с компьютера"><svg><use href="#i-plus"/></svg><span class="lbl">Файлы</span></button>
         </div>
       </div>
+      <section class="shelf" id="shelf" hidden></section>
       <section class="empty" id="empty" hidden></section>
       <ul class="rows" id="rows"></ul>
     </main>
   </div>
+
+  <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
 
   <footer class="bar" id="bar">
     <canvas class="viz" id="vizBar" aria-hidden="true"></canvas>
@@ -115,6 +118,7 @@
   <section class="full" id="full" aria-label="Сейчас играет">
     <div class="glow"><i id="glowA"></i><i id="glowB"></i></div>
     <canvas class="viz vizfull" id="vizFull" aria-hidden="true"></canvas>
+    <div class="grab fullgrab"></div>
     <button class="close" id="closeFull" title="Свернуть"><svg style="margin:auto"><use href="#i-down"/></svg></button>
     <div class="stack" id="stack"></div>
     <div class="lyrics" id="lyrics" hidden></div>
@@ -135,6 +139,7 @@
         <button class="ib" data-act="repeat" title="Повторять"><svg><use href="#i-repeat"/></svg></button>
         <button class="ib" data-act="lyrics" title="Текст песни"><svg><use href="#i-lyrics"/></svg></button>
       </div>
+      <div class="fextra"><button class="mixchip" id="fMix"></button><button class="ib" id="fEq" title="Эквалайзер"><svg><use href="#i-eq"/></svg></button></div>
       <div class="fnext" id="fNext"></div>
     </div>
   </section>

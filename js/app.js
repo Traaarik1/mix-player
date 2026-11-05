@@ -9,6 +9,7 @@ import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { startVisual } from './visual.js';
 import { openMini, canMini } from './mini.js';
+import { setupGestures } from './gestures.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -183,6 +184,7 @@ function rowHTML(t, n) {
 function render() {
   $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish';
   $('.fixbar')?.remove();
+  if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
   $('#sort').hidden = view === 'artists' || view === 'recent';
   $('#sort').value = settings.sort;
   if (view === 'fix') { renderFix(); renderNav(); return; }
@@ -200,7 +202,18 @@ function render() {
   const rows = $('#rows');
   rows.innerHTML = ids.map((id, i) => rowHTML(tracks.get(id), i + 1)).join('');
   hydrateIn(rows);
+  renderShelf();
   renderNav();
+}
+// Полка наверху «Всей музыки»: вход в Волну и то, что слушал недавно
+function renderShelf() {
+  const el = $('#shelf');
+  const recent = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id)).slice(0, 10);
+  el.hidden = view !== 'all' || !!query || !tracks.size;
+  if (el.hidden) { el.innerHTML = ''; return; }
+  el.innerHTML = `<button class="tile wavetile" data-view="wave"><span class="tileorb"><i></i><i></i></span><b>Моя волна</b><small>Твоё и похожее</small></button>`
+    + recent.map(id => { const t = tracks.get(id); return `<button class="tile" data-play="${esc(id)}">${coverHTML(t)}<b>${esc(t.title)}</b><small>${esc(t.artist || 'Неизвестный артист')}</small></button>`; }).join('');
+  hydrateIn(el);
 }
 function emptyHTML() {
   if (query) return `<h2>Ничего не нашлось</h2><p>По запросу «${esc(query)}» треков нет. Попробуй часть названия или имя артиста.</p>`;
@@ -226,7 +239,27 @@ function markCurrent() {
   if (curId) $(`.row[data-id="${CSS.escape(curId)}"]`)?.classList.add('on');
 }
 
+const isPhone = () => matchMedia('(max-width: 900px)').matches;
+function renderTabs() {
+  const main = ['wave', 'all', 'artists', 'liked'];
+  const on = id => view === id || (id === 'artists' && view.startsWith('artist:'));
+  const tab = (id, icon, name) => `<button class="${on(id) ? 'on' : ''}" data-view="${id}"><svg><use href="#i-${icon}"/></svg><span>${name}</span></button>`;
+  $('#tabs').innerHTML = tab('wave', 'wave', 'Волна') + tab('all', 'all', 'Музыка') + tab('artists', 'artist', 'Авторы') + tab('liked', 'heart', 'Любимое')
+    + `<button class="${main.some(on) ? '' : 'on'}" data-act="more"><svg><use href="#i-more"/></svg><span>Ещё</span>${wishes().length + fixCount() ? '<i class="tabdot"></i>' : ''}</button>`;
+}
+function openMore() {
+  const row = (attr, icon, name, n) => `<button class="morerow" ${attr}><svg><use href="#i-${icon}"/></svg><span>${esc(name)}</span>${n ? `<em>${n}</em>` : ''}</button>`;
+  modal(`<div class="grab"></div>
+    ${row('data-view="recent"', 'clock', 'Недавние')}
+    ${row('data-view="wish"', 'wish', 'Хочу скачать', wishes().length)}
+    ${row('data-view="fix"', 'wand', 'Проверка названий', fixCount())}
+    ${row('data-act="listen"', 'mic', 'Что играет?')}
+    <div class="morehead">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>
+    ${lib.playlists.map(p => row(`data-view="${esc(p.id)}"`, 'list', p.name, p.ids.length)).join('') || '<p class="morenote">Пока нет. Нажми плюс, чтобы создать первый.</p>'}
+    <div class="tgcard moretg">${$('#tgcard').innerHTML}</div>`);
+}
 function renderNav() {
+  renderTabs();
   const item = (id, icon, name, n) => `<button class="${view === id || (id === 'artists' && view.startsWith('artist:')) ? 'on' : ''}" data-view="${esc(id)}"><svg><use href="#i-${icon}"/></svg>${esc(name)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
   $('#nav').innerHTML = item('wave', 'wave', 'Волна')
     + item('all', 'all', 'Вся музыка', order.length || null)
@@ -650,6 +683,7 @@ async function paintNow() {
   hydrateIn($('#openFull'), true);
   $('#fTitle').textContent = t?.title || '';
   $('#fArtist').textContent = t ? (t.artist || '') + (t.source === 'preview' ? (t.because ? '. ' + t.because : '') + '. Превью 30 секунд' : '') : '';
+  $('#fMix').textContent = settings.cf ? `Микс ${settings.cf} с` : 'Без перехода';
   document.title = t ? `${t.title} — ${t.artist || 'Mix'}` : 'Mix';
   paintStack();
   paintNext();
@@ -754,7 +788,7 @@ function popup(html, anchorRight = true) {
   return layer.firstElementChild;
 }
 document.addEventListener('pointerdown', e => {
-  if (layer.firstElementChild && !layer.contains(e.target) && !e.target.closest('#mixChip, #eqBtn, #npAdd, #fAdd, [data-add], [data-sug=add], [data-more], .modal')) closeLayer();
+  if (layer.firstElementChild && !layer.contains(e.target) && !e.target.closest('#mixChip, #eqBtn, #fMix, #fEq, #npAdd, #fAdd, [data-add], [data-sug=add], [data-more], .modal')) closeLayer();
 });
 
 function mixCurvePath(cf) {
@@ -1543,6 +1577,9 @@ if ('mediaSession' in navigator) {
 
 // ---------- события ----------
 document.addEventListener('click', async e => {
+  const pl = e.target.closest('[data-play]')?.dataset.play;
+  if (pl) { waveMode = false; buildQueue(pl, order); playId(pl); return; }
+  if (e.target.closest('.dialog [data-view]')) closeLayer();
   const a = e.target.closest('[data-act]')?.dataset.act;
   if (a === 'toggle') toggle();
   else if (a === 'next') next();
@@ -1567,6 +1604,7 @@ document.addEventListener('click', async e => {
     for (const t of list) await acceptFix(t, t.ident.cand);
     render(); toast('Исправлено: ' + tracksWord(list.length));
   }
+  else if (a === 'more') openMore();
   else if (a === 'pair') openPair();
   else if (a === 'tg') openTg();
   else if (a === 'tgSync') startSync();
@@ -1695,7 +1733,12 @@ $('#main').addEventListener('scroll', e => $('.head').classList.toggle('stuck', 
 $('#fileInput').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 let qT; $('#search').oninput = e => { clearTimeout(qT); qT = setTimeout(() => { query = e.target.value.trim(); render(); }, 120); };
 $('#mixChip').onclick = () => layer.querySelector('.mixviz') ? closeLayer() : openMix();
-$('#eqBtn').onclick = () => layer.querySelector('.eqgraph') ? closeLayer() : openEq();
+$('#eqBtn').onclick = $('#fEq').onclick = () => layer.querySelector('.eqgraph') ? closeLayer() : openEq();
+$('#fMix').onclick = () => layer.querySelector('.mixviz') ? closeLayer() : openMix();
+const openFull = () => { if (engine.track) $('#full').classList.add('open'); };
+const closeFull = () => { $('#full').classList.remove('open'); setLyrics(false); };
+$('.np').addEventListener('click', e => { if (isPhone() && !e.target.closest('button:not(#openFull)')) openFull(); });
+setupGestures({ full: $('#full'), stack: $('#stack'), mini: $('#bar'), onClose: closeFull, onOpen: openFull, onNext: next, onPrev: prev });
 $('#vol').oninput = e => { settings.vol = +e.target.value; e.target.style.setProperty('--p', settings.vol + '%'); engine.setVolume(settings.vol / 100); saveSettings(); };
 $('#openFull').onclick = () => { if (engine.track) $('#full').classList.add('open'); };
 $('#closeFull').onclick = () => { $('#full').classList.remove('open'); setLyrics(false); };
@@ -1716,7 +1759,7 @@ document.addEventListener('keydown', e => {
   else if (e.code === 'ArrowLeft' && (e.ctrlKey || e.metaKey)) prev();
   else if (e.code === 'ArrowRight' && engine.track) engine.seek(Math.min(engine.duration - 1, engine.position + 10));
   else if (e.code === 'ArrowLeft' && engine.track) engine.seek(Math.max(0, engine.position - 10));
-  else if (e.code === 'Escape') { closeLayer(); $('#full').classList.remove('open'); }
+  else if (e.code === 'Escape') { if (layer.firstElementChild) closeLayer(); else closeFull(); }
 });
 
 // ---------- запуск ----------

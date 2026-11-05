@@ -558,3 +558,191 @@ body:has(.full.open) .app { transform: scale(.94); filter: brightness(.6); }
 .pairrow { display: flex; gap: 8px; margin-top: 10px; }
 .pairrow .inp { flex: 1; min-width: 0; }
 .pairbtn { margin-top: 8px; width: 100%; justify-content: center; }
+
+/* ---------- полка и плитки ---------- */
+.shelf { display: flex; gap: 14px; overflow-x: auto; padding: 6px 2px 22px; margin: 0 -2px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.shelf::-webkit-scrollbar { display: none; }
+.tile { flex: none; width: 148px; text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 10px; border-radius: var(--r-lg); scroll-snap-align: start; transition: background .25s, transform .3s var(--ease); }
+.tile:hover { background: rgb(255 255 255 / .07); transform: translateY(-4px); }
+.tile:active { transform: scale(.97); }
+.tile .cov { width: 128px; height: 128px; border-radius: var(--r-md); margin-bottom: 7px; font-size: 40px; box-shadow: 0 14px 34px rgb(0 0 0 / .42); }
+.tile b { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile small { color: var(--mist); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wavetile .tileorb { position: relative; width: 128px; height: 128px; margin-bottom: 7px; border-radius: var(--r-md); overflow: hidden; display: block;
+  background: linear-gradient(145deg, hsl(var(--h) var(--s) 34%), hsl(calc(var(--h) + 60) var(--s) 16%)); box-shadow: 0 14px 34px hsl(var(--h) var(--s) 30% / .55); }
+.tileorb i { position: absolute; width: 74px; height: 74px; top: 27px; border-radius: 50%; mix-blend-mode: screen; animation: tileA 5s ease-in-out infinite alternate; }
+.tileorb i:first-child { left: 18px; background: var(--accent); }
+.tileorb i:last-child { right: 18px; background: var(--amber); animation-name: tileB; }
+@keyframes tileA { to { transform: translateX(18px) scale(1.08); } }
+@keyframes tileB { to { transform: translateX(-18px) scale(.94); } }
+
+/* ---------- плавающий плеер ---------- */
+:root { --bar-h: 96px; }
+.app { height: calc(100dvh - var(--bar-h) - 10px); }
+.bar { left: 10px; right: 10px; bottom: 10px; height: 86px; border: 1px solid rgb(255 255 255 / .1); border-radius: 22px; overflow: hidden;
+  background: rgb(22 16 40 / .72); backdrop-filter: blur(30px) saturate(1.6); -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  box-shadow: 0 18px 50px rgb(0 0 0 / .5), inset 0 1px 0 rgb(255 255 255 / .07); }
+.pop { bottom: calc(var(--bar-h) + 10px); }
+#vizBar { border-radius: inherit; }
+
+/* заголовок окрашен цветом обложки */
+.head h1 { background: linear-gradient(100deg, var(--paper) 45%, hsl(var(--h) var(--s) 82%)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.head h1 .sub { -webkit-text-fill-color: var(--mist); }
+
+/* большой плеер: медленно вращающийся свет поверх размытой обложки */
+.full::before { content: ""; position: absolute; inset: -40%; z-index: -1; opacity: .3; pointer-events: none; mix-blend-mode: soft-light;
+  background: conic-gradient(from 0deg, hsl(var(--h) 90% 70%), transparent 30%, hsl(calc(var(--h) + 70) 90% 60%), transparent 70%, hsl(var(--h) 90% 70%)); animation: spin 38s linear infinite; }
+body:not(.playing) .full::before { animation-play-state: paused; }
+.full { touch-action: none; }
+.lyrics { touch-action: pan-y; }
+.fextra { display: none; }
+.grab { display: none; }
+
+/* волна: кольца расходятся от круга в такт */
+.orb::before, .orb::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid hsl(var(--h) var(--s) 76% / .5); opacity: 0; pointer-events: none; }
+body.playing .orb.live::before { animation: orbRing 2.6s infinite ease-out; }
+body.playing .orb.live::after { animation: orbRing 2.6s 1.3s infinite ease-out; }
+@keyframes orbRing { from { opacity: .7; transform: scale(.92); } to { opacity: 0; transform: scale(1.5); } }
+
+/* заглушка, пока подборка грузится */
+.tabs { display: none; }
+
+/* ---------- телефон ---------- */
+@media (max-width: 900px) {
+  :root { --bar-h: 66px; --tabs-h: calc(54px + env(safe-area-inset-bottom)); }
+  html, body { height: 100dvh; overscroll-behavior: none; }
+  button { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  .app { display: block; height: calc(100dvh - var(--tabs-h) - var(--bar-h) - 12px); }
+  .rail { display: none; }
+  .main { height: 100%; padding: env(safe-area-inset-top) 16px 18px; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+
+  /* вкладки */
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; height: var(--tabs-h); padding: 0 6px env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(5, 1fr);
+    background: rgb(14 10 26 / .86); backdrop-filter: blur(26px) saturate(1.5); -webkit-backdrop-filter: blur(26px) saturate(1.5); border-top: 1px solid var(--line); }
+  .tabs button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--mist); font-size: 10.5px; font-weight: 600; transition: color .2s, transform .15s; }
+  .tabs button svg { width: 23px; height: 23px; transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+  .tabs button:active { transform: scale(.9); }
+  .tabs button.on { color: var(--paper); }
+  .tabs button.on svg { color: var(--accent); transform: translateY(-1px) scale(1.12); }
+  .tabdot { position: absolute; top: 8px; left: calc(50% + 8px); width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+
+  /* мини-плеер над вкладками */
+  .bar { left: 8px; right: 8px; bottom: calc(var(--tabs-h) + 6px); height: var(--bar-h); padding: 0 8px 0 8px !important; border-radius: 16px; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .bar .np { gap: 10px; }
+  .np-cover { width: 48px; height: 48px; border-radius: 10px; }
+  .np-cover:hover::after { display: none; }
+  .np .ttl .t { font-size: 14px; }
+  .np .ttl .a { font-size: 12.5px; }
+  .np .like { display: none; }
+  .bar .ctrl { position: static; }
+  .bar .btns { gap: 2px; }
+  .bar .pp { width: 40px; height: 40px; background: none; color: var(--paper); box-shadow: none; }
+  .bar .pp svg { width: 26px; height: 26px; }
+  .bar .prog { position: absolute; left: 12px; right: 12px; bottom: 0; top: auto; height: 3px; z-index: 2; pointer-events: none; }
+  .bar .track { height: 3px; }
+  .bar .track::before, .bar .fill { top: 0; height: 3px; }
+  .bar .zone, .bar .knob { display: none !important; }
+  #vizBar { opacity: .55; }
+
+  /* заголовок и список */
+  .head { padding: 14px 16px 10px; margin: 0 -16px; gap: 10px; }
+  .head h1 { flex-basis: 100%; font-size: 32px; letter-spacing: -1px; }
+  .head .sub { margin-top: 6px; font-size: 13px; }
+  .head-tools { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .head-tools .search { grid-column: 1 / -1; width: 100%; padding: 11px 16px; }
+  .sortsel { padding: 10px 12px; min-width: 0; width: 100%; font-size: 13.5px; }
+  .head-tools #playAll { grid-column: 1 / -1; order: 3; }
+  .head-tools #addFiles { padding: 10px 14px; }
+  .shelf { margin: 0 -16px; padding: 4px 12px 16px; gap: 6px; }
+  .tile { width: 124px; padding: 6px; }
+  .tile .cov, .wavetile .tileorb { width: 112px; height: 112px; }
+  .tileorb i { width: 64px; height: 64px; top: 24px; }
+  .row { grid-template-columns: 52px minmax(0, 1fr) 40px 36px; gap: 12px; padding: 7px 4px; min-height: 66px; }
+  .row .cov { width: 52px; height: 52px; }
+  .row .like { display: none; }
+  .row .add, .row .more { width: 40px; height: 44px; opacity: 1 !important; }
+  .row:hover { background: none; }
+  .row:hover .cov { transform: none; box-shadow: none; }
+  .row:active { background: rgb(255 255 255 / .07); }
+  .row.on { padding-left: 10px; }
+  .ttl .t { font-size: 15px; }
+  .artists { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 4px; }
+  .artist { padding: 8px; align-items: center; text-align: center; max-width: 100%; }
+  .artist b { width: 100%; font-size: 13.5px; }
+  .empty { margin: 3vh 0; }
+  .empty h2 { font-size: 27px; }
+
+  /* волна */
+  .wavehero { gap: 18px; flex-wrap: nowrap; align-items: center; margin: 2px 0 22px; }
+  .orb { width: 88px; height: 88px; margin: 0 8px 0 12px; }
+  .orb svg { width: 32px; height: 32px; }
+  .wavehero h2 { font-size: 21px; }
+  .wavehero p { font-size: 13.5px; }
+  .wavesim { font-size: 12.5px; }
+  .sug { grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; padding: 7px 2px; }
+  .sug [data-sug=like], .sug [data-sug=copy] { display: none; }
+  .sug .acts .ib { width: 40px; height: 44px; }
+  .sechead .btn { width: 100%; justify-content: center; }
+
+  /* большой плеер */
+  .full { display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 2.4dvh; height: 100dvh; padding: calc(34px + env(safe-area-inset-top)) 24px calc(16px + env(safe-area-inset-bottom)); overflow: hidden; }
+  .full .close { display: none; }
+  .grab { display: block; width: 40px; height: 5px; margin: 0 auto 12px; border-radius: 5px; background: rgb(255 255 255 / .32); flex: none; }
+  .fullgrab { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 50%; margin: 0 0 0 -20px; z-index: 3; }
+  .stack { width: min(100%, 43dvh); align-self: center; flex: none; }
+  .fmeta { max-width: none; width: 100%; }
+  .fmeta .label { margin-bottom: 6px; font-size: 13px; min-height: 1.2em; }
+  .ftitle { font-size: clamp(22px, 6.6vw, 28px); letter-spacing: -.8px; -webkit-line-clamp: 2; }
+  .fartist { margin: 4px 0 12px; font-size: 15px; }
+  .fadd { margin: 0 0 8px; }
+  .fadd .btn { padding: 8px 14px; font-size: 13.5px; }
+  .full .track { height: 26px; }
+  .full .track::before, .full .fill, .full .zone { top: 11px; height: 4px; }
+  .full .knob { top: 7px; opacity: 1; }
+  .full .btns { margin-top: 6px; gap: 0; justify-content: space-between; }
+  .full .btns .ib { width: 44px; height: 44px; }
+  .full .pp { width: 62px; height: 62px; }
+  .fextra { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
+  .fextra .mixchip { margin: 0; }
+  .fextra .ib { background: rgb(255 255 255 / .08); }
+  .fnext { margin-top: 10px; min-height: 0; font-size: 13px; }
+  .fnext .cov { width: 36px; height: 36px; }
+  .vizfull { height: 26%; opacity: .7; }
+  .full.ly .fmeta .label, .full.ly .fadd, .full.ly .fextra, .full.ly .fnext { display: none; }
+  .full.ly .lyrics { flex: 1; min-height: 0; height: auto; padding: 14dvh 0; }
+
+  /* всё всплывающее выезжает снизу */
+  #layer:has(.menu)::before, #layer:has(.pop)::before { content: ""; position: fixed; inset: 0; z-index: 24; background: rgb(8 5 16 / .5); animation: fade .2s; }
+  .menu, .addmenu, .pop { left: 8px !important; right: 8px !important; top: auto !important; bottom: calc(8px + env(safe-area-inset-bottom)) !important; width: auto; max-width: none; max-height: 72dvh; overflow-y: auto; border-radius: 22px; padding: 10px; animation: sheetUp .32s cubic-bezier(.16, 1, .3, 1); }
+  .pop { padding: 20px; }
+  .menu button { padding: 14px 12px; font-size: 15.5px; }
+  .modal { place-items: end center; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
+  .dialog { width: 100%; border-radius: 24px; padding: 18px 18px 20px; max-height: calc(100dvh - 40px - env(safe-area-inset-top)); animation: sheetUp .34s cubic-bezier(.16, 1, .3, 1); }
+  .dialog h2 { font-size: 21px; }
+  .dialog .acts { flex-wrap: wrap; }
+  .dialog .acts .btn { flex: 1; justify-content: center; padding: 13px; }
+  @keyframes sheetUp { from { transform: translateY(100%); } }
+  .morerow { display: flex; align-items: center; gap: 14px; width: 100%; padding: 13px 8px; font-weight: 600; font-size: 15.5px; text-align: left; border-radius: 12px; }
+  .morerow:active { background: rgb(255 255 255 / .08); }
+  .morerow svg { color: var(--mist); }
+  .morerow em { margin-left: auto; font-style: normal; color: var(--mist); font-size: 13px; }
+  .morehead { display: flex; align-items: center; justify-content: space-between; margin: 12px 8px 2px; color: var(--mist); font-size: 13px; font-weight: 600; }
+  .morehead button { padding: 4px; }
+  .morenote { padding: 4px 8px; font-size: 13.5px; margin: 0 !important; }
+  .moretg { margin-top: 12px; padding: 14px; border-radius: var(--r-md); white-space: normal; }
+  .moretg p { display: block; }
+  .moretg .tgprog { display: block; }
+  .moretg b { margin-bottom: 2px; font-size: 15px; }
+  .sechead { align-items: stretch; }
+  .fixbar .btn { width: 100%; justify-content: center; white-space: normal; }
+  #toast { top: calc(10px + env(safe-area-inset-top)); bottom: auto !important; width: max-content; text-align: center; }
+  .qrbox { width: 200px; }
+}
+/* низкие экраны: iPhone SE и подобные */
+@media (max-width: 900px) and (max-height: 720px) {
+  .stack { width: min(100%, 34dvh); }
+  .fnext { display: none; }
+  .fadd { margin-bottom: 2px; }
+  .ftitle { font-size: 22px; -webkit-line-clamp: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .full::before, .tileorb i { animation: none; } }
