@@ -100,7 +100,7 @@ export class Engine extends EventTarget {
     this.token = 0; this.nextToken = 0; this.nextLoading = -1;
     this.lastNow = 0; this.stall = 0; this.lastKick = 0; this.kicking = false;
     this.eqGains = EQ_PRESETS['Ровно'].slice();
-    this.volume = 0.8;
+    this.volume = 0.8; this.fadeToken = 0;
   }
 
   init() {
@@ -255,6 +255,7 @@ export class Engine extends EventTarget {
   // Начать трек сейчас (по клику, «вперёд», перемотка)
   async play(track, { offset = null, fade = 0, keepPaused = false } = {}) {
     this.init();
+    this.softPos = null; clearTimeout(this.softTimer);
     if (!keepPaused) this.unlock();
     const my = ++this.token;
     const buf = await this.decode(track);
@@ -403,9 +404,18 @@ export class Engine extends EventTarget {
   async resume() {
     this.init();
     this.hold = false; this.resumeAfter = 0;
+    if (this.softPos != null && this.cur) { // трек сняли при паузе: ставим с того же места
+      const pos = this.softPos; this.softPos = null; clearTimeout(this.softTimer);
+      return this.play(this.cur.track, { offset: pos });
+    }
     // очередь закончилась: «играть» запускает трек сначала, иначе контекст пошёл бы вхолостую
     if (this.cur?.ended && !this.nxt && this.nextLoading !== this.nextToken) return this.play(this.cur.track);
     this.paused = false; this.unlocked = true;
+    this.fadeToken = (this.fadeToken || 0) + 1;
+    {
+      const g = this.master.gain, now = this.ctx.currentTime;
+      g.cancelScheduledValues(now); g.setValueAtTime(0, now); g.linearRampToValueAtTime(this.volume * this.volume, now + .06);
+    }
     this.outEl?.play().catch(noop);
     this.emit('state');
     const ctx = this.ctx;
@@ -419,6 +429,24 @@ export class Engine extends EventTarget {
     this.token++; // трек, который ещё загружается, не должен заиграть после паузы
     this.hold = true; this.resumeAfter = 0;
     this.paused = true; this.emit('state');
+    // резкая остановка потока на iOS слышна как писк: сначала быстро убираем громкость
+    const my = ++this.fadeToken, g = this.master.gain, now = this.ctx.currentTime;
+    g.cancelScheduledValues(now); g.setValueAtTime(this.volume * this.volume, now); g.linearRampToValueAtTime(0, now + .06);
+    await new Promise(r => setTimeout(r, 80));
+    if (my !== this.fadeToken || !this.paused) return;
+    if (this.softMode()) {
+      // iOS не даёт заблокированному сайту снова запустить остановленный поток, поэтому поток не останавливаем:
+      // снимаем трек и запоминаем позицию. Долгая пауза всё же выключает его ради батареи.
+      this.softPos = this.position;
+      this.hold = false;
+      this.cancelNext();
+      for (const t of [this.cur, ...this.tails]) { if (!t) continue; t.src.onended = null; try { t.src.stop(); } catch {} }
+      this.tails.clear(); this.fade = null;
+      this.outEl?.pause();
+      clearTimeout(this.softTimer);
+      this.softTimer = setTimeout(() => { if (this.paused && this.softPos != null) { this.hold = true; this.ctx.suspend().catch(noop); } }, 600000);
+      return;
+    }
     this.outEl?.pause();
     try { await this.ctx.suspend(); } catch {}
   }
@@ -445,12 +473,15 @@ export class Engine extends EventTarget {
     this.scheduleNext();
   }
 
+  softMode() { return isIOS || /[?&]softpause/.test(location.search); }
   seek(pos) {
+    if (this.softPos != null) { this.softPos = pos; this.emit('state'); return; }
     if (!this.cur) return;
     return this.play(this.cur.track, { offset: pos, keepPaused: this.paused });
   }
 
   get position() {
+    if (this.softPos != null) return this.softPos;
     const c = this.cur; if (!c) return 0;
     return Math.max(0, Math.min(c.buf.duration, c.offset + Math.max(0, (this.ctx.currentTime - c.startCtx) * (c.rate || 1))));
   }
