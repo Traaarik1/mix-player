@@ -29,7 +29,7 @@ const noop = () => {};
 
 // Секунда тишины в WAV для медиа-элемента
 function silence() {
-  const sr = 8000, buf = new ArrayBuffer(44 + sr * 2), v = new DataView(buf);
+  const sr = 48000, buf = new ArrayBuffer(44 + sr * 2), v = new DataView(buf);
   [...'RIFF'].forEach((c, i) => v.setUint8(i, c.charCodeAt(0))); v.setUint32(4, 36 + sr * 2, true);
   [...'WAVEfmt '].forEach((c, i) => v.setUint8(8 + i, c.charCodeAt(0))); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
   v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
@@ -184,7 +184,8 @@ export class Engine extends EventTarget {
     // WebKit иногда не читает blob из IndexedDB после сна страницы: один раз берём его заново
     try { ab = await blob.arrayBuffer(); }
     catch { blob = await this.load(track); ab = await blob.arrayBuffer(); }
-    const sec = estSeconds(track, blob), rate = [this.ctx.sampleRate, 22050, 11025].find(r => sec * r * 8 <= MEM.one);
+    // качество снижаем только если длина трека точно известна: оценка по размеру файла сильно ошибается на FLAC
+    const sec = track.duration || track.bounds?.d || Math.min(estSeconds(track, blob), 900), rate = [this.ctx.sampleRate, 22050, 11025].find(r => sec * r * 8 <= MEM.one);
     if (!rate) throw Object.assign(new Error('трек слишком длинный для памяти устройства'), { code: 'too-long' });
     this.sizes.set(track.id, sec * rate * 8);
     this.evict(track.id);
