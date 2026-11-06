@@ -3,8 +3,8 @@ import { readTags, parseFileName } from './id3.js';
 import { searchItunes, fetchArt } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
-import { identify, cleanName, sameName, findOriginal, IDENT_VER } from './identify.js';
-import { buildTaste, nextWave, artistParts, sameTrack } from './wave.js';
+import { identify, cleanName, cleanTag, sameName, findOriginal, IDENT_VER } from './identify.js';
+import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, analyzeAudio } from './wave.js';
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { openMini, canMini } from './mini.js';
@@ -51,7 +51,7 @@ async function coverUrl(id) {
   coverUrls.set(id, u);
   return u;
 }
-const thumbUrls = new Map();
+const thumbUrls = new Map(), thumbReady = new Map();
 let thumbChain = Promise.resolve();
 function thumbUrl(id) {
   if (thumbUrls.has(id)) return thumbUrls.get(id);
@@ -69,7 +69,9 @@ function thumbUrl(id) {
       })).catch(() => full);
       db.put('covers', 'th:' + id, b);
     }
-    return URL.createObjectURL(b);
+    const u = URL.createObjectURL(b);
+    thumbReady.set(id, u);
+    return u;
   })();
   thumbUrls.set(id, p);
   return p;
@@ -78,7 +80,7 @@ async function setCover(t, blob) {
   await db.put('covers', t.id, blob);
   const old = coverUrls.get(t.id); if (old) URL.revokeObjectURL(old);
   coverUrls.delete(t.id);
-  thumbUrls.delete(t.id); db.del('covers', 'th:' + t.id);
+  thumbUrls.delete(t.id); thumbReady.delete(t.id); db.del('covers', 'th:' + t.id);
   t.cover = true;
   try { t.tone = await toneOf(blob); } catch {}
   await saveTrack(t);
@@ -114,7 +116,8 @@ const applyTone = t => setToneVars(...toneFor(t));
 function coverHTML(t, cls = 'cov') {
   const ch = toneFor(t)[0], letter = esc((t.artist || t.title || '♪').trim()[0]?.toUpperCase() || '♪');
   if (!t.cover && t.art) return `<img class="${cls}" src="${esc(t.art)}" alt="" decoding="async" style="--ch:${ch}">`;
-  return t.cover ? `<img class="${cls}" data-cid="${esc(t.id)}" alt="" decoding="async" style="--ch:${ch}">`
+  const ready = thumbReady.get(t.id);
+  return t.cover ? `<img class="${cls}" data-cid="${esc(t.id)}"${ready ? ` src="${ready}"` : ''} alt="" style="--ch:${ch}">`
     : `<span class="${cls}" style="--ch:${ch}">${letter}</span>`;
 }
 // Подставляем картинки в только что нарисованные строки; большая нужна только в большом плеере
@@ -123,17 +126,17 @@ async function hydrate(img, big) {
   const u = await (big ? coverUrl(id) : thumbUrl(id));
   if (u && img.dataset.cid === id) img.src = u;
 }
-function hydrateIn(el, big = false) { for (const img of $$('img[data-cid]:not([src])', el)) hydrate(img, big); }
+function hydrateIn(el, big = false) { for (const img of $$(big ? 'img[data-cid]' : 'img[data-cid]:not([src])', el)) hydrate(img, big); }
 
 // ---------- библиотека ----------
-function rebuildOrder() { order = [...tracks.values()].sort((a, b) => b.addedAt - a.addedAt).map(t => t.id); }
+function rebuildOrder() { creditCache = null; order = [...tracks.values()].sort((a, b) => b.addedAt - a.addedAt).map(t => t.id); }
 
 function viewIds() {
   let ids;
   if (view === 'all' || view === 'fix' || view === 'wave' || view === 'wish') ids = order;
   else if (view === 'liked') ids = order.filter(id => lib.likes.has(id));
   else if (view === 'recent') ids = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id));
-  else if (view.startsWith('artist:')) { const k = view.slice(7); ids = order.filter(id => artistParts(tracks.get(id).artist).some(p => p.key === k)); }
+  else if (view.startsWith('artist:')) { const k = view.slice(7), idx = creditIndex(); ids = order.filter(id => idx.get(id).some(p => p.key === k)); }
   else if (view === 'artists') ids = order;
   else ids = (lib.playlists.find(p => p.id === view)?.ids || []).filter(id => tracks.has(id));
   if (query) {
@@ -162,17 +165,41 @@ function sortIds(ids) {
   }[key];
   return cmp ? ids.slice().sort((x, y) => cmp(tracks.get(x), tracks.get(y))) : ids;
 }
+const badArtist = n => n.length > 40 || /@|https?:|t\.me|\d{4,}/i.test(n) || !/[\p{L}\p{N}]/u.test(n);
+// Кому принадлежит трек. «GUF, Slim» — это два автора, а не один новый.
+let creditCache = null;
+function creditIndex() {
+  if (creditCache) return creditCache;
+  const rows = [...tracks.values()], solo = soloArtists(rows), whole = {};
+  for (const t of rows) { const k = artistParts(t.artist)[0]?.key; if (k) whole[k] = (whole[k] || 0) + 1; }
+  creditCache = new Map(rows.map(t => {
+    let c = creditsOf(t.artist, solo);
+    const parts = artistParts(t.artist);
+    // никто из участников не встречается сам по себе: повторяется — значит группа, разово — записываем на первого
+    if (c.length === 1 && parts.length > 1 && whole[parts[0].key] < 2) c = [parts[1]];
+    return [t.id, c.filter(p => !badArtist(p.name))];
+  }));
+  return creditCache;
+}
 function artistGroups() {
-  const m = new Map();
+  const m = new Map(), idx = creditIndex();
+  // автор появляется в списке, только если он указан первым хотя бы у одного трека
+  for (const id of order) {
+    const t = tracks.get(id), p = idx.get(id)?.[0];
+    if (!p) continue;
+    const g = m.get(p.key) || m.set(p.key, { key: p.key, name: p.name, n: 0, cover: null, sample: t, sure: false }).get(p.key);
+    if (t.verified && !g.sure) { g.name = p.name; g.sure = true; } // проверенное написание важнее случайного
+  }
+  // гости считаются у тех авторов, что уже есть
   for (const id of order) {
     const t = tracks.get(id);
-    for (const p of artistParts(t.artist)) {
-      const g = m.get(p.key) || m.set(p.key, { key: p.key, name: p.name, n: 0, cover: null, sample: t }).get(p.key);
-      g.n++; if (!g.cover && t.cover) g.cover = t;
+    for (const p of idx.get(id) || []) {
+      const g = m.get(p.key);
+      if (g) { g.n++; if (!g.cover && t.cover) g.cover = t; }
     }
   }
   const q = query.toLowerCase();
-  return [...m.values()].filter(g => !q || g.name.toLowerCase().includes(q)).sort((a, b) => ru(a.name, b.name));
+  return [...m.values()].filter(g => !q || g.name.toLowerCase().includes(q)).sort((x, y) => ru(x.name, y.name));
 }
 function renderArtists() {
   const groups = artistGroups(), empty = $('#empty');
@@ -202,6 +229,7 @@ function rowHTML(t, n) {
 }
 
 function render() {
+  creditCache = null;
   $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish';
   $('.fixbar')?.remove();
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
@@ -215,7 +243,8 @@ function render() {
   const ids = viewIds();
   $('#viewTitle').firstChild.textContent = viewName();
   const total = ids.reduce((s, id) => s + (tracks.get(id).duration || 0), 0);
-  $('#viewSub').textContent = ids.length ? tracksWord(ids.length) + (total > 60 ? ', ' + Math.round(total / 60) + ' мин' : '') : '';
+  listSub = ids.length ? tracksWord(ids.length) + (total > 60 ? ', ' + Math.round(total / 60) + ' мин' : '') : '';
+  paintSub();
   $('#playAll').hidden = !ids.length;
   const empty = $('#empty');
   empty.hidden = !!ids.length;
@@ -238,22 +267,29 @@ function renderShelf() {
 }
 // Виртуальный список: при тысячах треков в странице лежат только те строки, что видно на экране
 let listIds = [], listFrom = -1, listTo = -1, listTick = false;
-const BUFFER = 12;
+const BUFFER = 18;
 function clearList() { listIds = []; listFrom = -1; const r = $('#rows'); r.style.paddingTop = r.style.paddingBottom = ''; }
 function paintList() {
   const rows = $('#rows'), main = $('#main');
   if (!listIds.length) { rows.style.paddingTop = rows.style.paddingBottom = ''; if (listFrom !== -2) rows.innerHTML = ''; listFrom = -2; return; }
-  const rowH = isPhone() ? 66 : 62;
+  const rowH = isPhone() ? 66 : 62, full = listFrom < 0;
   const top = rows.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop;
-  const from = Math.max(0, Math.floor((main.scrollTop - top) / rowH) - BUFFER);
-  const to = Math.min(listIds.length, Math.ceil((main.scrollTop - top + main.clientHeight) / rowH) + BUFFER);
-  if (from === listFrom && to === listTo) return;
+  const seenFrom = Math.floor((main.scrollTop - top) / rowH), seenTo = Math.ceil((main.scrollTop - top + main.clientHeight) / rowH);
+  // пока запас строк не подходит к концу, ничего не трогаем
+  if (!full && (seenFrom - 6 >= listFrom || listFrom === 0) && (seenTo + 6 <= listTo || listTo === listIds.length)) return;
+  const from = Math.max(0, seenFrom - BUFFER), to = Math.min(listIds.length, seenTo + BUFFER);
+  const had = full ? new Map() : new Map([...rows.children].map(el => [el.dataset.id, el]));
+  const box = document.createElement('template'), frag = document.createDocumentFragment();
+  for (let i = from; i < to; i++) {
+    const id = listIds[i];
+    let el = had.get(id);
+    if (!el) { box.innerHTML = rowHTML(tracks.get(id), i + 1); el = box.content.firstElementChild; }
+    frag.append(el);
+  }
   listFrom = from; listTo = to;
   rows.style.paddingTop = from * rowH + 'px';
   rows.style.paddingBottom = (listIds.length - to) * rowH + 'px';
-  let html = '';
-  for (let i = from; i < to; i++) html += rowHTML(tracks.get(listIds[i]), i + 1);
-  rows.innerHTML = html;
+  rows.replaceChildren(frag);
   hydrateIn(rows);
 }
 function emptyHTML() {
@@ -331,9 +367,17 @@ function neighbour(id, dir) {
   return queue[j] === id && dir > 0 ? null : queue[j];
 }
 function shuffled(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// Вперемешку, но так, чтобы треки подходили друг к другу. Первые 200 подбираем, остальные случайно: дальше всё равно редко доходят.
+function smartShuffle(startId, ids) {
+  const rest = ids.filter(id => id !== startId), first = tracks.get(startId);
+  const rows = rest.map(id => tracks.get(id)).filter(Boolean);
+  const smart = nextWave(rows, currentTaste(), { count: Math.min(200, rows.length), after: first, history: recentIds() }).map(t => t.id);
+  const used = new Set(smart);
+  return [startId, ...smart, ...shuffled(rest.filter(id => !used.has(id)))];
+}
 function buildQueue(startId, ids = viewIds()) {
   queueBase = ids.slice();
-  queue = settings.shuffle ? [startId, ...shuffled(ids.filter(id => id !== startId))] : ids.slice();
+  queue = settings.shuffle ? smartShuffle(startId, ids) : ids.slice();
 }
 
 // Скип и выбор трека — всегда без перехода; плавно только сам конец трека
@@ -344,9 +388,14 @@ async function playId(id, fade = 0) {
 }
 function playFromView(id) { waveMode = false; buildQueue(id); playId(id); }
 function next() { const id = curId && neighbour(curId, 1); if (id) playId(id); }
+const backStack = [];
+let goingBack = false;
 function prev() {
   if (engine.position > 3) { engine.seek(0); return; }
-  const id = curId && neighbour(curId, -1); if (id) playId(id);
+  const id = backStack.pop() || (curId && neighbour(curId, -1));
+  if (!id) { engine.seek(0); return; }
+  goingBack = true;
+  playId(id);
 }
 function toggle() {
   if (!engine.track && view === 'wave') { startWave(); return; }
@@ -358,6 +407,8 @@ engine.addEventListener('track', () => {
   const t = engine.track;
   closeListen();
   if (t) listening = { id: t.id, played: 0 };
+  if (curId && !goingBack && curId !== t?.id) { backStack.push(curId); if (backStack.length > 100) backStack.shift(); }
+  goingBack = false;
   curId = t?.id || null;
   if (waveMode) refillWave();
   markCurrent(); paintNow(); applyTone(t); paintOrb();
@@ -403,7 +454,7 @@ const waveLibrary = () => { const all = [...tracks.values()]; return navigator.o
 function startWave() {
   const library = waveLibrary();
   if (!library.length) { toast(tracks.size ? 'Без интернета волне нечего играть: треки ещё не скачаны' : 'Сначала добавь музыку'); return; }
-  const picks = nextWave(library, currentTaste(), { count: 12, history: recentIds() });
+  const picks = nextWave(library, currentTaste(), { count: 12, history: recentIds(), after: engine.track });
   if (!picks.length) { toast('Волне нечего играть: все треки отмечены как «не моё»'); return; }
   waveMode = true;
   queue = queueBase = picks.map(t => t.id);
@@ -417,7 +468,7 @@ function refillWave() {
   const i = queue.indexOf(curId);
   if (i < 0 || queue.length - i > 4) return;
   const keep = queue.slice(Math.max(0, i - 5));
-  const more = nextWave(waveLibrary(), currentTaste(), { count: 10, history: [...recentIds(), ...keep] }).map(t => t.id).filter(id => !keep.includes(id));
+  const more = nextWave(waveLibrary(), currentTaste(), { count: 10, history: [...recentIds(), ...keep], after: getT(keep.at(-1)) }).map(t => t.id).filter(id => !keep.includes(id));
   queue = queueBase = [...keep, ...more];
   injectPreviews();
   engine.refreshNext();
@@ -794,10 +845,12 @@ const layer = $('#layer');
 function closeLayer() { layer.innerHTML = ''; }
 function popup(html, anchorRight = true) {
   closeLayer();
-  layer.innerHTML = `<div class="pop">${html}</div>`;
+  layer.innerHTML = `<div class="pop"><button class="popclose" title="Закрыть"><svg><use href="#i-x"/></svg></button>${html}</div>`;
+  layer.querySelector('.popclose').onclick = closeLayer;
   return layer.firstElementChild;
 }
 document.addEventListener('pointerdown', e => {
+  if (e.target === layer) { closeLayer(); return; }
   if (layer.firstElementChild && !layer.contains(e.target) && !e.target.closest('#mixChip, #eqBtn, #fMix, #fEq, #npAdd, #fAdd, [data-add], [data-sug=add], [data-more], .modal')) closeLayer();
 });
 
@@ -934,8 +987,8 @@ async function enrich(t, blob, tgItem) {
   try { tags = await readTags(blob); } catch {}
   // проверенные названия не трогаем: в файле может оставаться старый неверный тег
   if (!t.verified) {
-    if (tags.title && (!t.title || t.title === t.fileTitle)) t.title = tags.title;
-    if (tags.artist && !t.artist) t.artist = tags.artist;
+    if (tags.title && (!t.title || t.title === t.fileTitle || cleanTag(t.fileTitle) === t.title)) t.title = cleanTag(tags.title) || t.title;
+    if (tags.artist && !t.artist) t.artist = cleanTag(tags.artist);
     if (tags.album && !t.album) t.album = tags.album;
   }
   if (tags.released && !t.released) t.released = tags.released;
@@ -971,23 +1024,28 @@ async function coverHunt() {
   if (hunting || !navigator.onLine) return;
   hunting = true;
   try {
-    for (const id of order) {
-      const t = tracks.get(id);
-      if (!t || t.artChecked || !t.title || !t.verified || t.ident?.status === 'kept') continue; // оригинальную обложку ищем только для проверенных названий
-      if (!navigator.onLine) break;
+    for (;;) {
+      // оригинальную обложку ищем только для проверенных названий
+      const t = order.map(id => tracks.get(id)).find(x => x && !x.artChecked && x.title && x.verified && x.ident?.status !== 'kept');
+      if (!t || !navigator.onLine) break;
       try {
         const it = await findOriginal(t.artist, t.title, t.duration);
         t.artChecked = true;
+        // название из LRCLIB заменяем оригинальным написанием из каталога
+        if (it?.album && t.nameFrom === 'lrclib') { t.title = it.title; t.artist = it.artist; delete t.nameFrom; updateRow(t.id); if (t.id === curId) { paintNow(); mediaMeta(t); } }
+        t.metaV = 1;
+        if (it?.genre) t.genre = it.genre;
         if (it?.released && !t.released) t.released = it.released;
         if (it?.album && !t.album) t.album = it.album;
-        const b = it?.art ? await fetchArt(it.art).catch(() => null) : null;
+        // уже стоящую оригинальную обложку не трогаем: пост в канале второй раз не перезаливаем
+        const b = it?.art && !t.coverOriginal ? await fetchArt(it.art).catch(() => null) : null;
         if (b) {
           t.coverOriginal = true;
-          if (settings.writeChannel && inCurrentChat(t)) { t.chanPending = true; chanQueue(); }
+          if (settings.writeChannel && inCurrentChat(t)) t.chanPending = true;
           await setCover(t, b);
         } else await saveTrack(t);
-      }
-      catch { break; }
+        if (t.chanPending) chanQueue();
+      } catch { break; }
     }
   } finally { hunting = false; }
 }
@@ -1012,8 +1070,28 @@ async function auddFor(blob) {
   }
 }
 
+let tempoRunning = false;
+async function tempoHunt() {
+  if (tempoRunning || isPhone()) return;
+  tempoRunning = true;
+  try {
+    for (;;) {
+      const t = order.map(id => tracks.get(id)).find(x => x?.downloaded && x.bpm === undefined);
+      if (!t) break;
+      await new Promise(r => setTimeout(r, engine.paused ? 300 : 1500));
+      try {
+        const blob = await db.get('blobs', t.id);
+        const buf = await new OfflineAudioContext(1, 1, 22050).decodeAudioData(await blob.arrayBuffer());
+        const a = analyzeAudio(buf.getChannelData(0), buf.sampleRate);
+        t.bpm = a.bpm; t.rms = a.rms;
+      } catch { t.bpm = null; t.rms = null; }
+      await saveTrack(t);
+    }
+  } finally { tempoRunning = false; }
+}
+
 // ---------- распознавание треков ----------
-let identRunning = false;
+let identRunning = false, identPaint = 0;
 const identState = { done: 0, total: 0 };
 const fixCount = () => { let n = 0; for (const t of tracks.values()) if (t.ident?.status === 'found' && !t.verified) n++; return n; };
 
@@ -1023,14 +1101,14 @@ async function identHunt() {
   try {
     for (;;) {
       while (sugFetching) await new Promise(r => setTimeout(r, 1000)); // у iTunes общий лимит запросов с подборкой Волны
-      await new Promise(r => setTimeout(r, engine.paused ? 100 : 700)); // пока играет музыка, не торопимся
-      const todo = order.map(id => tracks.get(id)).filter(t => t && t.downloaded && !t.verified && !t.ident);
+      await new Promise(r => setTimeout(r, engine.paused ? 50 : 250)); // пока играет музыка, чуть медленнее
+      const todo = order.map(id => tracks.get(id)).filter(t => t && !t.verified && !t.ident);
       identState.total = identState.done + todo.length;
       if (!todo.length) {
         // Что не узнали раньше, пробуем по звуку, когда снова доступен дневной лимит AudD
         for (const t of order.map(id => tracks.get(id))) {
           if (!auddAllowed()) break;
-          if (t?.verified || t?.ident?.status !== 'none' || t.ident.auddTried) continue;
+          if (t?.verified || t?.ident?.status !== 'none' || t.ident.auddTried || !t.downloaded) continue;
           const blob = await db.get('blobs', t.id);
           const r = blob ? await auddFor(blob) : null;
           t.ident.auddTried = true;
@@ -1041,26 +1119,28 @@ async function identHunt() {
       }
       const t = todo[0];
       try {
-        const blob = await db.get('blobs', t.id);
+        const blob = t.downloaded ? await db.get('blobs', t.id) : null;
         const used = auddCalls();
-        const cand = blob ? await identify(t, blob, settings.acoustKey, { audd: auddFor }) : null;
-        if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used };
+        const cand = await identify(t, blob, settings.acoustKey, { audd: auddFor });
+        if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used || !blob };
         // уверены или название и так совпало — сразу ставим оригинальные название и обложку
-        else if (cand.auto || sameName(cand, t)) { await acceptFix(t, cand); identState.fixed = (identState.fixed || 0) + 1; }
+        else if (cand.auto || sameName(cand, t)) { await acceptFix(t, cand); identState.fixed = (identState.fixed || 0) + 1; coverHunt(); }
         else t.ident = { status: 'found', cand, v: IDENT_VER };
       } catch (e) {
         if (e.code === 4) { settings.acoustKey = ''; saveSettings(); toast('AcoustID не принял ключ. Проверь его в «Проверке названий»'); continue; }
-        // сбой сервиса — не приговор треку: ничего не сохраняем и продолжим позже
+        // сбой сервиса — не приговор треку: ничего не сохраняем и продолжим через минуту
         console.warn('identify', t.title, e);
+        setTimeout(identHunt, 60000);
         break;
       }
       await saveTrack(t);
       identState.done++;
-      if (view === 'fix') renderFix(); else renderNav();
+      if (view === 'fix') renderFix();
+      else if (Date.now() - identPaint > 1500) { identPaint = Date.now(); renderNav(); paintSub(); }
     }
   } finally {
     identRunning = false;
-    if (view === 'fix') renderFix(); else renderNav();
+    if (view === 'fix') renderFix(); else { renderNav(); paintSub(); }
     coverHunt();
   }
 }
@@ -1078,6 +1158,13 @@ function fixRowHTML(t) {
     <span class="acts"><button class="btn primary" data-fix="ok">Принять</button><button class="btn" data-fix="find">Другой</button><button class="btn" data-fix="keep">Оставить</button></span></li>`;
 }
 
+// Сколько треков ещё не проверено — видно прямо над списком
+let listSub = '';
+function paintSub() {
+  if (['fix', 'wave', 'wish', 'artists'].includes(view)) return;
+  const left = identRunning ? identState.total - identState.done : 0;
+  $('#viewSub').textContent = listSub + (left > 0 ? `. Распознаю названия: осталось ${left}` : '');
+}
 function renderFix() {
   $('#viewTitle').firstChild.textContent = 'Проверка названий';
   const list = order.map(id => tracks.get(id)).filter(t => t && !t.verified);
@@ -1104,8 +1191,9 @@ function renderFix() {
 
 async function acceptFix(t, c) {
   const renamed = t.title !== c.title || t.artist !== c.artist;
-  t.title = c.title; t.artist = c.artist; if (c.album) t.album = c.album; if (c.released) t.released = c.released;
+  t.title = c.title; t.artist = c.artist; if (c.album) t.album = c.album; if (c.released) t.released = c.released; if (c.genre) { t.genre = c.genre; t.metaV = 1; }
   t.verified = true; t.ident = { status: 'done', v: IDENT_VER };
+  if (c.from === 'lrclib') t.nameFrom = 'lrclib'; else delete t.nameFrom;
   // обложка всегда оригинальная, даже если в файле уже была какая-то картинка
   const b = c.art ? await fetchArt(c.art).catch(() => null) : null;
   if (b) { t.coverOriginal = true; t.artChecked = true; await setCover(t, b); }
@@ -1189,7 +1277,7 @@ async function chanQueue() {
     const later = new Set(); // эти посты в этот раз не получились — не мешаем остальным
     for (;;) {
       // только посты выбранного сейчас канала: номера сообщений в разных каналах совпадают
-      const pending = [...tracks.values()].filter(x => x.chanPending && inCurrentChat(x) && !later.has(x.id));
+      const pending = [...tracks.values()].filter(x => x.chanPending && x.artChecked && inCurrentChat(x) && !later.has(x.id));
       chan.total = chan.done + pending.length;
       const t = pending[0]; if (!t) break;
       renderTgCard();
@@ -1411,7 +1499,7 @@ async function startSync() {
       sync.scanned++;
       if (skip.has(id) || tracks.has(id)) continue;
       const p = parseFileName(it.fileName || 'Без названия');
-      const t = { id, source: 'tg', msgId: it.msgId, fileName: it.fileName, title: it.title || p.title, fileTitle: p.title, artist: it.artist || p.artist, album: '',
+      const t = { id, source: 'tg', msgId: it.msgId, fileName: it.fileName, title: cleanTag(it.title) || cleanTag(p.title) || p.title, fileTitle: p.title, artist: cleanTag(it.artist) || cleanTag(p.artist), album: '',
         duration: it.duration, size: it.size, mime: it.mime, downloaded: false, addedAt: it.date * 1000 + (it.msgId % 1000) };
       // другое устройство уже могло исправить название этого трека
       const meta = cloud?.trackMeta(id);
@@ -1582,11 +1670,57 @@ async function mediaMeta(t) {
 if ('mediaSession' in navigator) {
   const ms = navigator.mediaSession;
   const h = { play: toggle, pause: () => engine.pause(), nexttrack: next, previoustrack: prev, seekto: e => engine.seek(e.seekTime) };
-  for (const [k, f] of Object.entries(h)) try { ms.setActionHandler(k, f); } catch {}
+  // iOS иногда забывает обработчики, поэтому ставим их заново при смене трека
+  const bind = () => { for (const [k, f] of Object.entries(h)) try { ms.setActionHandler(k, f); } catch {} };
+  bind();
+  engine.addEventListener('track', bind);
   setInterval(() => { if (engine.track && engine.duration) try { ms.setPositionState({ duration: engine.duration, position: Math.min(engine.position, engine.duration), playbackRate: 1 }); } catch {} }, 2000);
 }
 
 // ---------- события ----------
+// Зажатие кнопок, как в плеере Telegram: «вперёд» играет ускоренно и разгоняется, «назад» перематывает рывками
+const HOLD_MS = 350, HOLD_RATES = [2, 3, 4];
+let hold = null, skipClick = false;
+function holdStart(btn) {
+  if (!engine.track || engine.paused) return;
+  const dir = btn.dataset.act;
+  hold = { btn, dir, active: false, timer: setTimeout(() => {
+    if (dir === 'next' && !engine.holdStart(HOLD_RATES[0])) { hold = null; return; }
+    hold.active = true; hold.at = Date.now();
+    btn.classList.add('holding');
+    hold.tick = setInterval(holdTick, 100);
+  }, HOLD_MS) };
+}
+function holdTick() {
+  const t = (Date.now() - hold.at) / 1000;
+  if (hold.dir === 'next') {
+    const rate = HOLD_RATES[Math.min(HOLD_RATES.length - 1, Math.floor(t / 1.5))];
+    if (rate !== hold.rate) { hold.rate = rate; engine.setRate(rate); }
+    paintProgress();
+    // дошли до конца трека — следующий начинается обычным образом
+    if (engine.position >= engine.duration - 1.5) { const h = hold; holdStop(true); h && next(); }
+  } else if (Date.now() - (hold.step || 0) > 400) {
+    hold.step = Date.now();
+    engine.seek(Math.max(0, engine.position - (t > 3 ? 12 : 6)));
+  }
+}
+function holdStop(ended) {
+  const h = hold; hold = null;
+  if (!h) return;
+  clearTimeout(h.timer); clearInterval(h.tick);
+  h.btn.classList.remove('holding');
+  if (!h.active) return;
+  skipClick = true; // отпускание не должно ещё и переключить трек
+  setTimeout(() => { skipClick = false; }, 400);
+  if (h.dir === 'next' && !ended) engine.holdEnd();
+  paintProgress();
+}
+for (const btn of $$('[data-act=next], [data-act=prev]')) {
+  btn.addEventListener('pointerdown', () => holdStart(btn));
+  btn.addEventListener('contextmenu', e => e.preventDefault()); // долгое нажатие на телефоне
+}
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, () => holdStop());
+document.addEventListener('click', e => { if (skipClick && e.target.closest('[data-act=next], [data-act=prev]')) { skipClick = false; e.stopImmediatePropagation(); } }, true);
 document.addEventListener('click', async e => {
   const pl = e.target.closest('[data-play]')?.dataset.play;
   if (pl) { waveMode = false; buildQueue(pl, order); playId(pl); return; }
@@ -1597,7 +1731,7 @@ document.addEventListener('click', async e => {
   else if (a === 'prev') prev();
   else if (a === 'shuffle') {
     settings.shuffle = !settings.shuffle; saveSettings();
-    if (curId && !waveMode) queue = settings.shuffle ? [curId, ...shuffled(queue.filter(id => id !== curId))] : queueBase.slice();
+    if (curId && !waveMode) queue = settings.shuffle ? smartShuffle(curId, queueBase.length ? queueBase : queue) : queueBase.slice();
     engine.refreshNext(); paintState();
   } else if (a === 'repeat') { settings.repeat = !settings.repeat; saveSettings(); engine.refreshNext(); paintState(); }
   else if (a === 'waveStart') startWave();
@@ -1770,6 +1904,9 @@ document.addEventListener('visibilitychange', () => {
 });
 document.addEventListener('keydown', e => {
   if (e.target.matches?.('input:not([type=range]), textarea')) return;
+  if (e.code === 'MediaPlayPause') { e.preventDefault(); toggle(); return; }
+  if (e.code === 'MediaTrackNext') { e.preventDefault(); next(); return; }
+  if (e.code === 'MediaTrackPrevious') { e.preventDefault(); prev(); return; }
   if (e.code === 'Space') { e.preventDefault(); toggle(); }
   else if (e.code === 'ArrowRight' && (e.ctrlKey || e.metaKey)) next();
   else if (e.code === 'ArrowLeft' && (e.ctrlKey || e.metaKey)) prev();
@@ -1796,6 +1933,9 @@ async function boot() {
     for (const t of await db.all('tracks')) {
       // старый поиск часто не находил русские треки: проверяем их заново
       if (!t.verified && t.ident && t.ident.v !== IDENT_VER) delete t.ident;
+      if (t.verified && t.artChecked && !t.genre && t.metaV !== 1 && !t.previewOnly) t.artChecked = false; // дозаполним жанр
+      const title = cleanTag(t.title) || t.title, artist = cleanTag(t.artist);
+      if (title !== t.title || artist !== t.artist) { t.title = title; t.artist = artist; saveTrack(t); }
       tracks.set(t.id, t);
     }
   } catch (e) {
@@ -1810,5 +1950,6 @@ async function boot() {
   db.persist();
   if (tgCfg?.session && tgCfg.chatId && navigator.onLine) { startSync(); if ([...tracks.values()].some(t => t.chanPending)) chanQueue(); }
   identHunt();
+  tempoHunt();
 }
 boot();

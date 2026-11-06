@@ -718,3 +718,32 @@ body:not(.playing) .stack { transform: none; }
 }
 .fmeta .label { display: none; }
 @media (max-width: 900px) { .row.on { padding-left: 4px; } }
+
+/* ---------- правки для телефона ---------- */
+.head.stuck { border-bottom: 0; box-shadow: 0 1px 0 var(--line); }
+.popclose { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; color: var(--mist); background: rgb(255 255 255 / .07); }
+.popclose:hover { color: var(--paper); }
+.pop { position: fixed; }
+.eqsl input { touch-action: none; }
+@media (max-width: 900px) {
+  html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; }
+  /* шапка уезжает вместе со списком, иначе занимает половину экрана */
+  .head, .head.stuck { position: static; background: none; box-shadow: none; }
+}
+
+.eqhead { padding-right: 44px; }
+@media (max-width: 900px) {
+  .bar .btns .ib[data-act=prev] { display: grid; }
+  .bar .btns .ib { width: 36px; height: 44px; }
+}
+
+[data-act=next], [data-act=prev] { touch-action: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.ib.holding { color: var(--accent); }
+
+/* кнопки плеера не наезжают друг на друга на средней ширине */
+.bar .ctrl { min-width: 0; gap: 2px; }
+.side { min-width: 0; flex-wrap: nowrap; }
+.side > * { flex: none; }
+@media (max-width: 1240px) { .vol, .side > svg { display: none; } }
+@media (max-width: 1060px) and (min-width: 901px) { .np .like, #npAdd { display: none; } .btns { gap: 8px; } }
+@media (max-width: 380px) { #npAdd { display: none; } }

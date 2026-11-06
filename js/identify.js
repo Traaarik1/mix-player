@@ -2,7 +2,7 @@
 import { searchItunes, norm } from './covers.js';
 import { normKey } from './wave.js';
 
-export const IDENT_VER = 2;
+export const IDENT_VER = 3;
 export const AUTO_SCORE = .85; // с такой уверенностью название и обложка меняются сами, без проверки
 
 // Мусор, который каналы и сайты дописывают к именам файлов
@@ -17,6 +17,15 @@ export function cleanName(s) {
     .replace(/^\s*\d{1,3}\s*[.\-_)]\s*/, '')
     .replace(/^[\s\-–—]+|[\s\-–—]+$/g, '')
     .replace(/\s+/g, ' ').trim();
+}
+
+// Реклама каналов внутри названия и артиста: «Трек [@newcloudrl]», «Артист | t.me/канал»
+export function cleanTag(s) {
+  return String(s || '')
+    .replace(/[([{][^)\]}]*(?:@|t\.me|telegram|телеграм|vk\.com|\.ru\b|\.com\b)[^)\]}]*[)\]}]?/gi, ' ')
+    .replace(/https?:\/\/\S+|t\.me\/\S+|@[\w.]+/gi, ' ')
+    .replace(/[([{]\s*[)\]}]/g, ' ')
+    .replace(/\s+/g, ' ').replace(/^[\s|/\-–—•]+|[\s|/\-–—•]+$/g, '').trim();
 }
 
 // track_0042, audio_2024-01-05 и подобное: искать по такому имени бессмысленно
@@ -55,6 +64,12 @@ export function scoreCandidate(query, c, duration = 0) {
   if (!q.length || !title.length) return 0;
   let s = covered(title, q) * .5 + covered(artist, q) * .35 + covered(q, [...title, ...artist]) * .15;
   if (VERSION.test(c.title) && !VERSION.test(query)) s -= .2;
+  if (c.from === 'lrclib') {
+    // LRCLIB заполняют люди: бывают перепутанные поля и артист внутри названия. Тогда пусть решает iTunes.
+    const [left, right] = query.split(/\s+[-–—]\s+/);
+    if (right && covered(words(left), title) >= .8 && covered(words(right), artist) >= .8) s -= .4;
+    if (covered(artist, title) >= .8 || c.artist.length > 40) s -= .4;
+  }
   if (duration && c.duration) {
     const gap = Math.abs(c.duration - duration);
     s += gap < 3 ? .15 : gap > 20 ? -.35 : 0;
@@ -66,7 +81,7 @@ async function lrclib(term) {
   const r = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(term)}`);
   if (!r.ok) return [];
   const list = await r.json();
-  return (Array.isArray(list) ? list : []).slice(0, 15).map(x => ({ title: x.trackName, artist: x.artistName, album: x.albumName || '', duration: x.duration || 0, art: null, preview: null }));
+  return (Array.isArray(list) ? list : []).slice(0, 15).map(x => ({ title: x.trackName, artist: x.artistName, album: x.albumName || '', duration: x.duration || 0, art: null, preview: null, from: 'lrclib' }));
 }
 
 async function acoustid(fp, duration, key) {
@@ -145,24 +160,20 @@ export async function identify(t, blob, key, { audd } = {}) {
   }
   let best = null, top = 0;
   const consider = (query, list) => { for (const c of list) { const s = scoreCandidate(query, c, duration); if (s > top) { best = c; top = s; } } };
-  const done = () => top >= AUTO_SCORE && best.art;
+  // Сначала LRCLIB: он без жёсткого лимита, поэтому тысячи треков проходят быстро. iTunes (20 запросов в минуту) — когда он не нашёл.
+  // Обложки подтягиваются потом отдельно, чтобы не держать очередь.
+  const itunes = (term, country) => searchItunes(term, 10, country).catch(() => []);
   search: for (const query of queriesFor(t)) {
-    // дефис между артистом и названием каталоги воспринимают как часть слова
-    const plain = query.replace(/\s+[-–—]\s+/g, ' ');
+    const plain = query.replace(/\s+[-–—]\s+/g, ' '); // дефис между артистом и названием каталоги воспринимают как часть слова
     const parts = query.split(/\s+[-–—]\s+/);
     const terms = isLatin(query) ? [plain, toCyrillic(plain)] : [plain];
-    if (parts.length > 1) terms.push(parts.at(-1)); // артист в имени часто записан неточно: ищем и по одному названию
-    for (const term of terms) {
-      consider(query, await searchItunes(term, 10, 'RU'));
-      if (done()) break search;
-      consider(query, await lrclib(term).catch(() => []));
+    for (const term of terms) { consider(query, await lrclib(term).catch(() => [])); if (top >= AUTO_SCORE) break search; }
+    for (const term of terms) { consider(query, await itunes(term, 'RU')); if (top >= AUTO_SCORE) break search; }
+    if (parts.length > 1) { // артист в имени часто записан неточно: ищем и по одному названию
+      consider(query, await lrclib(parts.at(-1)).catch(() => []));
       if (top >= AUTO_SCORE) break search;
     }
-    if (isLatin(query)) { consider(query, await searchItunes(plain, 10, 'US')); if (done()) break search; }
-  }
-  if (top >= AUTO_SCORE && best && !best.art) { // LRCLIB знает название, но обложек у него нет
-    const it = await findOriginal(best.artist, best.title, duration || best.duration);
-    if (it) best = { ...best, title: it.title, artist: it.artist, album: it.album || best.album, art: it.art, preview: it.preview };
+    if (isLatin(query)) { consider(query, await itunes(plain, 'US')); if (top >= AUTO_SCORE) break search; }
   }
   if (top < AUTO_SCORE && audd && blob) {
     const r = await audd(blob);

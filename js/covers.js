@@ -24,7 +24,7 @@ export async function searchItunes(term, limit = 10, country = 'RU') {
   return results.filter(x => x.trackName).map(x => ({
     title: x.trackName, artist: x.artistName, album: x.collectionName || '',
     art: x.artworkUrl100?.replace('100x100bb', '600x600bb') || null,
-    duration: (x.trackTimeMillis || 0) / 1000, preview: x.previewUrl || null, released: x.releaseDate?.slice(0, 10) || '',
+    duration: (x.trackTimeMillis || 0) / 1000, preview: x.previewUrl || null, released: x.releaseDate?.slice(0, 10) || '', genre: x.primaryGenreName || '',
   }));
 }
 

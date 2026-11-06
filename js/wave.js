@@ -14,6 +14,9 @@ export const WAVE = {
   EXPLORE: .15, EXPLORE_COLD: .35,
   // новые треки
   W_SIM: 1, W_SEED: .6, W_NOVEL: .5, W_POP: .25, W_FEEDBACK: 1, W_SEEN: .3, W_JUNK: 1,
+  // какой трек после какого
+  FLOW_GENRE_SAME: 1.6, FLOW_GENRE_OTHER: .75, FLOW_ERA_NEAR: 1.15, FLOW_ERA_FAR: .85, FLOW_TEMPO_NEAR: 1.25, FLOW_TEMPO_FAR: .85,
+  FLOW_LOUD_NEAR: 1.1, FLOW_LOUD_FAR: .85, FLOW_HABIT: .6, FLOW_MIN: .4, HABIT_GAP_MIN: 30,
   W_JITTER: .15, KNOWN_NOVELTY: .3, ARTIST_DROP: -.5, MAX_SHARE_PER_SEED: .4, COLLAB_SIM: .7,
 };
 
@@ -58,7 +61,7 @@ export function creditsOf(artist, solo = null) {
   return uniqBy((split ? [...parts, ...feat] : [main, ...feat]).map(name => ({ key: normKey(name), name })).filter(x => x.key), x => x.key);
 }
 
-function soloArtists(rows) {
+export function soloArtists(rows) {
   const solo = {};
   for (const r of rows) {
     if (isUnknown(r?.artist)) continue;
@@ -148,6 +151,18 @@ export function buildTaste({ listens = [], likes = [], dismissals = [], library 
   }
   for (const a of Object.values(artists)) if (a.dismissed >= W.ARTIST_BAN_DISMISSALS) banned.artists[a.key] = 1;
 
+  // Привычки: после какого артиста какого ты дослушиваешь, а какого пропускаешь
+  const trans = {};
+  const ordered = listens.filter(e => e.at).sort((a, b) => a.at - b.at);
+  for (let i = 1; i < ordered.length; i++) {
+    const a = ordered[i - 1], b = ordered[i];
+    if (b.at - a.at > W.HABIT_GAP_MIN * 60000) continue;
+    const ka = creditsOf(byId.get(a.id)?.artist ?? a.artist, solo)[0]?.key, kb = creditsOf(byId.get(b.id)?.artist ?? b.artist, solo)[0]?.key;
+    if (!ka || !kb || ka === kb) continue;
+    const t = byId.get(b.id), v = listenSignal(b, t?.duration || t?.bounds?.d || b.duration) * decay(b.at, now, W.HALF_LIFE_DAYS);
+    (trans[ka] ??= {})[kb] = (trans[ka][kb] || 0) + v;
+  }
+
   // Априорный вес за треки в библиотеке: почти всё решает при холодном старте, потом угасает
   const cold = clamp01(1 - listens.length / W.COLD_LISTENS), counts = {};
   for (const t of library) for (const c of creditsOf(t.artist, solo)) { entry(c).tracks++; counts[c.key] = (counts[c.key] || 0) + 1; }
@@ -155,7 +170,56 @@ export function buildTaste({ listens = [], likes = [], dismissals = [], library 
   for (const [k, n] of Object.entries(counts)) artists[k].weight += prior * Math.log2(1 + n);
   for (const a of Object.values(artists)) a.affinity = affinity(a.weight);
 
-  return { artists, tracks, banned, solo, listenCount: listens.length, cold: listens.length < W.COLD_LISTENS, now };
+  return { artists, tracks, banned, solo, trans, listenCount: listens.length, cold: listens.length < W.COLD_LISTENS, now };
+}
+
+// Насколько трек b подходит сразу после a. 1 — нейтрально; неизвестные данные ничего не меняют.
+export function flowScore(a, b, trans = {}, solo = null) {
+  const W = WAVE;
+  if (!a || !b) return 1;
+  let k = 1;
+  if (a.genre && b.genre) k *= a.genre === b.genre ? W.FLOW_GENRE_SAME : W.FLOW_GENRE_OTHER;
+  const ya = parseInt(a.released, 10), yb = parseInt(b.released, 10);
+  if (ya && yb) { const d = Math.abs(ya - yb); k *= d <= 5 ? W.FLOW_ERA_NEAR : d > 20 ? W.FLOW_ERA_FAR : 1; }
+  if (a.bpm && b.bpm) {
+    const r = Math.max(a.bpm, b.bpm) / Math.min(a.bpm, b.bpm); // двойной темп на слух тот же
+    k *= r < 1.06 || Math.abs(r - 2) < .12 ? W.FLOW_TEMPO_NEAR : r > 1.25 ? W.FLOW_TEMPO_FAR : 1;
+  }
+  if (a.rms != null && b.rms != null) { const d = Math.abs(a.rms - b.rms); k *= d <= 3 ? W.FLOW_LOUD_NEAR : d >= 10 ? W.FLOW_LOUD_FAR : 1; }
+  const ka = creditsOf(a.artist, solo)[0]?.key, kb = creditsOf(b.artist, solo)[0]?.key;
+  const h = ka && kb ? trans[ka]?.[kb] : 0;
+  if (h) k *= 1 + W.FLOW_HABIT * Math.tanh(h / 2);
+  return Math.max(W.FLOW_MIN, k);
+}
+
+// Темп и громкость трека по звуку. samples — один канал, sr — его частота.
+export function analyzeAudio(samples, sr) {
+  const hop = Math.max(1, Math.round(sr / 100)), n = samples.length;
+  const start = Math.floor(n * .15), end = Math.min(n, start + sr * 90);
+  const env = [];
+  let sum = 0, count = 0;
+  for (let i = start; i + hop <= end; i += hop) {
+    let e = 0;
+    for (let j = i; j < i + hop; j += 2) e += samples[j] * samples[j];
+    sum += e; count += Math.ceil(hop / 2);
+    env.push(Math.sqrt(e / Math.ceil(hop / 2)));
+  }
+  const rms = count && sum ? Math.round(10 * Math.log10(sum / count) * 10) / 10 : null;
+  if (env.length < 500) return { rms, bpm: null };
+  const onset = env.map((v, i) => i ? Math.max(0, v - env[i - 1]) : 0);
+  const mean = onset.reduce((a, b) => a + b, 0) / onset.length;
+  let best = 0, bestLag = 0, total = 0, seen = 0;
+  for (let lag = 33; lag <= 100; lag++) { // 60–180 ударов в минуту при 100 замерах в секунду
+    let c = 0;
+    for (let i = lag; i < onset.length; i++) c += (onset[i] - mean) * (onset[i - lag] - mean);
+    total += Math.max(0, c); seen++;
+    if (c > best) { best = c; bestLag = lag; }
+  }
+  if (!bestLag || !total || best < total / seen * 1.4) return { rms, bpm: null }; // ритм не выражен
+  let bpm = 6000 / bestLag;
+  while (bpm < 75) bpm *= 2;
+  while (bpm > 165) bpm /= 2;
+  return { rms, bpm: Math.round(bpm) };
 }
 
 function pickIndex(ws, rng) {
@@ -176,7 +240,7 @@ function isBanned(t, taste, bannedIdx) {
 
 // Следующие count треков волны из своей библиотеки. history — id недавно сыгранных и уже поставленных
 // в очередь (последние в конце). Вернёт пусто, только если библиотека пуста или вся забанена.
-export function nextWave(library, taste, { count = 10, history = [], rng = Math.random, now = taste.now } = {}) {
+export function nextWave(library, taste, { count = 10, history = [], after = null, rng = Math.random, now = taste.now } = {}) {
   const W = WAVE, bannedIdx = trackIndex(taste.banned.tracks);
   const rows = library.filter(t => !isBanned(t, taste, bannedIdx)).map(t => {
     const keys = creditsOf(t.artist, taste.solo).map(c => c.key);
@@ -190,13 +254,14 @@ export function nextWave(library, taste, { count = 10, history = [], rng = Math.
   const recent = new Set(recentN ? seq.slice(-recentN) : []);
   const lastArtists = seq.map(id => byId.get(id) || byId.get(Number(id))).filter(Boolean).slice(-W.ARTIST_GAP).map(r => r.keys);
   const inBatch = {}, picked = new Set(), out = [];
+  let prev = after || [...seq].reverse().map(id => byId.get(id)?.t).find(Boolean) || null;
 
   const score = r => {
     const aff = r.keys.length ? Math.max(...r.keys.map(k => taste.artists[k]?.affinity ?? 0)) : 0;
     const base = Math.max(.05, 1 + W.TASTE_ARTIST * aff + W.TASTE_TRACK * affinity(r.s?.weight || 0));
     const hrs = r.s?.lastAt ? Math.max(0, now - r.s.lastAt) / HOUR : Infinity;
     const fresh = hrs === Infinity ? 1 + W.UNPLAYED_BONUS : 1 - Math.exp(-hrs / W.FRESH_TAU_HOURS);
-    return { w: base * base * fresh, fresh, aff };
+    return { w: base * base * fresh * flowScore(prev, r.t, taste.trans, taste.solo), fresh, aff };
   };
   const explore = taste.cold ? W.EXPLORE_COLD : W.EXPLORE;
 
@@ -213,7 +278,7 @@ export function nextWave(library, taste, { count = 10, history = [], rng = Math.
     let i = pickIndex(ws, rng);
     if (i < 0) i = pickIndex(scored.map(x => Math.max(x.w, 1e-6)), rng);
     const r = pool[i];
-    picked.add(r.t.id); out.push(r.t);
+    picked.add(r.t.id); out.push(r.t); prev = r.t;
     lastArtists.push(r.keys);
     for (const k of r.keys) inBatch[k] = (inBatch[k] || 0) + 1;
   }

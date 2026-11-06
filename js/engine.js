@@ -1,3 +1,4 @@
+import { analyzeAudio } from './wave.js';
 // Аудиодвижок Mix.
 // Главная идея: переход на следующий трек заранее ставится в расписание звукового потока
 // (AudioBufferSourceNode.start(when) + кривые громкости). Звуковой поток не зависит от таймеров JS,
@@ -25,6 +26,16 @@ const FADE_IN = Float32Array.from({ length: N }, (_, i) => Math.sin(i / (N - 1) 
 const FADE_OUT = Float32Array.from({ length: N }, (_, i) => Math.cos(i / (N - 1) * Math.PI / 2));
 const scaled = (curve, k) => k === 1 ? curve : curve.map(v => v * k);
 const noop = () => {};
+
+// Секунда тишины в WAV для медиа-элемента
+function silence() {
+  const sr = 8000, buf = new ArrayBuffer(44 + sr * 2), v = new DataView(buf);
+  [...'RIFF'].forEach((c, i) => v.setUint8(i, c.charCodeAt(0))); v.setUint32(4, 36 + sr * 2, true);
+  [...'WAVEfmt '].forEach((c, i) => v.setUint8(8 + i, c.charCodeAt(0))); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  [...'data'].forEach((c, i) => v.setUint8(36 + i, c.charCodeAt(0))); v.setUint32(40, sr * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
 
 export const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -118,6 +129,9 @@ export class Engine extends EventTarget {
       this.outEl.addEventListener('pause', () => { if (!this.paused) this.interrupted(); });
     } else {
       this.master.connect(ctx.destination);
+      // Кнопки экрана блокировки и клавиатуры браузер привязывает к настоящему медиа-элементу,
+      // а звук Web Audio им не считается. Поэтому рядом всегда идёт зацикленная тишина.
+      if (this.route !== 'plain') { this.outEl = new Audio(silence()); this.outEl.loop = true; this.outEl.play().catch(noop); }
     }
     ctx.onstatechange = () => this.onCtxState();
     navigator.audioSession?.addEventListener?.('statechange', () => { if (navigator.audioSession.state !== 'interrupted') this.recover(); });
@@ -184,7 +198,11 @@ export class Engine extends EventTarget {
     this.decodeQ = run.catch(noop);
     const buf = await run;
     this.sizes.set(track.id, buf.length * buf.numberOfChannels * 4);
-    if (!track.bounds) { track.bounds = silenceBounds(buf); this.onBounds?.(track, track.bounds); }
+    if (!track.bounds || track.bpm === undefined) {
+      track.bounds ||= silenceBounds(buf);
+      if (track.bpm === undefined) { const a = analyzeAudio(buf.getChannelData(0), buf.sampleRate); track.bpm = a.bpm; track.rms = a.rms; }
+      this.onBounds?.(track, track.bounds);
+    }
     this.evict(track.id);
     return buf;
   }
@@ -406,6 +424,27 @@ export class Engine extends EventTarget {
   }
   toggle() { return this.paused ? this.resume() : this.pause(); }
 
+  // Ускоренное проигрывание при зажатой кнопке. Переход на следующий трек на это время снимается с расписания,
+  // иначе он заиграл бы не вовремя.
+  setRate(rate) {
+    const c = this.cur; if (!c || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    c.offset = this.position; c.startCtx = now; c.rate = rate;
+    c.src.playbackRate.setValueAtTime(rate, now);
+  }
+  holdStart(rate) {
+    if (!this.cur || this.paused) return false;
+    if (this.nxt && this.ctx.currentTime >= this.nxt.at) return false; // переход уже идёт
+    this.cancelNext();
+    this.setRate(rate);
+    return true;
+  }
+  holdEnd() {
+    if (!this.cur) return;
+    this.setRate(1);
+    this.scheduleNext();
+  }
+
   seek(pos) {
     if (!this.cur) return;
     return this.play(this.cur.track, { offset: pos, keepPaused: this.paused });
@@ -413,7 +452,7 @@ export class Engine extends EventTarget {
 
   get position() {
     const c = this.cur; if (!c) return 0;
-    return Math.max(0, Math.min(c.buf.duration, c.offset + Math.max(0, this.ctx.currentTime - c.startCtx)));
+    return Math.max(0, Math.min(c.buf.duration, c.offset + Math.max(0, (this.ctx.currentTime - c.startCtx) * (c.rate || 1))));
   }
   get duration() { return this.cur?.buf.duration || 0; }
   get track() { return this.cur?.track || null; }
