@@ -44,6 +44,8 @@
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m9.500 16.600-4.100-4.100L4 13.900l5.500 5.500L20.500 8.400 19.100 7z"/></symbol>
     <symbol id="i-wish" viewBox="0 0 24 24"><path d="M11 3h2v9.200l3.300-3.300 1.400 1.400L12 16 6.300 10.300l1.400-1.400L11 12.200V3ZM4 19h16v2H4v-2Z"/></symbol>
     <symbol id="i-mini" viewBox="0 0 24 24"><path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm1 2v10h16V7H4Zm8 4h7v5h-7v-5Z"/></symbol>
+    <symbol id="i-queue" viewBox="0 0 24 24"><path d="M3 6h14v2H3V6Zm0 5h14v2H3v-2Zm0 5h9v2H3v-2Zm12 0 6 3-6 3v-6Z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 7.800 18 13.800 16.600 15.200 12 10.600 7.400 15.200 6 13.800Z"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 11h12.2l-5.6-5.6L12 4l8 8-8 8-1.4-1.4 5.6-5.6H4v-2Z"/></symbol>
   </svg>
 
@@ -105,6 +107,7 @@
     <div class="side">
       <button class="mixchip" id="mixChip" title="Переход между треками"></button>
       <button class="ib" data-act="lyrics" title="Текст песни"><svg><use href="#i-lyrics"/></svg></button>
+      <button class="ib" id="queueBtn" title="Очередь"><svg><use href="#i-queue"/></svg></button>
       <button class="ib" id="miniBtn" title="Мини-плеер: маленькое окно поверх остальных"><svg><use href="#i-mini"/></svg></button>
       <button class="ib" id="eqBtn" title="Эквалайзер"><svg><use href="#i-eq"/></svg></button>
       <svg style="color:var(--mist);margin-left:6px"><use href="#i-vol"/></svg>
@@ -134,7 +137,7 @@
         <button class="ib" data-act="repeat" title="Повторять"><svg><use href="#i-repeat"/></svg></button>
         <button class="ib" data-act="lyrics" title="Текст песни"><svg><use href="#i-lyrics"/></svg></button>
       </div>
-      <div class="fextra"><button class="mixchip" id="fMix"></button><button class="ib" id="fEq" title="Эквалайзер"><svg><use href="#i-eq"/></svg></button></div>
+      <div class="fextra"><button class="mixchip" id="fMix"></button><button class="ib" id="fEq" title="Эквалайзер"><svg><use href="#i-eq"/></svg></button><button class="ib" id="fQueue" title="Очередь"><svg><use href="#i-queue"/></svg></button></div>
       <div class="fnext" id="fNext"></div>
     </div>
   </section>

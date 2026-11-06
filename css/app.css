@@ -775,3 +775,25 @@ body:not(.playing) .stack { transform: none; }
   #layer:has(.menu)::before, #layer:has(.pop)::before { animation: fadeIn .2s ease-out; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ---------- очередь ---------- */
+.queuepop { width: 380px; padding: 18px 8px 8px; }
+.queuepop h3 { padding: 0 12px; }
+.qbody { max-height: min(62vh, 560px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.qhead { display: flex; justify-content: space-between; align-items: center; min-height: 30px; padding: 8px 12px 4px; color: var(--mist); font-size: 13px; font-weight: 600; }
+.qlist { list-style: none; margin: 0; padding: 0; }
+.qrow { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 12px; border-radius: var(--r-sm); cursor: pointer; }
+.qrow:hover { background: rgb(255 255 255 / .05); }
+.qrow:active { background: rgb(255 255 255 / .08); }
+.qrow[data-kind=now] { cursor: default; }
+.qrow[data-kind=now] .t { color: var(--accent); }
+.qrow .cov { width: 42px; height: 42px; font-size: 15px; flex: none; }
+.qrow .ttl { flex: 1; min-width: 0; }
+.qrow .ib { flex: none; }
+.qempty { color: var(--mist); font-size: 14px; padding: 6px 12px 12px; margin: 0; }
+@media (max-width: 900px) { .queuepop { width: auto; padding: 18px 6px 6px; } .qbody { max-height: 66dvh; } }
+@media (max-width: 1320px) and (min-width: 901px) { #miniBtn { display: none; } }
+
+.row { touch-action: pan-y; }
+.row.swiping { background: var(--velvet-2); box-shadow: -120px 0 0 var(--accent); }
+.row.swiping.armed { box-shadow: -120px 0 0 var(--amber); }

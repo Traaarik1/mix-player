@@ -60,3 +60,35 @@ export function setupGestures({ full, stack, mini, onClose, onOpen, onNext, onPr
     },
   });
 }
+
+// Свайп строки вправо: в очередь
+export function setupRowSwipe(list, onQueue) {
+  let s = null;
+  const reset = el => { el.style.transition = 'transform .18s ease-out'; el.style.transform = ''; setTimeout(() => { el.style.transition = ''; el.classList.remove('swiping', 'armed'); }, 190); };
+  list.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || e.target.closest('button')) return;
+    const el = e.target.closest('.row'); if (el) s = { el, x: e.clientX, y: e.clientY, on: false };
+  });
+  list.addEventListener('pointermove', e => {
+    if (!s) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (!s.on) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { s = null; return; }
+      if (dx < 12) return;
+      s.on = true; s.el.classList.add('swiping'); try { s.el.setPointerCapture(e.pointerId); } catch {}
+    }
+    const x = Math.max(0, Math.min(120, dx));
+    s.el.style.transform = 'translateX(' + x + 'px)';
+    s.el.classList.toggle('armed', x >= 80);
+  });
+  const end = cancel => e => {
+    if (!s) return;
+    const a = s; s = null;
+    if (!a.on) return;
+    if (!cancel && e.clientX - a.x >= 80) { onQueue(a.el.dataset.id); list.dataset.noclick = '1'; setTimeout(() => delete list.dataset.noclick, 300); }
+    else if (!cancel) { list.dataset.noclick = '1'; setTimeout(() => delete list.dataset.noclick, 300); }
+    reset(a.el);
+  };
+  list.addEventListener('pointerup', end(false));
+  list.addEventListener('pointercancel', end(true));
+}

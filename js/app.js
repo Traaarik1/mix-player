@@ -8,7 +8,7 @@ import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, a
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { openMini, canMini } from './mini.js';
-import { setupGestures } from './gestures.js';
+import { setupGestures, setupRowSwipe } from './gestures.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -359,8 +359,11 @@ const engine = new Engine({
 });
 engine.cf = settings.cf;
 
+let userQueue = [], queueAnchor = null, fromUser = null;
 function neighbour(id, dir) {
-  const i = queue.indexOf(id);
+  if (dir > 0 && userQueue.length) return userQueue[0];
+  let i = id === fromUser ? -1 : queue.indexOf(id);
+  if (i < 0) i = queue.indexOf(queueAnchor); // сейчас играет трек из ручной очереди
   if (i < 0 || !queue.length) return null;
   let j = i + dir;
   if (j >= queue.length) { if (!settings.repeat && !waveMode) return null; j = 0; }
@@ -389,6 +392,55 @@ async function playId(id, fade = 0) {
 }
 function playFromView(id) { waveMode = false; buildQueue(id); playId(id); }
 function next() { const id = curId && neighbour(curId, 1); if (id) playId(id); }
+const saveQueue = () => db.put('kv', 'userQueue', userQueue);
+function addToQueue(id, first = false) {
+  const t = getT(id); if (!t) return;
+  if (!engine.track) { waveMode = false; if (!queue.length) queue = queueBase = [id]; playId(id); return; }
+  userQueue = userQueue.filter(x => x !== id);
+  first ? userQueue.unshift(id) : userQueue.push(id);
+  saveQueue(); engine.refreshNext(); paintNext(); paintQueue();
+  toast(first ? 'Сыграет следующим' : `В очереди: ${t.title}`);
+}
+function queueUpcoming() {
+  const i = Math.max(0, queue.indexOf(curId !== fromUser && queue.includes(curId) ? curId : queueAnchor));
+  return queue.slice(i + 1, i + 31).filter(id => getT(id) && !userQueue.includes(id));
+}
+const queueRow = (id, kind, n) => {
+  const t = getT(id);
+  return `<li class="qrow" data-q="${esc(id)}" data-kind="${kind}">${coverHTML(t)}<span class="ttl"><span class="t">${esc(t.title)}</span><span class="a">${esc(t.artist || 'Неизвестный артист')}</span></span>
+    ${kind === 'user' && n > 0 ? '<button class="ib" data-qa="up" title="Выше"><svg><use href="#i-up"/></svg></button>' : ''}
+    <button class="ib" data-qa="del" title="Убрать из очереди"><svg><use href="#i-x"/></svg></button></li>`;
+};
+function queueHTML() {
+  const mine = userQueue.filter(getT), next = queueUpcoming();
+  return `<h3>Очередь</h3>${engine.track ? `<div class="qhead">Сейчас играет</div><ul class="qlist">${queueRow(engine.track.id, 'now', 0).replace(/<button[\s\S]*<\/button>/, '')}</ul>` : ''}
+    ${mine.length ? `<div class="qhead">В очереди<button class="chip" data-qa="clear">Очистить</button></div><ul class="qlist">${mine.map((id, n) => queueRow(id, 'user', n)).join('')}</ul>` : '<p class="qempty">Нажми плюс у трека и выбери «В очередь».</p>'}
+    ${next.length ? `<div class="qhead">Дальше по списку</div><ul class="qlist">${next.map(id => queueRow(id, 'base', 0)).join('')}</ul>` : ''}`;
+}
+function paintQueue() {
+  const box = $('.queuepop .qbody'); if (!box) return;
+  const top = box.scrollTop;
+  box.innerHTML = queueHTML(); hydrateIn(box); box.scrollTop = top;
+}
+function openQueue() {
+  if ($('.queuepop')) { dismissLayer(); return; }
+  const el = popup('<div class="qbody"></div>');
+  el.classList.add('queuepop');
+  paintQueue();
+  el.addEventListener('click', e => {
+    const a = e.target.closest('[data-qa]')?.dataset.qa, row = e.target.closest('.qrow'), id = row?.dataset.q;
+    if (a === 'clear') { userQueue = []; }
+    else if (a === 'del') {
+      if (row.dataset.kind === 'user') userQueue = userQueue.filter(x => x !== id);
+      else queue = queueBase = queue.filter(x => x !== id);
+    } else if (a === 'up') {
+      const i = userQueue.indexOf(id);
+      if (i > 0) [userQueue[i - 1], userQueue[i]] = [userQueue[i], userQueue[i - 1]];
+    } else if (row && row.dataset.kind !== 'now') { playId(id); return; }
+    else return;
+    saveQueue(); engine.refreshNext(); paintNext(); paintQueue();
+  });
+}
 const backStack = [];
 let goingBack = false;
 function prev() {
@@ -411,7 +463,14 @@ engine.addEventListener('track', () => {
   if (curId && !goingBack && curId !== t?.id) { backStack.push(curId); if (backStack.length > 100) backStack.shift(); }
   goingBack = false;
   curId = t?.id || null;
+  if (t) {
+    const before = userQueue.length;
+    userQueue = userQueue.filter(id => id !== t.id);
+    if (userQueue.length !== before) { saveQueue(); fromUser = t.id; }
+    else { fromUser = null; if (queue.includes(t.id)) queueAnchor = t.id; }
+  }
   if (waveMode) refillWave();
+  paintQueue();
   markCurrent(); paintNow(); applyTone(t); paintOrb();
   if (t?.source === 'preview' && !t.tone && t.art) fetchArt(t.art).then(toneOf).then(v => { t.tone = v; if (engine.track === t) applyTone(t); }).catch(() => {});
   if (t && t.source !== 'preview') { lib.history.unshift({ id: t.id, at: Date.now() }); lib.history.length = Math.min(lib.history.length, 300); saveLib(); }
@@ -544,7 +603,7 @@ async function fulfilWish(t) {
   delete waveFx[w.key];
   if (lib.likes.delete(old)) lib.likes.add(t.id);
   for (const p of lib.playlists) p.ids = [...new Set(p.ids.map(x => x === old ? t.id : x))];
-  queue = queue.map(x => x === old ? t.id : x); queueBase = queueBase.map(x => x === old ? t.id : x);
+  queue = queue.map(x => x === old ? t.id : x); queueBase = queueBase.map(x => x === old ? t.id : x); userQueue = userQueue.map(x => x === old ? t.id : x);
   const v = virtual.get('pv:' + fxKey(w.artist, w.title));
   if (v) v.libId = t.id;
   await dropPreviewTrack(old);
@@ -578,6 +637,7 @@ function openAddMenu(btn, t = engine.track) {
   const liked = id && lib.likes.has(id);
   layer.innerHTML = `<div class="menu addmenu">
     <button data-a="like"><svg><use href="#i-heart${liked ? '' : '-o'}"/></svg>${liked ? 'Убрать из любимого' : 'В любимое'}</button>
+    ${t.id !== curId ? '<button data-a="qnext"><svg><use href="#i-next"/></svg>Играть следующим</button><button data-a="qadd"><svg><use href="#i-queue"/></svg>В очередь</button>' : ''}
     ${isPv && !id ? '<button data-a="keep"><svg><use href="#i-plus"/></svg>Во все песни (пока 30 секунд)</button>' : ''}
     ${isPv || t.previewOnly ? '<button data-a="find"><svg><use href="#i-wish"/></svg>Найти полный трек в Telegram</button>' : ''}
     <hr><div class="menuhead">Альбом или плейлист</div>
@@ -591,6 +651,7 @@ function openAddMenu(btn, t = engine.track) {
     const a = b.dataset.a, pid = b.dataset.p;
     closeLayer();
     if (a === 'find') { findInTelegram(t); return; }
+    if (a === 'qnext' || a === 'qadd') { addToQueue(t.id, a === 'qnext'); return; }
     try {
       if (a === 'keep') { await keepPreview(t); toast('Добавлено. Полная версия заменит превью, когда появится в канале'); return; }
       const real = id ? tracks.get(id) : await keepPreview(t);
@@ -857,7 +918,7 @@ function popup(html, anchorRight = true) {
 }
 document.addEventListener('pointerdown', e => {
   if (e.target === layer) { dismissLayer(); return; }
-  if (layer.firstElementChild && !layer.contains(e.target) && !e.target.closest('#mixChip, #eqBtn, #fMix, #fEq, #npAdd, #fAdd, [data-add], [data-sug=add], [data-more], .modal')) closeLayer();
+  if (layer.firstElementChild && !layer.contains(e.target) && !e.target.closest('#queueBtn, #fQueue, #mixChip, #eqBtn, #fMix, #fEq, #npAdd, #fAdd, [data-add], [data-sug=add], [data-more], .modal')) closeLayer();
 });
 
 function mixCurvePath(cf) {
@@ -912,6 +973,7 @@ function openMenu(id, x, y) {
   const inPl = lib.playlists.find(p => p.id === view);
   layer.innerHTML = `<div class="menu">
     <button data-m="playNext">Играть следующим</button>
+    <button data-m="qadd">В очередь</button>
     <button data-m="toPl">Добавить в плейлист</button>
     ${inPl ? '<button data-m="fromPl">Убрать из плейлиста</button>' : ''}
     <hr>
@@ -924,10 +986,8 @@ function openMenu(id, x, y) {
   m.onclick = async e => {
     const a = e.target.dataset.m; if (!a) return;
     closeLayer();
-    if (a === 'playNext') {
-      if (!curId) { playFromView(id); return; }
-      queue = queue.filter(q => q !== id); queue.splice(queue.indexOf(curId) + 1, 0, id);
-      engine.refreshNext(); paintNext(); toast('Сыграет следующим');
+    if (a === 'playNext' || a === 'qadd') {
+      addToQueue(id, a === 'playNext');
     } else if (a === 'toPl') pickPlaylist(id);
     else if (a === 'fromPl') { inPl.ids = inPl.ids.filter(q => q !== id); saveLib(); render(); }
     else if (a === 'free') { await db.del('blobs', id); t.downloaded = false; saveTrack(t); updateRow(id); toast('Файл удалён, трек скачается снова при прослушивании'); }
@@ -936,7 +996,7 @@ function openMenu(id, x, y) {
       await Promise.all([db.del('blobs', id), db.del('covers', id), db.del('tracks', id)]);
       if (t.previewOnly) delete waveFx['w:' + fxKey(t.artist, t.title)];
       tracks.delete(id); lib.likes.delete(id); for (const p of lib.playlists) p.ids = p.ids.filter(q => q !== id);
-      queue = queue.filter(q => q !== id); queueBase = queueBase.filter(q => q !== id); engine.refreshNext();
+      queue = queue.filter(q => q !== id); queueBase = queueBase.filter(q => q !== id); userQueue = userQueue.filter(q => q !== id); saveQueue(); engine.refreshNext();
       if (t.source === 'tg') { tgCfg.skip = [...(tgCfg.skip || []), id]; saveTg(); }
       saveLib(); rebuildOrder(); render();
     }
@@ -1789,6 +1849,7 @@ $('#main').addEventListener('change', e => {
   }
 });
 $('#rows').addEventListener('click', async e => {
+  if ($('#rows').dataset.noclick) return;
   const fx = e.target.closest('[data-fix]');
   if (fx) {
     const t = tracks.get(fx.closest('.fix').dataset.id);
@@ -1892,10 +1953,12 @@ $('#fileInput').onchange = e => { addFiles(e.target.files); e.target.value = '';
 let qT; $('#search').oninput = e => { clearTimeout(qT); qT = setTimeout(() => { query = e.target.value.trim(); render(); }, 120); };
 $('#mixChip').onclick = () => layer.querySelector('.mixviz') ? closeLayer() : openMix();
 $('#eqBtn').onclick = $('#fEq').onclick = () => layer.querySelector('.eqgraph') ? closeLayer() : openEq();
+$('#queueBtn').onclick = $('#fQueue').onclick = openQueue;
 $('#fMix').onclick = () => layer.querySelector('.mixviz') ? closeLayer() : openMix();
 const openFull = () => { if (engine.track) $('#full').classList.add('open'); };
 const closeFull = () => { $('#full').classList.remove('open'); setLyrics(false); };
 $('.np').addEventListener('click', e => { if (isPhone() && !e.target.closest('button:not(#openFull)')) openFull(); });
+setupRowSwipe($('#rows'), id => addToQueue(id));
 setupGestures({ full: $('#full'), stack: $('#stack'), mini: $('#bar'), onClose: closeFull, onOpen: openFull, onNext: next, onPrev: prev });
 $('#vol').oninput = e => { settings.vol = +e.target.value; e.target.style.setProperty('--p', settings.vol + '%'); engine.setVolume(settings.vol / 100); saveSettings(); };
 $('#openFull').onclick = () => { if (engine.track) $('#full').classList.add('open'); };
@@ -1935,6 +1998,7 @@ async function boot() {
     const l = await db.get('kv', 'library');
     if (l) { lib.likes = new Set(l.likes); lib.playlists = l.playlists || []; lib.history = l.history || []; lib.listens = l.listens || []; waveFx = l.wave || {}; }
     waveSeen = await db.get('kv', 'waveSeen') || [];
+    userQueue = (await db.get('kv', 'userQueue') || []).filter(id => tracks.has(id) || String(id).startsWith('tg:') || String(id).startsWith('f:'));
     deviceId = await db.get('kv', 'deviceId') || Math.random().toString(36).slice(2, 10);
     db.put('kv', 'deviceId', deviceId);
     tgCfg = await db.get('kv', 'tg') || null;
