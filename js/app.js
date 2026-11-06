@@ -277,6 +277,7 @@ function paintList() {
   const seenFrom = Math.floor((main.scrollTop - top) / rowH), seenTo = Math.ceil((main.scrollTop - top + main.clientHeight) / rowH);
   // пока запас строк не подходит к концу, ничего не трогаем
   if (!full && (seenFrom - 6 >= listFrom || listFrom === 0) && (seenTo + 6 <= listTo || listTo === listIds.length)) return;
+  if (seenFrom >= listIds.length) { main.scrollTop = 0; listFrom = -1; paintList(); return; } // список стал короче
   const from = Math.max(0, seenFrom - BUFFER), to = Math.min(listIds.length, seenTo + BUFFER);
   const had = full ? new Map() : new Map([...rows.children].map(el => [el.dataset.id, el]));
   const box = document.createElement('template'), frag = document.createDocumentFragment();
@@ -843,14 +844,19 @@ for (const tr of $$('[data-seek]')) {
 // ---------- всплывающие панели ----------
 const layer = $('#layer');
 function closeLayer() { layer.innerHTML = ''; }
+function dismissLayer() {
+  const el = layer.firstElementChild; if (!el) return;
+  el.classList.add('closing');
+  setTimeout(() => { if (layer.firstElementChild === el) closeLayer(); }, 170);
+}
 function popup(html, anchorRight = true) {
   closeLayer();
   layer.innerHTML = `<div class="pop"><button class="popclose" title="Закрыть"><svg><use href="#i-x"/></svg></button>${html}</div>`;
-  layer.querySelector('.popclose').onclick = closeLayer;
+  layer.querySelector('.popclose').onclick = dismissLayer;
   return layer.firstElementChild;
 }
 document.addEventListener('pointerdown', e => {
-  if (e.target === layer) { closeLayer(); return; }
+  if (e.target === layer) { dismissLayer(); return; }
   if (layer.firstElementChild && !layer.contains(e.target) && !e.target.closest('#mixChip, #eqBtn, #fMix, #fEq, #npAdd, #fAdd, [data-add], [data-sug=add], [data-more], .modal')) closeLayer();
 });
 
@@ -941,7 +947,7 @@ function modal(html) {
   closeLayer();
   layer.innerHTML = `<div class="modal"><div class="dialog">${html}</div></div>`;
   const m = layer.firstElementChild;
-  m.addEventListener('pointerdown', e => { if (e.target === m) closeLayer(); });
+  m.addEventListener('pointerdown', e => { if (e.target === m) dismissLayer(); });
   return m.firstElementChild;
 }
 function askName(title, value = '') {
@@ -1122,7 +1128,7 @@ async function identHunt() {
         const blob = t.downloaded ? await db.get('blobs', t.id) : null;
         const used = auddCalls();
         const cand = await identify(t, blob, settings.acoustKey, { audd: auddFor });
-        if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used || !blob };
+        if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used };
         // уверены или название и так совпало — сразу ставим оригинальные название и обложку
         else if (cand.auto || sameName(cand, t)) { await acceptFix(t, cand); identState.fixed = (identState.fixed || 0) + 1; coverHunt(); }
         else t.ident = { status: 'found', cand, v: IDENT_VER };
@@ -1473,6 +1479,7 @@ async function downloadTrack(t) {
     await enrich(t, blob, it);
     updateRow(t.id);
     fulfilWish(t);
+    if (t.ident?.status === 'none' && settings.acoustKey) delete t.ident;
     identHunt();
   })();
   downloads.set(t.id, p);
@@ -1669,7 +1676,7 @@ async function mediaMeta(t) {
 }
 if ('mediaSession' in navigator) {
   const ms = navigator.mediaSession;
-  const h = { play: toggle, pause: () => engine.pause(), nexttrack: next, previoustrack: prev, seekto: e => engine.seek(e.seekTime) };
+  const h = { play: () => engine.track ? engine.resume() : toggle(), pause: () => engine.pause(), nexttrack: next, previoustrack: prev, seekto: e => engine.seek(e.seekTime) };
   // iOS иногда забывает обработчики, поэтому ставим их заново при смене трека
   const bind = () => { for (const [k, f] of Object.entries(h)) try { ms.setActionHandler(k, f); } catch {} };
   bind();
@@ -1769,6 +1776,7 @@ document.addEventListener('click', async e => {
   const v = e.target.closest('[data-view]')?.dataset.view;
   if (v) {
     view = v; $('#main').scrollTop = 0; render();
+    const mainEl = $('#main'); mainEl.classList.remove('fadein'); void mainEl.offsetWidth; mainEl.classList.add('fadein');
     if (v === 'wave' && !sug.items.length && tracks.size && navigator.onLine) loadSuggestions();
   }
 });
@@ -1789,7 +1797,7 @@ $('#rows').addEventListener('click', async e => {
       fx.disabled = true; fx.textContent = 'Слушаю…';
       try {
         const { recognizeTrack } = await import('./listen.js');
-        const r = await recognizeTrack(await db.get('blobs', t.id), { token: settings.auddToken });
+        const r = await recognizeTrack(await loadAudio(t), { token: settings.auddToken });
         if (r) { t.ident = { status: 'found', cand: { title: r.title, artist: r.artist, album: r.album || '', art: r.art || null, source: 'sound', score: .9 } }; await saveTrack(t); }
         else toast('Сервис тоже не узнал этот трек');
       } catch (err) { toast(err.message || 'Не получилось распознать'); }

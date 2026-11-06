@@ -747,3 +747,31 @@ body:not(.playing) .stack { transform: none; }
 @media (max-width: 1240px) { .vol, .side > svg { display: none; } }
 @media (max-width: 1060px) and (min-width: 901px) { .np .like, #npAdd { display: none; } .btns { gap: 8px; } }
 @media (max-width: 380px) { #npAdd { display: none; } }
+
+/* ---------- плавность: только transform и opacity, они не нагружают телефон ---------- */
+@keyframes sheetIn { from { transform: translateY(100%); } }
+@keyframes popIn { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+.main.fadein > * { animation: rise .22s ease-out; }
+.stack > *, .np-cover .cov { animation: fadeIn .3s ease-out; }
+.pop, .menu { animation: popIn .18s ease-out; }
+.modal { animation: fadeIn .18s ease-out; }
+.dialog { animation: popIn .22s ease-out; }
+.closing, .closing .dialog { opacity: 0; transition: opacity .16s ease-in; }
+.full { transition: transform .34s cubic-bezier(.22, 1, .36, 1), visibility 0s .34s; will-change: transform; }
+.full.open { transition: transform .34s cubic-bezier(.22, 1, .36, 1); }
+.btn, .chip, .ib, .pp, .row, .tile, .sug, .morerow, .tabs button { transition: transform .12s ease-out, background-color .12s, color .12s; }
+.btn:active, .chip:active, .ib:active, .tile:active, .morerow:active { transform: scale(.94); }
+.pp:active { transform: scale(.9); }
+.row:active, .sug:active { transform: scale(.985); }
+.tabs button svg { transition: transform .25s cubic-bezier(.3, 1.5, .5, 1); }
+.like.on svg { animation: popIn .2s ease-out; }
+.lyrics p { transition: color .25s ease-out, opacity .25s; }
+@media (max-width: 900px) {
+  .menu, .addmenu, .pop { animation: sheetIn .28s cubic-bezier(.22, 1, .36, 1); }
+  .dialog { animation: sheetIn .3s cubic-bezier(.22, 1, .36, 1); }
+  .closing.pop, .closing.menu, .closing .dialog { opacity: 1; transform: translateY(100%); transition: transform .17s ease-in; }
+  #layer:has(.menu)::before, #layer:has(.pop)::before { animation: fadeIn .2s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

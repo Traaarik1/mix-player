@@ -2,8 +2,8 @@
 import { searchItunes, norm } from './covers.js';
 import { normKey } from './wave.js';
 
-export const IDENT_VER = 3;
-export const AUTO_SCORE = .85; // с такой уверенностью название и обложка меняются сами, без проверки
+export const IDENT_VER = 4;
+export const AUTO_SCORE = .78; // с такой уверенностью название и обложка меняются сами, без проверки
 
 // Мусор, который каналы и сайты дописывают к именам файлов
 export function cleanName(s) {
@@ -84,6 +84,24 @@ async function lrclib(term) {
   return (Array.isArray(list) ? list : []).slice(0, 15).map(x => ({ title: x.trackName, artist: x.artistName, album: x.albumName || '', duration: x.duration || 0, art: null, preview: null, from: 'lrclib' }));
 }
 
+// Третий каталог: MusicBrainz, не больше запроса в секунду
+let mbLast = 0;
+async function musicbrainz(query) {
+  const wait = mbLast + 1100 - Date.now();
+  mbLast = Math.max(Date.now(), mbLast + 1100);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  const q = s => '"' + s.replace(/["\\]/g, ' ') + '"';
+  const [left, right] = query.split(/\s+[-–—]\s+/);
+  const lucene = right ? `recording:${q(right)} AND artist:${q(left)}` : q(query);
+  const r = await fetch(`https://musicbrainz.org/ws/2/recording?query=${encodeURIComponent(lucene)}&fmt=json&limit=8`);
+  if (!r.ok) return [];
+  const { recordings = [] } = await r.json();
+  return recordings.filter(x => x.score >= 80 && x.title && x['artist-credit']?.length).map(x => ({
+    title: x.title, artist: x['artist-credit'].map(a => a.name + (a.joinphrase || '')).join(''),
+    album: x.releases?.[0]?.title || '', duration: (x.length || 0) / 1000, art: null, preview: null, released: x['first-release-date'] || '',
+  }));
+}
+
 async function acoustid(fp, duration, key) {
   const body = new URLSearchParams({ client: key, meta: 'recordings releasegroups compress', duration: Math.round(duration), fingerprint: fp, format: 'json' });
   const r = await fetch('https://api.acoustid.org/v2/lookup', { method: 'POST', body });
@@ -138,10 +156,16 @@ function queriesFor(t) {
     const q = cleanName(raw);
     if (q && !isJunkName(q) && !out.some(x => words(x).join() === words(q).join())) out.push(q);
   };
+  // без приписок: «Трек 2.0 (prod. X) feat. Y» → «Трек»
+  const bare = s => String(s || '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/\s(?:feat\.?|ft\.?|prod\.?|при уч\S*)\s.*$/i, ' ').replace(/\s+\d+(?:\.\d+)?\s*$/, ' ').replace(/\s+/g, ' ').trim();
+  const lead = String(t.artist || '').split(/\s*(?:,|;|&|\/|\sx\s|\sfeat\.?\s|\sft\.?\s)\s*/i)[0];
   if (t.artist && t.title) add(`${t.artist} - ${t.title}`);
   add(t.fileName);
-  if (t.title) add(t.title);
-  return out.slice(0, 2);
+  if (lead && t.title) add(`${lead} - ${bare(t.title)}`);
+  const name = cleanName(t.fileName || '');
+  if (name) add(bare(name));
+  if (t.title) add(bare(t.title));
+  return out.slice(0, 4);
 }
 
 // t — трек, blob — его аудио, key — ключ AcoustID (может быть пустым), audd — необязательное распознавание по куску звука
@@ -174,6 +198,8 @@ export async function identify(t, blob, key, { audd } = {}) {
       if (top >= AUTO_SCORE) break search;
     }
     if (isLatin(query)) { consider(query, await itunes(plain, 'US')); if (top >= AUTO_SCORE) break search; }
+    consider(query, await musicbrainz(query).catch(() => []));
+    if (top >= AUTO_SCORE) break search;
   }
   if (top < AUTO_SCORE && audd && blob) {
     const r = await audd(blob);
