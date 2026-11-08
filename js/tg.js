@@ -78,6 +78,17 @@ export async function download(item, onProgress) {
 
 // Перезалить аудио в тот же пост канала с правильными названием, артистом и обложкой.
 // Пост остаётся на месте (это редактирование, а не удаление и новая публикация).
+// Свой файл с компьютера становится постом канала и появляется на всех устройствах
+export async function sendAudio(entity, { blob, fileName, mime, title, performer, duration, thumb }) {
+  const { Api } = await lib();
+  const msg = await client.sendFile(entity, {
+    file: new File([blob], fileName, { type: mime }), forceDocument: false, workers: 4,
+    thumb: thumb ? new File([thumb], 'cover.jpg', { type: 'image/jpeg' }) : undefined,
+    attributes: [new Api.DocumentAttributeAudio({ duration: Math.round(duration || 0), title, performer }), new Api.DocumentAttributeFilename({ fileName })],
+  });
+  return msg.id;
+}
+
 export async function editAudio(entity, msgId, { blob, fileName, mime, title, performer, duration, thumb }) {
   const { Api } = await lib();
   // Сначала убеждаемся, что под этим номером лежит именно аудио: чужой или текстовый пост не трогаем

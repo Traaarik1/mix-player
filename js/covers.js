@@ -24,8 +24,24 @@ export async function searchItunes(term, limit = 10, country = 'RU') {
   return results.filter(x => x.trackName).map(x => ({
     title: x.trackName, artist: x.artistName, album: x.collectionName || '',
     art: x.artworkUrl100?.replace('100x100bb', '600x600bb') || null,
-    duration: (x.trackTimeMillis || 0) / 1000, preview: x.previewUrl || null, released: x.releaseDate?.slice(0, 10) || '', genre: x.primaryGenreName || '',
+    duration: (x.trackTimeMillis || 0) / 1000, preview: x.previewUrl || null, released: x.releaseDate?.slice(0, 10) || '', genre: x.primaryGenreName || '', albumId: x.collectionId || null, albumTotal: x.trackCount || 0, trackNo: x.trackNumber || 0,
   }));
+}
+
+// Весь трек-лист альбома: чтобы показать, каких песен не хватает
+export async function albumTracks(albumId) {
+  for (const country of ['RU', 'US']) {
+    await throttle();
+    const r = await fetch(`https://itunes.apple.com/lookup?id=${albumId}&entity=song&country=${country}`).catch(() => null);
+    if (!r?.ok) continue;
+    const { results = [] } = await r.json();
+    const songs = results.filter(x => x.wrapperType === 'track').map(x => ({
+      title: x.trackName, artist: x.artistName, album: x.collectionName || '', trackNo: x.trackNumber || 0,
+      art: x.artworkUrl100?.replace('100x100bb', '600x600bb') || null, preview: x.previewUrl || null, duration: (x.trackTimeMillis || 0) / 1000,
+    }));
+    if (songs.length) return songs.sort((a, b) => a.trackNo - b.trackNo);
+  }
+  return [];
 }
 
 export async function fetchArt(url) {

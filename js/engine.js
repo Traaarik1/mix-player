@@ -223,10 +223,12 @@ export class Engine extends EventTarget {
     const src = this.ctx.createBufferSource(), gain = this.ctx.createGain();
     src.buffer = buf; src.connect(gain).connect(this.bus);
     const b = track.bounds || { s: 0, e: buf.duration };
+    this.live ??= new Set();
     const d = { track, buf, src, gain, startCtx: 0, offset: 0, fadeEnd: 0, ended: false,
       end: this.trim ? Math.min(b.e, buf.duration) : buf.duration, head: this.trim ? b.s : 0 };
     src.onended = () => {
       try { gain.disconnect(); src.disconnect(); } catch {}
+      this.live.delete(d);
       this.tails.delete(d);
       if (this.cur !== d) return;
       d.ended = true;
@@ -266,6 +268,7 @@ export class Engine extends EventTarget {
     const now = ctx.currentTime, t0 = now + 0.05;
     d.offset = Math.max(0, Math.min(offset ?? d.head, buf.duration - 0.1));
     d.startCtx = t0;
+    this.live.add(d);
     d.src.start(t0, d.offset);
     const canFade = fade > 0.05 && old && !old.ended && !this.paused;
     if (canFade) {
@@ -282,7 +285,9 @@ export class Engine extends EventTarget {
       d.gain.gain.value = 1;
       // резкая смена: всё прежнее глушим сразу, иначе при быстрых скипах треки наложатся друг на друга.
       // 20 мс на затухание только чтобы не было щелчка.
-      for (const t of [old, ...this.tails]) {
+      // резкая смена: глушим вообще всё, что сейчас звучит, а не только известные хвосты
+      for (const t of new Set([old, ...this.tails, ...this.live])) {
+        if (t === d) continue;
         if (!t) continue;
         const g = t.gain.gain;
         try {
@@ -332,6 +337,7 @@ export class Engine extends EventTarget {
     const at = Math.max(now + 0.1, cur.fadeEnd + 0.01, curEnd - cf);
     cf = Math.max(0, Math.min(cf, curEnd - at)); // после перемотки к концу на полный переход может не хватить
     d.offset = d.head; d.startCtx = at;
+    this.live.add(d);
     d.src.start(at, d.head);
     try {
       if (cf > 0.05) {
@@ -441,7 +447,7 @@ export class Engine extends EventTarget {
       this.softPos = this.position;
       this.hold = false;
       this.cancelNext();
-      for (const t of [this.cur, ...this.tails]) { if (!t) continue; t.src.onended = null; try { t.src.stop(); } catch {} }
+      for (const t of new Set([this.cur, ...this.tails, ...this.live])) { if (!t) continue; this.live.delete(t); t.src.onended = null; try { t.src.stop(); } catch {} }
       this.tails.clear(); this.fade = null;
       this.outEl?.pause();
       clearTimeout(this.softTimer);

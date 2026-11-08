@@ -1,10 +1,10 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, fetchArt } from './covers.js';
+import { searchItunes, fetchArt, albumTracks } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, IDENT_VER } from './identify.js';
-import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, analyzeAudio } from './wave.js';
+import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, analyzeAudio, normKey } from './wave.js';
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { openMini, canMini } from './mini.js';
@@ -137,7 +137,8 @@ function viewIds() {
   else if (view === 'liked') ids = order.filter(id => lib.likes.has(id));
   else if (view === 'recent') ids = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id));
   else if (view.startsWith('artist:')) { const k = view.slice(7), idx = creditIndex(); ids = order.filter(id => idx.get(id).some(p => p.key === k)); }
-  else if (view === 'artists') ids = order;
+  else if (view === 'artists' || view === 'albums') ids = order;
+  else if (view.startsWith('album:')) { const k = view.slice(6); ids = order.filter(id => albumKey(tracks.get(id)) === k).sort((x, y) => (tracks.get(x).trackNo || 99) - (tracks.get(y).trackNo || 99)); return ids; }
   else ids = (lib.playlists.find(p => p.id === view)?.ids || []).filter(id => tracks.has(id));
   if (query) {
     const q = query.toLowerCase();
@@ -177,7 +178,8 @@ function creditIndex() {
     const parts = artistParts(t.artist);
     // никто из участников не встречается сам по себе: повторяется — значит группа, разово — записываем на первого
     if (c.length === 1 && parts.length > 1 && whole[parts[0].key] < 2) c = [parts[1]];
-    return [t.id, c.filter(p => !badArtist(p.name))];
+    const tidy = p => { const name = p.name.replace(/^(?:группа|гр\.)\s+/i, '').trim(); return name === p.name ? p : { key: normKey(name), name }; };
+    return [t.id, c.filter(p => !badArtist(p.name)).map(tidy)];
   }));
   return creditCache;
 }
@@ -189,7 +191,10 @@ function artistGroups() {
     if (!p) continue;
     const g = m.get(p.key) || m.set(p.key, { key: p.key, name: p.name, n: 0, cover: null, sample: t, sure: false }).get(p.key);
     if (t.verified && !g.sure) { g.name = p.name; g.sure = true; } // проверенное написание важнее случайного
+    g.own = (g.own || 0) + 1;
   }
+  // имя из одного нераспознанного файла — скорее мусор, чем автор: прячем до распознавания
+  for (const [k, g] of m) if (!g.sure && g.own < 2) m.delete(k);
   // гости считаются у тех авторов, что уже есть
   for (const id of order) {
     const t = tracks.get(id);
@@ -208,10 +213,53 @@ function renderArtists() {
   empty.hidden = !!groups.length;
   if (!groups.length) empty.innerHTML = query ? `<h2>Никого не нашлось</h2><p>По запросу «${esc(query)}» авторов нет.</p>` : '<h2>Пока нет авторов</h2><p>Они появятся, когда в библиотеке будет музыка.</p>';
   const rows = $('#rows');
-  rows.innerHTML = groups.length ? `<li class="artists">${groups.map(g => `<button class="artist" data-view="artist:${esc(g.key)}">${coverHTML(g.cover || g.sample)}<b>${esc(g.name)}</b><small>${tracksWord(g.n)}</small></button>`).join('')}</li>` : '';
+  const unsure = order.filter(id => !tracks.get(id).verified).length;
+  rows.innerHTML = groups.length ? `<li class="artists">${unsure ? `<button class="artist unsure" data-view="fix"><span class="cov" style="--ch:40">?</span><b>Не распознано</b><small>${tracksWord(unsure)}</small></button>` : ''}${groups.map(g => `<button class="artist" data-view="artist:${esc(g.key)}">${coverHTML(g.cover || g.sample)}<b>${esc(g.name)}</b><small>${tracksWord(g.n)}</small></button>`).join('')}</li>` : '';
   hydrateIn(rows);
 }
-const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать' })[view] || (view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
+const norm2 = s => normKey(String(s || '').replace(/\s*[-–—]\s*(single|ep)$/i, ''));
+// Альбом: по номеру в каталоге, а если его нет — по автору и названию альбома
+const albumKey = t => t.album ? (t.albumId ? 'i' + t.albumId : 'n' + (artistParts(t.artist)[0]?.key || '') + '|' + norm2(t.album)) : null;
+function albumGroups() {
+  const m = new Map();
+  for (const id of order) {
+    const t = tracks.get(id), k = albumKey(t);
+    if (!k || t.previewOnly) continue;
+    const g = m.get(k) || m.set(k, { key: k, name: t.album, artist: t.artist, ids: [], total: 0, cover: null, albumId: t.albumId }).get(k);
+    g.ids.push(id); g.total = Math.max(g.total, t.albumTotal || 0);
+    if (!g.cover && t.cover) g.cover = t;
+    if (t.verified && t.artist.length < g.artist.length) g.artist = t.artist; // без гостей в названии
+  }
+  const q = query.toLowerCase();
+  return [...m.values()].filter(g => g.ids.length > 1 || g.total > 1).filter(g => !q || (g.name + ' ' + g.artist).toLowerCase().includes(q))
+    .sort((x, y) => y.ids.length - x.ids.length || ru(x.artist, y.artist));
+}
+function renderAlbums() {
+  const groups = albumGroups(), empty = $('#empty');
+  $('#viewTitle').firstChild.textContent = 'Альбомы';
+  $('#viewSub').textContent = groups.length ? plural(groups.length, 'альбом', 'альбома', 'альбомов') : '';
+  empty.hidden = !!groups.length;
+  if (!groups.length) empty.innerHTML = '<h2>Альбомов пока нет</h2><p>Они соберутся сами, когда Mix распознает треки и узнает, с каких они альбомов.</p>';
+  const rows = $('#rows');
+  rows.innerHTML = groups.length ? `<li class="artists albums">${groups.map(g => `<button class="artist album" data-view="album:${esc(g.key)}">${coverHTML(g.cover || tracks.get(g.ids[0]))}<b>${esc(g.name)}</b><small>${esc(g.artist)}</small><em>${g.total > g.ids.length ? `есть ${g.ids.length} из ${g.total}` : g.total && g.total <= g.ids.length ? 'весь альбом' : tracksWord(g.ids.length)}</em></button>`).join('')}</li>` : '';
+  hydrateIn(rows);
+}
+// Чего не хватает в альбоме: трек-лист из каталога минус то, что есть
+async function paintAlbumMissing(g) {
+  const box = $('#extra'); box.innerHTML = '';
+  if (!g?.albumId || !navigator.onLine) return;
+  const songs = await albumTracks(g.albumId).catch(() => []);
+  if (view !== 'album:' + g.key) return;
+  const have = g.ids.map(id => tracks.get(id));
+  const missing = songs.filter(s => !have.some(t => sameTrack(s, t)));
+  if (!missing.length) return;
+  albumMissing = missing;
+  box.innerHTML = `<div class="sechead"><div><b>Не хватает: ${missing.length}</b><small>Плюс отправит трек в «Хочу скачать», он заменится полным, когда появится в канале</small></div></div>
+    <ul class="rows">${missing.map((s, i) => `<li class="sug" data-mi="${i}"><span class="art-wrap">${s.art ? `<img src="${esc(s.art)}" alt="" loading="lazy">` : ''}</span><span class="ttl"><span class="t">${s.trackNo ? s.trackNo + '. ' : ''}${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></span>
+    <span class="acts"><button class="ib" data-miss="wish" title="В «Хочу скачать»"><svg><use href="#i-plus"/></svg></button><button class="ib" data-miss="find" title="Найти в Telegram"><svg><use href="#i-copy"/></svg></button></span></li>`).join('')}</ul>`;
+}
+let albumMissing = [];
+const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('album:') ? albumGroups().find(g => g.key === view.slice(6))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
   const liked = lib.likes.has(t.id);
@@ -233,13 +281,14 @@ function render() {
   $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish';
   $('.fixbar')?.remove();
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
-  $('#sort').hidden = view === 'artists' || view === 'recent';
+  $('#sort').hidden = ['artists', 'recent', 'albums'].includes(view) || view.startsWith('album:');
   $('#sort').value = settings.sort;
-  if (['fix', 'wave', 'wish', 'artists'].includes(view)) clearList();
+  if (['fix', 'wave', 'wish', 'artists', 'albums'].includes(view)) { clearList(); $('#extra').innerHTML = ''; }
   if (view === 'fix') { renderFix(); renderNav(); return; }
   if (view === 'wave') { renderWave(); renderNav(); return; }
   if (view === 'wish') { renderWish(); renderNav(); return; }
   if (view === 'artists') { $('#playAll').hidden = true; renderArtists(); renderNav(); return; }
+  if (view === 'albums') { clearList(); $('#playAll').hidden = true; renderAlbums(); renderNav(); return; }
   const ids = viewIds();
   $('#viewTitle').firstChild.textContent = viewName();
   const total = ids.reduce((s, id) => s + (tracks.get(id).duration || 0), 0);
@@ -251,6 +300,8 @@ function render() {
   if (!ids.length) empty.innerHTML = emptyHTML();
   const rows = $('#rows');
   listIds = ids; listFrom = -1;
+  $('#extra').innerHTML = '';
+  if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
   renderShelf();
   paintList();
   renderNav();
@@ -328,6 +379,7 @@ function renderTabs() {
 function openMore() {
   const row = (attr, icon, name, n) => `<button class="morerow" ${attr}><svg><use href="#i-${icon}"/></svg><span>${esc(name)}</span>${n ? `<em>${n}</em>` : ''}</button>`;
   modal(`<div class="grab"></div>
+    ${row('data-view="albums"', 'list', 'Альбомы')}
     ${row('data-view="recent"', 'clock', 'Недавние')}
     ${row('data-view="wish"', 'wish', 'Хочу скачать', wishes().length)}
     ${row('data-view="fix"', 'wand', 'Проверка названий', fixCount())}
@@ -342,6 +394,7 @@ function renderNav() {
   $('#nav').innerHTML = item('wave', 'wave', 'Волна')
     + item('all', 'all', 'Вся музыка', order.length || null)
     + item('artists', 'artist', 'Авторы')
+    + item('albums', 'list', 'Альбомы')
     + item('liked', 'heart', 'Любимое', lib.likes.size || null)
     + item('recent', 'clock', 'Недавние')
     + item('wish', 'wish', 'Хочу скачать', wishes().length || null)
@@ -470,6 +523,7 @@ engine.addEventListener('track', () => {
     else { fromUser = null; if (queue.includes(t.id)) queueAnchor = t.id; }
   }
   if (waveMode) refillWave();
+  if (previewEl && t) stopPreview();
   paintQueue();
   markCurrent(); paintNow(); applyTone(t); paintOrb();
   if (t?.source === 'preview' && !t.tone && t.art) fetchArt(t.art).then(toneOf).then(v => { t.tone = v; if (engine.track === t) applyTone(t); }).catch(() => {});
@@ -1081,6 +1135,7 @@ async function addFiles(files) {
   }
   rebuildOrder(); render();
   toast(added ? 'Добавлено: ' + tracksWord(added) : 'Эти треки уже есть');
+  if (added && tgCfg?.chatId) askUpload();
   identHunt();
 }
 
@@ -1099,8 +1154,9 @@ async function coverHunt() {
         t.artChecked = true;
         // название из LRCLIB заменяем оригинальным написанием из каталога
         if (it?.album && t.nameFrom === 'lrclib') { t.title = it.title; t.artist = it.artist; delete t.nameFrom; updateRow(t.id); if (t.id === curId) { paintNow(); mediaMeta(t); } }
-        t.metaV = 1;
+        t.metaV = 2;
         if (it?.genre) t.genre = it.genre;
+        if (it?.albumId && (!t.album || norm2(it.album) === norm2(t.album))) { t.albumId = it.albumId; t.albumTotal = it.albumTotal; t.trackNo = it.trackNo; if (!t.album) t.album = it.album; }
         if (it?.released && !t.released) t.released = it.released;
         if (it?.album && !t.album) t.album = it.album;
         // уже стоящую оригинальную обложку не трогаем: пост в канале второй раз не перезаливаем
@@ -1257,7 +1313,8 @@ function renderFix() {
 
 async function acceptFix(t, c) {
   const renamed = t.title !== c.title || t.artist !== c.artist;
-  t.title = c.title; t.artist = c.artist; if (c.album) t.album = c.album; if (c.released) t.released = c.released; if (c.genre) { t.genre = c.genre; t.metaV = 1; }
+  t.title = c.title; t.artist = c.artist; if (c.album) t.album = c.album; if (c.released) t.released = c.released; if (c.genre) t.genre = c.genre;
+  if (c.albumId) { t.albumId = c.albumId; t.albumTotal = c.albumTotal; t.trackNo = c.trackNo; t.metaV = 2; }
   t.verified = true; t.ident = { status: 'done', v: IDENT_VER };
   if (c.from === 'lrclib') t.nameFrom = 'lrclib'; else delete t.nameFrom;
   // обложка всегда оригинальная, даже если в файле уже была какая-то картинка
@@ -1489,6 +1546,54 @@ function handlePairLink() {
   };
 }
 
+// ---------- свои файлы → канал: так они появляются на телефоне ----------
+const localFiles = () => [...tracks.values()].filter(t => t.source === 'file' && !t.previewOnly);
+function askUpload() {
+  const n = localFiles().length; if (!n || !tgCfg?.chatId) return;
+  const d = modal(`<h2>Отправить в канал?</h2><p>${tracksWord(n)} есть только на этом компьютере. Если отправить их в «${esc(tgCfg.chatTitle)}», они появятся на телефоне и останутся в канале навсегда.</p>
+    <div class="acts"><button class="btn" data-x>Не сейчас</button><button class="btn primary" id="upGo">Отправить</button></div>`);
+  $('[data-x]', d).onclick = closeLayer;
+  $('#upGo', d).onclick = () => { closeLayer(); uploadLocal(); };
+}
+let uploading = false;
+async function uploadLocal() {
+  if (uploading) return; uploading = true;
+  let done = 0, failed = 0;
+  try {
+    const tg = await ensureTg(), entity = await resolveChat(tg);
+    for (const t of localFiles()) {
+      toast(`Отправляю в канал: ${done + 1} из ${localFiles().length + done}`);
+      try {
+        const blob = await db.get('blobs', t.id); if (!blob) continue;
+        const cover = t.cover ? await db.get('covers', t.id) : null;
+        const ext = t.fileName?.match(/\.\w{2,4}$/)?.[0] || '.mp3';
+        const fileName = `${t.artist ? t.artist + ' - ' : ''}${t.title}${ext}`.replace(/[\\/:*?"<>|]/g, '');
+        const msgId = await tg.sendAudio(entity, { blob, fileName, mime: t.mime || blob.type || 'audio/mpeg', title: t.title, performer: t.artist, duration: t.duration || t.bounds?.d, thumb: cover ? await makeThumb(cover).catch(() => null) : null });
+        await moveTrack(t, { ...t, id: `tg:${tgCfg.chatId}:m${msgId}`, source: 'tg', msgId, fileName, downloaded: true });
+        done++;
+      } catch (e) { failed++; console.warn('upload', t.title, e); }
+    }
+  } catch { toast('Нет связи с Telegram, отправлю позже'); }
+  finally { uploading = false; }
+  if (done || failed) toast(failed ? `Отправлено ${done}, не вышло ${failed}` : `Готово: ${tracksWord(done)} теперь и на телефоне`);
+}
+// Трек меняет id: переносим файл, обложку, лайки, плейлисты и очередь
+async function moveTrack(t, nt) {
+  const [blob, cover] = await Promise.all([db.get('blobs', t.id), db.get('covers', t.id)]);
+  if (blob) await db.put('blobs', nt.id, blob);
+  if (cover) await db.put('covers', nt.id, cover);
+  tracks.delete(t.id); tracks.set(nt.id, nt); await saveTrack(nt);
+  await Promise.all([db.del('blobs', t.id), db.del('covers', t.id), db.del('tracks', t.id)]);
+  const swap = x => x === t.id ? nt.id : x;
+  if (lib.likes.delete(t.id)) lib.likes.add(nt.id);
+  for (const p of lib.playlists) p.ids = p.ids.map(swap);
+  lib.history = lib.history.map(h => ({ ...h, id: swap(h.id) }));
+  queue = queue.map(swap); queueBase = queueBase.map(swap); userQueue = userQueue.map(swap);
+  if (curId === t.id) curId = nt.id;
+  coverUrls.delete(t.id); thumbUrls.delete(t.id); thumbReady.delete(t.id);
+  saveLib(); saveQueue(); rebuildOrder(); render();
+}
+
 // ---------- Telegram ----------
 let tgMod = null, tgReady = null;
 const tgItems = new Map();
@@ -1619,7 +1724,8 @@ function renderTgCard() {
   const when = tgCfg.lastSync ? new Date(tgCfg.lastSync).toLocaleString('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   c.innerHTML = `<b>${esc(tgCfg.chatTitle)}</b><p>${sync.error ? esc(sync.error) : chan.error ? esc(chan.error) : tracksWord(count) + (when ? ', обновлено ' + when : '')}</p>
     <button class="btn" data-act="${sync.error.includes('войти') ? 'tg' : 'tgSync'}">${sync.error.includes('войти') ? 'Войти' : 'Обновить'}</button>
-    ${matchMedia('(pointer: fine)').matches ? '<button class="btn pairbtn" data-act="pair">Подключить телефон</button>' : ''}`;
+    ${matchMedia('(pointer: fine)').matches ? '<button class="btn pairbtn" data-act="pair">Подключить телефон</button>' : ''}
+    ${localFiles().length ? `<button class="btn pairbtn" data-act="upload">Отправить в канал файлы с компьютера (${localFiles().length})</button>` : ''}`;
 }
 
 // Пошаговое подключение: ключи → телефон → код → (пароль) → выбор канала
@@ -1818,6 +1924,7 @@ document.addEventListener('click', async e => {
   }
   else if (a === 'more') openMore();
   else if (a === 'pair') openPair();
+  else if (a === 'upload') askUpload();
   else if (a === 'tg') openTg();
   else if (a === 'tgSync') startSync();
   else if (a === 'tgStop') { sync.stop = true; }
@@ -1839,6 +1946,13 @@ document.addEventListener('click', async e => {
     const mainEl = $('#main'); mainEl.classList.remove('fadein'); void mainEl.offsetWidth; mainEl.classList.add('fadein');
     if (v === 'wave' && !sug.items.length && tracks.size && navigator.onLine) loadSuggestions();
   }
+});
+$('#extra').addEventListener('click', e => {
+  const b = e.target.closest('[data-miss]'), li = e.target.closest('[data-mi]');
+  const sng = li && albumMissing[+li.dataset.mi]; if (!sng) return;
+  if (!b) { if (sng.preview) { waveMode = false; const v = previewTrack(sng); queue = queueBase = [v.id]; playId(v.id); } return; }
+  if (b.dataset.miss === 'find') findInTelegram(sng);
+  else { addWish(sng); toast('Добавлено в «Хочу скачать»'); b.disabled = true; }
 });
 $('#main').addEventListener('change', e => {
   if (e.target.id === 'writeChan') { settings.writeChannel = e.target.checked; saveSettings(); }
@@ -2005,7 +2119,7 @@ async function boot() {
     for (const t of await db.all('tracks')) {
       // старый поиск часто не находил русские треки: проверяем их заново
       if (!t.verified && t.ident && t.ident.v !== IDENT_VER) delete t.ident;
-      if (t.verified && t.artChecked && !t.genre && t.metaV !== 1 && !t.previewOnly) t.artChecked = false; // дозаполним жанр
+      if (t.verified && t.artChecked && t.metaV !== 2 && !t.previewOnly && t.ident?.status !== 'kept') t.artChecked = false; // дозаполним жанр и альбом
       const title = cleanTag(t.title) || t.title, artist = cleanTag(t.artist);
       if (title !== t.title || artist !== t.artist) { t.title = title; t.artist = artist; saveTrack(t); }
       tracks.set(t.id, t);

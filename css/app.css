@@ -797,3 +797,12 @@ body:not(.playing) .stack { transform: none; }
 .row { touch-action: pan-y; }
 .row.swiping { background: var(--velvet-2); box-shadow: -120px 0 0 var(--accent); }
 .row.swiping.armed { box-shadow: -120px 0 0 var(--amber); }
+
+.artist.unsure .cov { background: var(--velvet-2); color: var(--mist); }
+
+/* ---------- альбомы ---------- */
+.album .cov { border-radius: var(--r-md); }
+.album em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--accent); }
+#extra { margin-top: 18px; }
+#extra .rows { list-style: none; padding: 0; margin: 0; }
+#extra .sug { opacity: .85; }

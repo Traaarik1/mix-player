@@ -130,6 +130,7 @@ export function buildTaste({ listens = [], likes = [], dismissals = [], library 
     credit(artist, v, sig === W.SKIP_SIGNAL ? 'skips' : 'plays');
     if (e.id != null) {
       const s = trackEntry(e.id);
+      if (sig === W.SKIP_SIGNAL) s.lastSkipAt = Math.max(s.lastSkipAt || 0, e.at || 0);
       s.weight += v; s[sig === W.SKIP_SIGNAL ? 'skips' : 'plays']++; s.lastAt = Math.max(s.lastAt, e.at || 0);
     }
   }
@@ -178,6 +179,7 @@ export function flowScore(a, b, trans = {}, solo = null) {
   const W = WAVE;
   if (!a || !b) return 1;
   let k = 1;
+  if (a.album && a.album === b.album && a.artist === b.artist) k *= .6; // целый альбом подряд — это уже не волна
   if (a.genre && b.genre) k *= a.genre === b.genre ? W.FLOW_GENRE_SAME : W.FLOW_GENRE_OTHER;
   const ya = parseInt(a.released, 10), yb = parseInt(b.released, 10);
   if (ya && yb) { const d = Math.abs(ya - yb); k *= d <= 5 ? W.FLOW_ERA_NEAR : d > 20 ? W.FLOW_ERA_FAR : 1; }
@@ -260,7 +262,8 @@ export function nextWave(library, taste, { count = 10, history = [], after = nul
     const aff = r.keys.length ? Math.max(...r.keys.map(k => taste.artists[k]?.affinity ?? 0)) : 0;
     const base = Math.max(.05, 1 + W.TASTE_ARTIST * aff + W.TASTE_TRACK * affinity(r.s?.weight || 0));
     const hrs = r.s?.lastAt ? Math.max(0, now - r.s.lastAt) / HOUR : Infinity;
-    const fresh = hrs === Infinity ? 1 + W.UNPLAYED_BONUS : 1 - Math.exp(-hrs / W.FRESH_TAU_HOURS);
+    const cool = r.s?.lastSkipAt && now - r.s.lastSkipAt < DAY ? .15 : 1; // пропустил за последние сутки — пока не надо
+    const fresh = cool * (hrs === Infinity ? 1 + W.UNPLAYED_BONUS : 1 - Math.exp(-hrs / W.FRESH_TAU_HOURS));
     return { w: base * base * fresh * flowScore(prev, r.t, taste.trans, taste.solo), fresh, aff };
   };
   const explore = taste.cold ? W.EXPLORE_COLD : W.EXPLORE;
