@@ -1,8 +1,8 @@
 // Определяем, что это за трек. По порядку: по звуку (AcoustID), по названию (LRCLIB и iTunes), по звуку через AudD.
-import { searchItunes, norm } from './covers.js';
+import { searchItunes, searchDeezer, norm } from './covers.js';
 import { normKey } from './wave.js';
 
-export const IDENT_VER = 4;
+export const IDENT_VER = 5;
 export const AUTO_SCORE = .78; // с такой уверенностью название и обложка меняются сами, без проверки
 
 // Мусор, который каналы и сайты дописывают к именам файлов
@@ -131,6 +131,11 @@ export async function findOriginal(artist, title, duration = 0) {
     for (const c of res) { const s = scoreCandidate(query, c, duration); if (s > top) { best = c; top = s; } }
     if (best && top >= .7) return best;
   }
+  { // в iTunes нет — обложку и альбом берём из Deezer
+    let best = null, top = 0;
+    for (const c of await searchDeezer(query).catch(() => [])) { const s = scoreCandidate(query, c, duration); if (s > top) { best = c; top = s; } }
+    if (best?.art && top >= .7) return best;
+  }
   const art = await coverFromMusicBrainz(artist, title).catch(() => null);
   return art ? { title, artist, album: '', art, duration, preview: null } : null;
 }
@@ -192,6 +197,7 @@ export async function identify(t, blob, key, { audd } = {}) {
     const parts = query.split(/\s+[-–—]\s+/);
     const terms = isLatin(query) ? [plain, toCyrillic(plain)] : [plain];
     for (const term of terms) { consider(query, await lrclib(term).catch(() => [])); if (top >= AUTO_SCORE) break search; }
+    consider(query, await searchDeezer(plain).catch(() => [])); if (top >= AUTO_SCORE) break search;
     for (const term of terms) { consider(query, await itunes(term, 'RU')); if (top >= AUTO_SCORE) break search; }
     if (parts.length > 1) { // артист в имени часто записан неточно: ищем и по одному названию
       consider(query, await lrclib(parts.at(-1)).catch(() => []));

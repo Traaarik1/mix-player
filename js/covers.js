@@ -28,6 +28,29 @@ export async function searchItunes(term, limit = 10, country = 'RU') {
   }));
 }
 
+// Deezer: бесплатно, без ключа, много русской музыки. Браузеру он отвечает только через JSONP.
+let dzSeq = 0, dzLast = 0;
+function jsonp(url) {
+  if (typeof document === 'undefined') return Promise.resolve(null);
+  return new Promise(res => {
+    const cb = '__dz' + (++dzSeq), s = document.createElement('script');
+    const done = v => { clearTimeout(tm); delete globalThis[cb]; s.remove(); res(v); };
+    const tm = setTimeout(() => done(null), 8000);
+    globalThis[cb] = done; s.onerror = () => done(null);
+    s.src = url + '&output=jsonp&callback=' + cb;
+    document.head.appendChild(s);
+  });
+}
+export async function searchDeezer(term, limit = 10) {
+  const wait = dzLast + 150 - Date.now(); dzLast = Math.max(Date.now(), dzLast + 150); // лимит Deezer — 50 запросов за 5 секунд
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  const j = await jsonp(`https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=${limit}`);
+  return (j?.data || []).filter(x => x.title && x.artist?.name).map(x => ({
+    title: x.title, artist: x.artist.name, album: x.album?.title || '',
+    art: x.album?.cover_xl || x.album?.cover_big || null, duration: x.duration || 0, preview: null, released: '', genre: '', albumId: null, albumTotal: 0, trackNo: 0, from: 'deezer',
+  }));
+}
+
 // Весь трек-лист альбома: чтобы показать, каких песен не хватает
 export async function albumTracks(albumId) {
   for (const country of ['RU', 'US']) {

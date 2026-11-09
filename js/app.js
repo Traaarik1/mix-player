@@ -1244,7 +1244,7 @@ async function identHunt() {
         const blob = t.downloaded ? await db.get('blobs', t.id) : null;
         const used = auddCalls();
         const cand = await identify(t, blob, settings.acoustKey, { audd: auddFor });
-        if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used };
+        if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used, at: Date.now() };
         // уверены или название и так совпало — сразу ставим оригинальные название и обложку
         else if (cand.auto || sameName(cand, t)) { await acceptFix(t, cand); identState.fixed = (identState.fixed || 0) + 1; coverHunt(); }
         else t.ident = { status: 'found', cand, v: IDENT_VER };
@@ -2119,6 +2119,8 @@ async function boot() {
     for (const t of await db.all('tracks')) {
       // старый поиск часто не находил русские треки: проверяем их заново
       if (!t.verified && t.ident && t.ident.v !== IDENT_VER) delete t.ident;
+      // каталоги пополняются: не найденное пробуем снова раз в две недели
+      else if (!t.verified && t.ident?.status === 'none' && Date.now() - (t.ident.at || 0) > 14 * 864e5) delete t.ident;
       if (t.verified && t.artChecked && t.metaV !== 2 && !t.previewOnly && t.ident?.status !== 'kept') t.artChecked = false; // дозаполним жанр и альбом
       const title = cleanTag(t.title) || t.title, artist = cleanTag(t.artist);
       if (title !== t.title || artist !== t.artist) { t.title = title; t.artist = artist; saveTrack(t); }
