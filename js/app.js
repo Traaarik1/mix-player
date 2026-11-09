@@ -1308,12 +1308,14 @@ async function soundHunt() {
         const c = { ...r.cand, source: 'sound', score: r.s };
         const renamed = !sameName(c, t);
         if (renamed || !t.coverOriginal) { await acceptFix(t, c); if (renamed) soundState.renamed++; }
-        else { t.verified = true; await saveTrack(t); }
+        else t.verified = true;
+        if (t.chanWait) { delete t.chanWait; if (settings.writeChannel && inCurrentChat(t)) { t.chanPending = true; chanQueue(); } }
+        await saveTrack(t);
       } else if (r.st === 'mismatch') {
         // название не подтвердилось: пробуем «Шазам», иначе — в «Проверку названий»
         const au = auddAllowed() ? await auddFor(blob).catch(() => null) : null;
         if (au) { await acceptFix(t, { title: au.title, artist: au.artist, album: au.album || '', art: au.art || null, source: 'sound', score: .95 }); t.sound.st = 'audd'; await saveTrack(t); soundState.renamed++; }
-        else { t.soundBad = { title: t.title, artist: t.artist }; t.verified = false; t.ident = { status: 'none', v: IDENT_VER, at: Date.now(), soundBad: true }; soundState.bad++; await saveTrack(t); updateRow(t.id); }
+        else { delete t.chanWait; t.soundBad = { title: t.title, artist: t.artist }; t.verified = false; t.ident = { status: 'none', v: IDENT_VER, at: Date.now(), soundBad: true }; soundState.bad++; await saveTrack(t); updateRow(t.id); }
       } else await saveTrack(t);
       soundState.done++;
       if (view === 'fix') renderFix();
@@ -1377,7 +1379,8 @@ async function acceptFix(t, c) {
   // обложка всегда оригинальная, даже если в файле уже была какая-то картинка
   const b = c.art ? await fetchArt(c.art).catch(() => null) : null;
   if (b) { t.coverOriginal = true; t.artChecked = true; await setCover(t, b); }
-  if ((renamed || b) && settings.writeChannel && inCurrentChat(t)) t.chanPending = true;
+  // В канал пишем только то, что подтверждено по звуку: название в посте может быть чужим
+  if ((renamed || b) && settings.writeChannel && inCurrentChat(t)) { if (c.source === 'sound' || c.source === 'manual') { t.chanPending = true; delete t.chanWait; } else t.chanWait = true; }
   await saveTrack(t);
   updateRow(t.id);
   if (t.id === curId) { paintNow(); mediaMeta(t); if (lyricsOn) loadLyrics(true); }
@@ -1976,7 +1979,7 @@ document.addEventListener('click', async e => {
   else if (a === 'acceptAll') {
     const list = [...tracks.values()].filter(t => t.ident?.status === 'found' && !t.verified);
     e.target.closest('button').disabled = true;
-    for (const t of list) await acceptFix(t, t.ident.cand);
+    for (const t of list) await acceptFix(t, { ...t.ident.cand, source: t.ident.cand.source === 'sound' ? 'sound' : 'manual' });
     render(); toast('Исправлено: ' + tracksWord(list.length));
   }
   else if (a === 'more') openMore();
@@ -2024,7 +2027,7 @@ $('#rows').addEventListener('click', async e => {
   const fx = e.target.closest('[data-fix]');
   if (fx) {
     const t = tracks.get(fx.closest('.fix').dataset.id);
-    if (fx.dataset.fix === 'ok') { fx.disabled = true; await acceptFix(t, t.ident.cand); renderFix(); }
+    if (fx.dataset.fix === 'ok') { fx.disabled = true; await acceptFix(t, { ...t.ident.cand, source: t.ident.cand.source === 'sound' ? 'sound' : 'manual' }); renderFix(); }
     else if (fx.dataset.fix === 'audd') {
       fx.disabled = true; fx.textContent = 'Слушаю…';
       try {

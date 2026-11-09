@@ -23,6 +23,28 @@ export const EQ_PRESETS = {
 
 const N = 256;
 const FADE_IN = Float32Array.from({ length: N }, (_, i) => Math.sin(i / (N - 1) * Math.PI / 2));
+// Переход как у диджея: бас (бочка) звучит только у одного трека, иначе два ритма сливаются в кашу
+const BASS_HZ = 180, BASS_CUT = -24, SWAP = .35;
+// Громкость куска буфера (по каждому 8-му сэмплу — быстро)
+function loudness(buf, from, to) {
+  const d = buf.getChannelData(0), sr = buf.sampleRate, a = Math.max(0, from * sr | 0), b = Math.min(d.length, to * sr | 0);
+  let sum = 0, n = 0;
+  for (let i = a; i < b; i += 8) { sum += d[i] * d[i]; n++; }
+  return n ? Math.sqrt(sum / n) : 0;
+}
+// Ритмы совпадают (или один ровно вдвое быстрее) — длинный переход звучит нормально
+export function tempoFits(a, b) {
+  if (!a || !b) return false;
+  const r = Math.max(a, b) / Math.min(a, b);
+  return Math.abs(r - 1) < .04 || Math.abs(r - 2) < .08;
+}
+// Сколько секунд реально можно накладывать: два плотных куска с разным ритмом — коротко
+export function smartCf(cf, outTail, inHead, bpmA, bpmB) {
+  const LOUD = .08;
+  if (outTail < LOUD * .5 || inHead < LOUD * .5) return cf; // один из треков тут тихий: затухание или вступление
+  if (tempoFits(bpmA, bpmB)) return Math.min(cf, 8);
+  return Math.min(cf, outTail > LOUD && inHead > LOUD ? 2.5 : 4);
+}
 const FADE_OUT = Float32Array.from({ length: N }, (_, i) => Math.cos(i / (N - 1) * Math.PI / 2));
 const scaled = (curve, k) => k === 1 ? curve : curve.map(v => v * k);
 const noop = () => {};
@@ -220,14 +242,15 @@ export class Engine extends EventTarget {
   }
 
   deck(track, buf) {
-    const src = this.ctx.createBufferSource(), gain = this.ctx.createGain();
-    src.buffer = buf; src.connect(gain).connect(this.bus);
+    const src = this.ctx.createBufferSource(), gain = this.ctx.createGain(), bass = this.ctx.createBiquadFilter();
+    bass.type = 'lowshelf'; bass.frequency.value = BASS_HZ; bass.gain.value = 0;
+    src.buffer = buf; src.connect(bass).connect(gain).connect(this.bus);
     const b = track.bounds || { s: 0, e: buf.duration };
     this.live ??= new Set();
-    const d = { track, buf, src, gain, startCtx: 0, offset: 0, fadeEnd: 0, ended: false,
+    const d = { track, buf, src, gain, bass, startCtx: 0, offset: 0, fadeEnd: 0, ended: false,
       end: this.trim ? Math.min(b.e, buf.duration) : buf.duration, head: this.trim ? b.s : 0 };
     src.onended = () => {
-      try { gain.disconnect(); src.disconnect(); } catch {}
+      try { gain.disconnect(); src.disconnect(); bass.disconnect(); } catch {}
       this.live.delete(d);
       this.tails.delete(d);
       if (this.cur !== d) return;
@@ -333,6 +356,7 @@ export class Engine extends EventTarget {
     const ctx = this.ctx, d = this.deck(next, buf), now = ctx.currentTime;
     const curEnd = cur.startCtx + cur.end - cur.offset; // когда в расписании кончится текущий
     let cf = Math.max(0, Math.min(this.cf, (cur.end - cur.head) / 3, (d.end - d.head) / 3));
+    if (cf > 0.05) try { cf = smartCf(cf, loudness(cur.buf, cur.end - cf, cur.end), loudness(buf, d.head, d.head + cf), cur.track.bpm, next.bpm); } catch {}
     // не раньше конца ручного перехода: две кривые на одном параметре браузер не примет
     const at = Math.max(now + 0.1, cur.fadeEnd + 0.01, curEnd - cf);
     cf = Math.max(0, Math.min(cf, curEnd - at)); // после перемотки к концу на полный переход может не хватить
@@ -344,6 +368,11 @@ export class Engine extends EventTarget {
         d.gain.gain.setValueAtTime(0, 0);
         d.gain.gain.setValueCurveAtTime(FADE_IN, at, cf);
         cur.gain.gain.setValueCurveAtTime(FADE_OUT, at, cf);
+        if (cf >= 1.5) { // на середине перехода бас передаётся новому треку
+          const sw = at + cf / 2 - SWAP / 2;
+          d.bass.gain.setValueAtTime(BASS_CUT, 0); d.bass.gain.setValueAtTime(BASS_CUT, sw); d.bass.gain.linearRampToValueAtTime(0, sw + SWAP);
+          cur.bass.gain.setValueAtTime(0, sw); cur.bass.gain.linearRampToValueAtTime(BASS_CUT, sw + SWAP);
+        }
       } else {
         d.gain.gain.setValueAtTime(0, 0); d.gain.gain.setValueAtTime(1, at);
         cur.gain.gain.setValueAtTime(0, at);
@@ -366,6 +395,7 @@ export class Engine extends EventTarget {
     try { n.deck.src.stop(); } catch {}
     try { n.deck.src.disconnect(); n.deck.gain.disconnect(); } catch {}
     this.cur.gain.gain.cancelScheduledValues(n.at);
+    try { this.cur.bass.gain.cancelScheduledValues(0); this.cur.bass.gain.setValueAtTime(0, this.ctx.currentTime); } catch {}
   }
 
   // Расписанный переход начался — следующий трек становится текущим.
