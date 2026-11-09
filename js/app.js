@@ -438,13 +438,26 @@ function buildQueue(startId, ids = viewIds()) {
 }
 
 // Скип и выбор трека — всегда без перехода; плавно только сам конец трека
-async function playId(id, fade = 0) {
-  const t = getT(id); if (!t) return;
-  try { await engine.play(t, { fade }); }
-  catch (e) { toast(t.source === 'preview' ? 'Превью не загрузилось, проверь интернет' : t.downloaded ? 'Не получилось открыть этот файл' : 'Трек ещё не скачан, а Telegram сейчас недоступен'); console.error(e); }
+async function playId(id, fade = 0, quiet = false) {
+  const t = getT(id); if (!t) return false;
+  try { await engine.play(t, { fade }); return true; }
+  catch (e) { if (quiet) { console.warn('skip', t.title, e.message); return false; } toast(t.source === 'preview' ? 'Превью не загрузилось, проверь интернет' : t.downloaded ? 'Не получилось открыть этот файл' : 'Трек ещё не скачан, а Telegram сейчас недоступен'); console.error(e); return false; }
 }
 function playFromView(id) { waveMode = false; buildQueue(id); playId(id); }
-function next() { const id = curId && neighbour(curId, 1); if (id) playId(id); }
+// Трек, который не открывается (не скачан, из другого канала), пропускаем и берём следующий
+let skipToken = 0;
+async function next() {
+  const my = ++skipToken;
+  let id = curId && neighbour(curId, 1), first = id;
+  for (let i = 0; id && i < 25; i++) {
+    if (await playId(id, 0, true)) return;
+    if (my !== skipToken) return;
+    if (userQueue[0] === id) { userQueue.shift(); saveQueue(); }
+    id = neighbour(id, 1);
+    if (id === first) break;
+  }
+  if (my === skipToken && first) toast('Дальше нет треков, которые можно включить');
+}
 const saveQueue = () => db.put('kv', 'userQueue', userQueue);
 function addToQueue(id, first = false) {
   const t = getT(id); if (!t) return;
@@ -2077,6 +2090,7 @@ setupGestures({ full: $('#full'), stack: $('#stack'), mini: $('#bar'), onClose: 
 $('#vol').oninput = e => { settings.vol = +e.target.value; e.target.style.setProperty('--p', settings.vol + '%'); engine.setVolume(settings.vol / 100); saveSettings(); };
 $('#openFull').onclick = () => { if (engine.track) $('#full').classList.add('open'); };
 $('#closeFull').onclick = () => { $('#full').classList.remove('open'); setLyrics(false); };
+$('.fullgrab').onclick = closeFull; // на телефоне кнопки «Свернуть» нет: тап по полоске тоже сворачивает
 addEventListener('dragover', e => e.preventDefault());
 addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
 addEventListener('online', () => { if (tgCfg?.chatId && !sync.running) { startSync(); chanQueue(); } identHunt(); cloud?.push(); });

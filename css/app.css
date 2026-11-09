@@ -806,3 +806,7 @@ body:not(.playing) .stack { transform: none; }
 #extra { margin-top: 18px; }
 #extra .rows { list-style: none; padding: 0; margin: 0; }
 #extra .sug { opacity: .85; }
+
+/* полоска плеера: больше зона нажатия */
+.fullgrab { cursor: pointer; }
+.fullgrab::after { content: ""; position: absolute; inset: -16px -40px; }
