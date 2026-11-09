@@ -9,6 +9,7 @@ import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { openMini, canMini } from './mini.js';
 import { setupGestures, setupRowSwipe } from './gestures.js';
+import { checkSound, SOUND_V } from './soundcheck.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -1256,7 +1257,8 @@ async function identHunt() {
       try {
         const blob = t.downloaded ? await db.get('blobs', t.id) : null;
         const used = auddCalls();
-        const cand = await identify(t, blob, settings.acoustKey, { audd: auddFor });
+        let cand = await identify(t, blob, settings.acoustKey, { audd: auddFor });
+        if (cand && t.soundBad && sameName(cand, t.soundBad) && cand.source !== 'sound') cand = null; // по звуку уже выяснили, что это не она
         if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used, at: Date.now() };
         // уверены или название и так совпало — сразу ставим оригинальные название и обложку
         else if (cand.auto || sameName(cand, t)) { await acceptFix(t, cand); identState.fixed = (identState.fixed || 0) + 1; coverHunt(); }
@@ -1277,14 +1279,54 @@ async function identHunt() {
     identRunning = false;
     if (view === 'fix') renderFix(); else { renderNav(); paintSub(); }
     coverHunt();
+    soundHunt();
   }
+}
+
+// ---------- сверка по звуку: та ли это песня, что написана в названии ----------
+let soundRunning = false;
+const soundSkip = new Set();
+const soundState = { done: 0, renamed: 0, bad: 0 };
+const needsSound = t => t && t.downloaded && !t.previewOnly && t.source !== 'preview' && t.sound?.v !== SOUND_V && t.ident?.status !== 'kept';
+async function soundHunt() {
+  if (soundRunning || identRunning || !navigator.onLine) return;
+  soundRunning = true; soundSkip.clear();
+  try {
+    const { rawPrint } = await import('./audiokey.js');
+    for (;;) {
+      if (identRunning || !navigator.onLine) break;
+      while (sugFetching) await new Promise(r => setTimeout(r, 1000));
+      const t = order.map(id => tracks.get(id)).find(x => needsSound(x) && !soundSkip.has(x.id));
+      if (!t) break;
+      const blob = await db.get('blobs', t.id);
+      if (!blob) { soundSkip.add(t.id); continue; } // файла сейчас нет на устройстве — сверим, когда скачается
+      let r = { st: 'unknown' };
+      await new Promise(r => setTimeout(r, engine.paused ? 200 : 1500)); // пока играет музыка — потише, чтобы не подтормаживало
+      { try { r = await checkSound(t, blob, { rawPrint }); } catch (e) { console.warn('sound', t.title, e); r = { st: 'unknown' }; } }
+      t.sound = { v: SOUND_V, st: r.st, s: r.s ? +r.s.toFixed(2) : undefined };
+      if (r.st === 'ok') {
+        const c = { ...r.cand, source: 'sound', score: r.s };
+        const renamed = !sameName(c, t);
+        if (renamed || !t.coverOriginal) { await acceptFix(t, c); if (renamed) soundState.renamed++; }
+        else { t.verified = true; await saveTrack(t); }
+      } else if (r.st === 'mismatch') {
+        // название не подтвердилось: пробуем «Шазам», иначе — в «Проверку названий»
+        const au = auddAllowed() ? await auddFor(blob).catch(() => null) : null;
+        if (au) { await acceptFix(t, { title: au.title, artist: au.artist, album: au.album || '', art: au.art || null, source: 'sound', score: .95 }); t.sound.st = 'audd'; await saveTrack(t); soundState.renamed++; }
+        else { t.soundBad = { title: t.title, artist: t.artist }; t.verified = false; t.ident = { status: 'none', v: IDENT_VER, at: Date.now(), soundBad: true }; soundState.bad++; await saveTrack(t); updateRow(t.id); }
+      } else await saveTrack(t);
+      soundState.done++;
+      if (view === 'fix') renderFix();
+      else if (Date.now() - identPaint > 3000) { identPaint = Date.now(); renderNav(); }
+    }
+  } finally { soundRunning = false; }
 }
 
 function fixRowHTML(t) {
   const c = t.ident.cand;
   const was = `${coverHTML(t)}<span class="was"><span>${esc(t.title)}</span><span>${esc(t.artist || 'Без артиста')}</span></span><svg><use href="#i-arrow"/></svg>`;
   if (!c) return `<li class="fix" data-id="${esc(t.id)}">${was}<span class="cov new" style="--ch:${hash(t.id)}">?</span>
-    <span class="is none"><span>Не распознан</span><span>Найди вручную или попробуй распознать ещё раз</span></span>
+    <span class="is none"><span>${t.soundBad ? 'Звук не совпадает с названием' : 'Не распознан'}</span><span>Найди вручную или попробуй распознать ещё раз</span></span>
     <span class="acts"><button class="btn primary" data-fix="find">Найти</button><button class="btn" data-fix="audd" title="Точнее, но бесплатно только несколько раз в день">Как Шазам</button><button class="btn" data-fix="keep">Оставить</button></span></li>`;
   const art = c.art ? `<img class="cov new" src="${esc(c.art)}" alt="">` : `<span class="cov new" style="--ch:${hash(c.title)}">${esc(c.title[0] || '?')}</span>`;
   const tag = c.source === 'sound' ? 'По звуку' : c.source === 'manual' ? 'Выбрано вручную' : 'По названию файла';
@@ -1305,7 +1347,9 @@ function renderFix() {
   const list = order.map(id => tracks.get(id)).filter(t => t && !t.verified);
   const found = list.filter(t => t.ident?.status === 'found'), none = list.filter(t => t.ident?.status === 'none');
   const auto = identState.fixed ? `Исправлено само: ${identState.fixed}. ` : '';
-  $('#viewSub').textContent = auto + (identRunning ? `Распознаю треки: ${identState.done} из ${identState.total}` : found.length ? `Проверь сомнительные: ${found.length}` : '');
+  const snd = [...tracks.values()], sLeft = snd.filter(needsSound).length, sOk = snd.filter(t => t.sound?.st === 'ok').length, notDl = snd.filter(t => !t.downloaded && !t.previewOnly).length;
+  $('#viewSub').textContent = auto + (identRunning ? `Распознаю треки: ${identState.done} из ${identState.total}` : found.length ? `Проверь сомнительные: ${found.length}` : '')
+    + ` Сверено по звуку: ${sOk}${sLeft ? `, осталось ${sLeft}` : ''}${notDl ? `. Не скачано: ${notDl}, проверятся после скачивания` : ''}.`;
   $('#playAll').hidden = true;
   let bar = $('.fixbar');
   if (!bar) { bar = document.createElement('div'); bar.className = 'fixbar'; $('#rows').before(bar); }
@@ -2117,6 +2161,7 @@ document.addEventListener('keydown', e => {
 // ---------- запуск ----------
 window.__mixReady = true;
 setInterval(frame, 250);
+setInterval(() => soundHunt(), 5 * 60e3); // скачались новые треки — сверим и их
 async function boot() {
   // сначала рисуем интерфейс, потом читаем сохранённое — чтобы кнопки работали сразу
   render(); renderTgCard(); paintState(); paintMixChip();
