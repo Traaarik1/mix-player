@@ -129,12 +129,12 @@ export async function findOriginal(artist, title, duration = 0) {
     const res = await searchItunes(query, 10, country).catch(() => []);
     let best = null, top = 0;
     for (const c of res) { const s = scoreCandidate(query, c, duration); if (s > top) { best = c; top = s; } }
-    if (best && top >= .7) return best;
+    if (best && top >= .82) return best;
   }
   { // в iTunes нет — обложку и альбом берём из Deezer
     let best = null, top = 0;
     for (const c of await searchDeezer(query).catch(() => [])) { const s = scoreCandidate(query, c, duration); if (s > top) { best = c; top = s; } }
-    if (best?.art && top >= .7) return best;
+    if (best?.art && top >= .82) return best;
   }
   const art = await coverFromMusicBrainz(artist, title).catch(() => null);
   return art ? { title, artist, album: '', art, duration, preview: null } : null;
@@ -212,7 +212,8 @@ export async function identify(t, blob, key, { audd } = {}) {
     if (r) return { title: r.title, artist: r.artist, album: r.album || '', art: r.art || null, preview: r.preview || null, source: 'sound', score: .95, auto: true };
   }
   if (!best || top < .6) return null;
-  return { ...best, source: 'name', score: top, auto: top >= AUTO_SCORE };
+  // Название в посте может быть чужим: по одному названию ничего не меняем сами, только предлагаем
+  return { ...best, source: 'name', score: top, auto: false };
 }
 
 export const sameName = (a, b) => norm(a.title) === norm(b.title) && norm(a.artist) === norm(b.artist);

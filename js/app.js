@@ -3,7 +3,7 @@ import { readTags, parseFileName } from './id3.js';
 import { searchItunes, fetchArt, albumTracks } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
-import { identify, cleanName, cleanTag, sameName, findOriginal, IDENT_VER } from './identify.js';
+import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
 import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, analyzeAudio, normKey } from './wave.js';
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
@@ -856,8 +856,8 @@ function applyMerged(p, ch) {
   }
   for (const id of ch.tracks || []) {
     const t = tracks.get(id), m = p.tracks[id];
-    if (!t || !m) continue;
-    Object.assign(t, { title: m.title, artist: m.artist, album: m.album, verified: m.verified }, m.verified ? { ident: { status: 'done' } } : {});
+    if (!t || !m || !m.conf) continue;
+    Object.assign(t, { conf: true, title: m.title, artist: m.artist, album: m.album, verified: m.verified }, m.verified ? { ident: { status: 'done' } } : {});
     saveTrack(t);
     if (id === curId) { paintNow(); mediaMeta(t); }
   }
@@ -1167,7 +1167,7 @@ async function coverHunt() {
         const it = await findOriginal(t.artist, t.title, t.duration);
         t.artChecked = true;
         // название из LRCLIB заменяем оригинальным написанием из каталога
-        if (it?.album && t.nameFrom === 'lrclib') { t.title = it.title; t.artist = it.artist; delete t.nameFrom; updateRow(t.id); if (t.id === curId) { paintNow(); mediaMeta(t); } }
+        if (it?.album && t.nameFrom === 'lrclib' && scoreCandidate(`${t.artist} - ${t.title}`, it) >= .9) { t.title = it.title; t.artist = it.artist; delete t.nameFrom; updateRow(t.id); if (t.id === curId) { paintNow(); mediaMeta(t); } }
         t.metaV = 2;
         if (it?.genre) t.genre = it.genre;
         if (it?.albumId && (!t.album || norm2(it.album) === norm2(t.album))) { t.albumId = it.albumId; t.albumTotal = it.albumTotal; t.trackNo = it.trackNo; if (!t.album) t.album = it.album; }
@@ -1177,7 +1177,7 @@ async function coverHunt() {
         const b = it?.art && !t.coverOriginal ? await fetchArt(it.art).catch(() => null) : null;
         if (b) {
           t.coverOriginal = true;
-          if (settings.writeChannel && inCurrentChat(t)) t.chanPending = true;
+          if (settings.writeChannel && inCurrentChat(t) && t.conf) t.chanPending = true;
           await setCover(t, b);
         } else await saveTrack(t);
         if (t.chanPending) chanQueue();
@@ -1238,7 +1238,7 @@ async function identHunt() {
     for (;;) {
       while (sugFetching) await new Promise(r => setTimeout(r, 1000)); // у iTunes общий лимит запросов с подборкой Волны
       await new Promise(r => setTimeout(r, engine.paused ? 50 : 250)); // пока играет музыка, чуть медленнее
-      const todo = order.map(id => tracks.get(id)).filter(t => t && !t.verified && !t.ident);
+      const todo = order.map(id => tracks.get(id)).filter(t => t && !t.verified && !t.ident && !t.resetName); // старое название вернётся из канала — тогда и распознаем
       identState.total = identState.done + todo.length;
       if (!todo.length) {
         // Что не узнали раньше, пробуем по звуку, когда снова доступен дневной лимит AudD
@@ -1283,6 +1283,21 @@ async function identHunt() {
   }
 }
 
+// Название, угаданное только по похожему тексту, откатываем: возвращаем то, что в канале или в файле
+function undoGuess(t) {
+  if (t.previewOnly || t.conf || t.ident?.status === 'kept' || ['ok', 'audd'].includes(t.sound?.st)) { if (['ok', 'audd'].includes(t.sound?.st) && !t.conf) { t.conf = true; saveTrack(t); } return false; }
+  if (!t.verified && !t.ident) return false;
+  if (t.orig) { t.title = t.orig.title; t.artist = t.orig.artist; delete t.orig; }
+  else if (t.source === 'tg' && tgCfg?.chatId) t.resetName = true;
+  else if (t.fileName) { const p = parseFileName(t.fileName); t.title = cleanTag(p.title) || p.title || t.title; t.artist = cleanTag(p.artist) || ''; } // настоящее название возьмём из поста при следующем просмотре канала
+  else if (t.fileTitle) { const p = parseFileName(t.fileName || ''); t.title = cleanTag(t.fileTitle) || t.fileTitle; t.artist = cleanTag(p.artist) || t.artist; }
+  if (t.coverOriginal) { t.coverOriginal = false; t.cover = false; db.del('covers', t.id); db.del('covers', 'th:' + t.id); }
+  for (const k of ['album', 'albumId', 'albumTotal', 'trackNo', 'genre', 'released', 'nameFrom', 'metaV', 'sound', 'soundBad', 'chanWait']) delete t[k];
+  t.album = ''; t.verified = false; t.artChecked = false; t.chanPending = false; delete t.ident;
+  saveTrack(t);
+  return true;
+}
+
 // ---------- сверка по звуку: та ли это песня, что написана в названии ----------
 let soundRunning = false;
 const soundSkip = new Set();
@@ -1308,7 +1323,7 @@ async function soundHunt() {
         const c = { ...r.cand, source: 'sound', score: r.s };
         const renamed = !sameName(c, t);
         if (renamed || !t.coverOriginal) { await acceptFix(t, c); if (renamed) soundState.renamed++; }
-        else t.verified = true;
+        else { t.verified = true; t.conf = true; }
         if (t.chanWait) { delete t.chanWait; if (settings.writeChannel && inCurrentChat(t)) { t.chanPending = true; chanQueue(); } }
         await saveTrack(t);
       } else if (r.st === 'mismatch') {
@@ -1372,6 +1387,8 @@ function renderFix() {
 
 async function acceptFix(t, c) {
   const renamed = t.title !== c.title || t.artist !== c.artist;
+  if (renamed && !t.orig) t.orig = { title: t.title, artist: t.artist }; // чтобы можно было вернуть
+  if (c.source === 'sound' || c.source === 'manual') t.conf = true; else delete t.conf;
   t.title = c.title; t.artist = c.artist; if (c.album) t.album = c.album; if (c.released) t.released = c.released; if (c.genre) t.genre = c.genre;
   if (c.albumId) { t.albumId = c.albumId; t.albumTotal = c.albumTotal; t.trackNo = c.trackNo; t.metaV = 2; }
   t.verified = true; t.ident = { status: 'done', v: IDENT_VER };
@@ -1460,7 +1477,7 @@ async function chanQueue() {
     const later = new Set(); // эти посты в этот раз не получились — не мешаем остальным
     for (;;) {
       // только посты выбранного сейчас канала: номера сообщений в разных каналах совпадают
-      const pending = [...tracks.values()].filter(x => x.chanPending && x.artChecked && inCurrentChat(x) && !later.has(x.id));
+      const pending = [...tracks.values()].filter(x => x.chanPending && x.conf && x.artChecked && inCurrentChat(x) && !later.has(x.id));
       chan.total = chan.done + pending.length;
       const t = pending[0]; if (!t) break;
       renderTgCard();
@@ -1725,7 +1742,15 @@ async function startSync() {
     for await (const it of tg.audioMessages(chat)) {
       if (sync.stop) break;
       const old = known.get(it.msgId);
-      if (old) { tgItems.set(old.id, it); sync.scanned++; continue; }
+      if (old) {
+        tgItems.set(old.id, it); sync.scanned++;
+        if (old.resetName) { // вернуть название как в посте
+          const p = parseFileName(it.fileName || '');
+          old.title = cleanTag(it.title) || cleanTag(p.title) || p.title || old.title; old.artist = cleanTag(it.artist) || cleanTag(p.artist) || '';
+          delete old.resetName; await saveTrack(old); updateRow(old.id);
+        }
+        continue;
+      }
       const id = tgId(it);
       tgItems.set(id, it);
       sync.scanned++;
@@ -1735,11 +1760,11 @@ async function startSync() {
         duration: it.duration, size: it.size, mime: it.mime, downloaded: false, addedAt: it.date * 1000 + (it.msgId % 1000) };
       // другое устройство уже могло исправить название этого трека
       const meta = cloud?.trackMeta(id);
-      if (meta) Object.assign(t, { title: meta.title, artist: meta.artist, album: meta.album, verified: meta.verified }, meta.verified ? { ident: { status: 'done' } } : {});
+      if (meta?.conf) Object.assign(t, { conf: true, title: meta.title, artist: meta.artist, album: meta.album, verified: meta.verified }, meta.verified ? { ident: { status: 'done' } } : {});
       tracks.set(id, t); await saveTrack(t);
       if (Date.now() - lastPaint > 4000) { lastPaint = Date.now(); rebuildOrder(); if (view === 'all') render(); renderTgCard(); }
     }
-    rebuildOrder(); render();
+    rebuildOrder(); render(); identHunt();
     const todo = order.map(id => tracks.get(id)).filter(t => t.source === 'tg' && !t.downloaded);
     sync.total = todo.length;
     for (const t of todo) {
@@ -1979,7 +2004,7 @@ document.addEventListener('click', async e => {
   else if (a === 'acceptAll') {
     const list = [...tracks.values()].filter(t => t.ident?.status === 'found' && !t.verified);
     e.target.closest('button').disabled = true;
-    for (const t of list) await acceptFix(t, { ...t.ident.cand, source: t.ident.cand.source === 'sound' ? 'sound' : 'manual' });
+    for (const t of list) await acceptFix(t, t.ident.cand);
     render(); toast('Исправлено: ' + tracksWord(list.length));
   }
   else if (a === 'more') openMore();
@@ -2178,7 +2203,9 @@ async function boot() {
     deviceId = await db.get('kv', 'deviceId') || Math.random().toString(36).slice(2, 10);
     db.put('kv', 'deviceId', deviceId);
     tgCfg = await db.get('kv', 'tg') || null;
+    const resetFix = settings.fixReset !== 1;
     for (const t of await db.all('tracks')) {
+      if (resetFix) undoGuess(t);
       // старый поиск часто не находил русские треки: проверяем их заново
       if (!t.verified && t.ident && t.ident.v !== IDENT_VER) delete t.ident;
       // каталоги пополняются: не найденное пробуем снова раз в две недели
@@ -2188,6 +2215,7 @@ async function boot() {
       if (title !== t.title || artist !== t.artist) { t.title = title; t.artist = artist; saveTrack(t); }
       tracks.set(t.id, t);
     }
+    if (resetFix) { settings.fixReset = 1; saveSettings(); }
   } catch (e) {
     window.__mixErr?.('Не открывается хранилище: ' + e.message + '. Без него плеер не сможет сохранять музыку.');
       return;

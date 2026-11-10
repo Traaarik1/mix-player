@@ -13,7 +13,7 @@ const SETTINGS = {
   cf: v => isNum(v) && v >= 0 && v <= 12, trim: isBool, skipFade: isBool, eqPreset: v => typeof v === 'string' && v.length < 100,
   eq: v => Array.isArray(v) && v.length <= 32 && v.every(x => isNum(x) && Math.abs(x) <= 40),
 };
-const TRACK_FIELDS = ['title', 'artist', 'album', 'verified'];
+const TRACK_FIELDS = ['title', 'artist', 'album', 'verified', 'conf'];
 // Ключи не уходят в документ, даже если случайно окажутся в «непрозрачных» данных волны
 const SECRET = new Set(['apiid', 'apihash', 'session', 'acoustkey', 'auddtoken', 'token', 'api_token', 'password', 'phone', 'secret']);
 function scrub(v) {
@@ -170,7 +170,7 @@ export function stamp(doc, plain = {}, now = Date.now()) {
   if (plain.history) d.history = mergeHistory(d.history, plain.history.filter(h => h && typeof h.id === 'string' && isNum(h.at)));
   if (plain.tracks) {
     for (const [id, t] of Object.entries(plain.tracks)) {
-      if (!t?.verified) continue; // непроверенное название с канала не должно перебить чужое исправление
+      if (!t?.verified || !t.conf) continue; // только подтверждённое по звуку или вручную: догадка не должна разойтись по устройствам
       const val = {}; for (const f of TRACK_FIELDS) if (t[f] !== undefined) val[f] = t[f];
       const { t: _, ...old } = d.tracks[id] || {};
       if (canon(old) !== canon(val)) d.tracks[id] = { t: T(), ...val };
