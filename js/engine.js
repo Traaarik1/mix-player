@@ -32,6 +32,32 @@ function loudness(buf, from, to) {
   for (let i = a; i < b; i += 8) { sum += d[i] * d[i]; n++; }
   return n ? Math.sqrt(sum / n) : 0;
 }
+// Громкость трека «на слух»: средняя по кускам 0,4 с, тишина и тихие места не считаются (как в LUFS, но без фильтра)
+export function loudnessOf(buf) {
+  const sr = buf.sampleRate, block = Math.round(sr * .4), chans = [...Array(Math.min(2, buf.numberOfChannels))].map((_, c) => buf.getChannelData(c));
+  const n = chans[0].length, en = []; let peak = 0;
+  for (let b = 0; b + block <= n; b += block) {
+    let sum = 0, k = 0;
+    for (let i = b; i < b + block; i += 4) for (const d of chans) { const v = d[i]; sum += v * v; k++; const a = v < 0 ? -v : v; if (a > peak) peak = a; }
+    en.push(sum / k);
+  }
+  const db = x => 10 * Math.log10(x || 1e-12);
+  let loud = en.filter(x => db(x) > -60);
+  if (!loud.length) return { db: -60, peak };
+  const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+  const gate = db(mean(loud)) - 10;
+  loud = loud.filter(x => db(x) > gate);
+  return { db: +db(mean(loud)).toFixed(1), peak: +peak.toFixed(3) };
+}
+export const NORM_TARGET = -11;
+// Во сколько раз изменить громкость: громкие тише, тихие громче, но без перегруза
+export function normGain(loud, target = NORM_TARGET) {
+  if (!loud || !isFinite(loud.db)) return 1;
+  const dB = Math.max(-12, Math.min(6, target - loud.db));
+  const lin = 10 ** (dB / 20);
+  return dB > 0 ? Math.max(1, Math.min(lin, .98 / Math.max(loud.peak, 1e-3))) : lin;
+}
+
 // Ритмы совпадают (или один ровно вдвое быстрее) — длинный переход звучит нормально
 export function tempoFits(a, b) {
   if (!a || !b) return false;
@@ -221,8 +247,9 @@ export class Engine extends EventTarget {
     this.decodeQ = run.catch(noop);
     const buf = await run;
     this.sizes.set(track.id, buf.length * buf.numberOfChannels * 4);
-    if (!track.bounds || track.bpm === undefined) {
+    if (!track.bounds || track.bpm === undefined || !track.loud) {
       track.bounds ||= silenceBounds(buf);
+      if (!track.loud) try { track.loud = loudnessOf(buf); } catch {}
       if (track.bpm === undefined) { const a = analyzeAudio(buf.getChannelData(0), buf.sampleRate); track.bpm = a.bpm; track.rms = a.rms; }
       this.onBounds?.(track, track.bounds);
     }
@@ -242,15 +269,17 @@ export class Engine extends EventTarget {
   }
 
   deck(track, buf) {
-    const src = this.ctx.createBufferSource(), gain = this.ctx.createGain(), bass = this.ctx.createBiquadFilter();
+    const src = this.ctx.createBufferSource(), gain = this.ctx.createGain(), bass = this.ctx.createBiquadFilter(), norm = this.ctx.createGain(), tone = this.ctx.createBiquadFilter();
+    tone.type = 'lowpass'; tone.frequency.value = 20000; tone.Q.value = .5;
     bass.type = 'lowshelf'; bass.frequency.value = BASS_HZ; bass.gain.value = 0;
-    src.buffer = buf; src.connect(bass).connect(gain).connect(this.bus);
+    norm.gain.value = this.norm ? normGain(track.loud) : 1;
+    src.buffer = buf; src.connect(bass).connect(tone).connect(norm).connect(gain).connect(this.bus);
     const b = track.bounds || { s: 0, e: buf.duration };
     this.live ??= new Set();
-    const d = { track, buf, src, gain, bass, startCtx: 0, offset: 0, fadeEnd: 0, ended: false,
+    const d = { track, buf, src, gain, bass, norm, tone, startCtx: 0, offset: 0, fadeEnd: 0, ended: false,
       end: this.trim ? Math.min(b.e, buf.duration) : buf.duration, head: this.trim ? b.s : 0 };
     src.onended = () => {
-      try { gain.disconnect(); src.disconnect(); bass.disconnect(); } catch {}
+      try { gain.disconnect(); src.disconnect(); bass.disconnect(); norm.disconnect(); tone.disconnect(); } catch {}
       this.live.delete(d);
       this.tails.delete(d);
       if (this.cur !== d) return;
@@ -356,7 +385,8 @@ export class Engine extends EventTarget {
     const ctx = this.ctx, d = this.deck(next, buf), now = ctx.currentTime;
     const curEnd = cur.startCtx + cur.end - cur.offset; // когда в расписании кончится текущий
     let cf = Math.max(0, Math.min(this.cf, (cur.end - cur.head) / 3, (d.end - d.head) / 3));
-    if (cf > 0.05) try { cf = smartCf(cf, loudness(cur.buf, cur.end - cf, cur.end), loudness(buf, d.head, d.head + cf), cur.track.bpm, next.bpm); } catch {}
+    if (cf > 0.05) try { const k = t => this.norm ? normGain(t.loud) : 1; // громкость уже после выравнивания
+      cf = smartCf(cf, loudness(cur.buf, cur.end - cf, cur.end) * k(cur.track), loudness(buf, d.head, d.head + cf) * k(next), cur.track.bpm, next.bpm); } catch {}
     // не раньше конца ручного перехода: две кривые на одном параметре браузер не примет
     const at = Math.max(now + 0.1, cur.fadeEnd + 0.01, curEnd - cf);
     cf = Math.max(0, Math.min(cf, curEnd - at)); // после перемотки к концу на полный переход может не хватить
@@ -372,6 +402,7 @@ export class Engine extends EventTarget {
           const sw = at + cf / 2 - SWAP / 2;
           d.bass.gain.setValueAtTime(BASS_CUT, 0); d.bass.gain.setValueAtTime(BASS_CUT, sw); d.bass.gain.linearRampToValueAtTime(0, sw + SWAP);
           cur.bass.gain.setValueAtTime(0, sw); cur.bass.gain.linearRampToValueAtTime(BASS_CUT, sw + SWAP);
+          cur.tone.frequency.setValueAtTime(20000, at); cur.tone.frequency.exponentialRampToValueAtTime(500, at + cf);
         }
       } else {
         d.gain.gain.setValueAtTime(0, 0); d.gain.gain.setValueAtTime(1, at);
@@ -396,6 +427,7 @@ export class Engine extends EventTarget {
     try { n.deck.src.disconnect(); n.deck.gain.disconnect(); } catch {}
     this.cur.gain.gain.cancelScheduledValues(n.at);
     try { this.cur.bass.gain.cancelScheduledValues(0); this.cur.bass.gain.setValueAtTime(0, this.ctx.currentTime); } catch {}
+    try { this.cur.tone.frequency.cancelScheduledValues(0); this.cur.tone.frequency.setValueAtTime(20000, this.ctx.currentTime); } catch {}
   }
 
   // Расписанный переход начался — следующий трек становится текущим.
@@ -437,6 +469,11 @@ export class Engine extends EventTarget {
   }
   setCrossfade(sec) { this.cf = sec; this.refreshNext(); }
   setTrim(on) { this.trim = on; }
+  // Ровная громкость: меняем плавно и у того, что уже звучит
+  setNorm(on) {
+    this.norm = on;
+    for (const d of this.live || []) try { d.norm.gain.setTargetAtTime(on ? normGain(d.track.loud) : 1, this.ctx.currentTime, .15); } catch {}
+  }
 
   async resume() {
     this.init();

@@ -25,7 +25,7 @@ const tracks = new Map();   // id -> трек
 const virtual = new Map();  // превью похожих треков в Волне: играют, но не лежат в библиотеке
 const getT = id => tracks.get(id) || virtual.get(id);
 let order = [];             // id, новые сверху
-const settings = { cf: 6, trim: true, skipFade: true, vol: 80, shuffle: false, repeat: true, eq: EQ_PRESETS['Ровно'].slice(), eqPreset: 'Ровно', acoustKey: '', auddToken: '', writeChannel: true, sort: 'added-desc', waveSimilar: true };
+const settings = { cf: 6, trim: true, skipFade: true, vol: 80, shuffle: false, repeat: true, eq: EQ_PRESETS['Ровно'].slice(), eqPreset: 'Ровно', acoustKey: '', auddToken: '', writeChannel: true, sort: 'added-desc', waveSimilar: true, norm: true };
 const lib = { likes: new Set(), playlists: [], history: [], listens: [] };
 let waveFx = {};            // синхронизируется: d:* «не моё», l:* лайки подборки, listens:<устройство> история других устройств
 let deviceId = '', waveSeen = [];
@@ -1000,14 +1000,16 @@ function openMix() {
   const el = popup(`<h3>Переход между треками</h3>
     <svg class="mixviz" viewBox="0 0 320 50" preserveAspectRatio="none"><path id="cOut" stroke="var(--accent)"/><path id="cIn" stroke="var(--amber)"/></svg>
     <div class="field"><span>Длина перехода</span><input type="range" id="cf" min="0" max="12" step="1"><output id="cfOut"></output></div>
-    <label class="check"><input type="checkbox" class="sw" id="trim"><span>Умный микс<small>Срезать тишину в начале и конце треков, чтобы на стыке не было паузы</small></span></label>`);
+    <label class="check"><input type="checkbox" class="sw" id="trim"><span>Умный микс<small>Срезать тишину в начале и конце треков, чтобы на стыке не было паузы</small></span></label>
+    <label class="check"><input type="checkbox" class="sw" id="norm"><span>Ровная громкость<small>Громкие треки чуть тише, тихие — громче, чтобы не крутить звук от песни к песне</small></span></label>`);
   const sync = () => {
     $('#cf', el).value = settings.cf; $('#cf', el).style.setProperty('--p', settings.cf / 12 * 100 + '%');
     $('#cfOut', el).textContent = settings.cf ? settings.cf + ' с' : 'выкл';
     const c = mixCurvePath(settings.cf); $('#cOut', el).setAttribute('d', c.out); $('#cIn', el).setAttribute('d', c.inn);
   };
   sync();
-  $('#trim', el).checked = settings.trim;
+  $('#trim', el).checked = settings.trim; $('#norm', el).checked = settings.norm;
+  $('#norm', el).onchange = e => { settings.norm = e.target.checked; engine.setNorm(settings.norm); saveSettings(); };
   $('#cf', el).oninput = e => { settings.cf = +e.target.value; sync(); saveSettings(); engine.setCrossfade(settings.cf); };
   $('#trim', el).onchange = e => { settings.trim = e.target.checked; engine.setTrim(settings.trim); saveSettings(); engine.refreshNext(); };
 }
@@ -2228,7 +2230,7 @@ async function boot() {
   }
   rebuildOrder();
   handlePairLink();
-  engine.cf = settings.cf; engine.trim = settings.trim; engine.eqGains = settings.eq.slice(); engine.volume = settings.vol / 100;
+  engine.cf = settings.cf; engine.trim = settings.trim; engine.norm = settings.norm !== false; engine.eqGains = settings.eq.slice(); engine.volume = settings.vol / 100;
   $('#vol').value = settings.vol; $('#vol').style.setProperty('--p', settings.vol + '%');
   render(); renderTgCard(); paintState(); paintNow(); updateUsage();
   db.persist();
