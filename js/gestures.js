@@ -62,11 +62,40 @@ export function setupGestures({ full, stack, mini, onClose, onOpen, onNext, onPr
 }
 
 // Свайп строки вправо: в очередь
+// Как в приложениях iPhone: ведёшь пальцем от левого края вправо — экран уезжает, и открывается предыдущий
+const EDGE = 26;
+export function setupEdgeBack(el, { canBack, onBack }) {
+  let s = null;
+  el.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || e.clientX > EDGE || !canBack()) return;
+    s = { x: e.clientX, y: e.clientY, t: Date.now(), on: false };
+  });
+  el.addEventListener('pointermove', e => {
+    if (!s) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (!s.on) { if (Math.abs(dy) > 14 && Math.abs(dy) > dx) { s = null; return; } if (dx < 12) return; s.on = true; el.style.transition = 'none'; }
+    el.style.transform = `translateX(${Math.max(0, dx)}px)`;
+  });
+  const end = (e, cancel) => {
+    if (!s) return;
+    const a = s; s = null; if (!a.on) return;
+    const dx = cancel ? 0 : e.clientX - a.x, fast = dx / Math.max(1, Date.now() - a.t) > .5;
+    el.style.transition = 'transform .2s ease-out';
+    if (dx > innerWidth * .33 || (dx > 50 && fast)) {
+      el.style.transform = 'translateX(100%)';
+      setTimeout(() => { onBack(); el.style.transition = 'none'; el.style.transform = 'translateX(-24px)'; requestAnimationFrame(() => { el.style.transition = 'transform .18s ease-out'; el.style.transform = ''; }); }, 180);
+    } else el.style.transform = '';
+    setTimeout(() => { el.style.transition = ''; }, 420);
+  };
+  el.addEventListener('pointerup', e => end(e, false));
+  el.addEventListener('pointercancel', e => end(e, true));
+}
+
 export function setupRowSwipe(list, onQueue) {
   let s = null;
   const reset = el => { el.style.transition = 'transform .18s ease-out'; el.style.transform = ''; setTimeout(() => { el.style.transition = ''; el.classList.remove('swiping', 'armed'); }, 190); };
   list.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse' || e.target.closest('button')) return;
+    if (e.pointerType === 'mouse' || e.target.closest('button') || e.clientX < EDGE) return; // от края — это «назад», а не очередь
     const el = e.target.closest('.row'); if (el) s = { el, x: e.clientX, y: e.clientY, on: false };
   });
   list.addEventListener('pointermove', e => {

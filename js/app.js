@@ -8,7 +8,7 @@ import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, a
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { openMini, canMini } from './mini.js';
-import { setupGestures, setupRowSwipe } from './gestures.js';
+import { setupGestures, setupRowSwipe, setupEdgeBack } from './gestures.js';
 import { checkSound, SOUND_V } from './soundcheck.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -32,6 +32,8 @@ let deviceId = '', waveSeen = [];
 let waveMode = false;
 let tgCfg = null;           // {apiId, apiHash, session, chatId, chatTitle, lastSync}
 let view = 'all', query = '';
+const navStack = []; // откуда пришли: для «назад»
+let artistAll = false; // у артиста показаны все треки, а не первые 5
 let queue = [], queueBase = [];
 let curId = null;
 
@@ -318,9 +320,9 @@ let catFor = '';
 async function paintArtistCatalog() {
   const g = artistGroups().find(x => x.key === view.slice(7)); if (!g || !navigator.onLine) return;
   const v = view; catFor = v;
-  const box = $('#extra');
-  box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Ищу альбомы…</small></div></div>';
+  const box = $('#disc');
   const cache = await db.get('kv', 'cat:' + g.key);
+  if (!cache) box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Ищу альбомы…</small></div></div>';
   const cat = cache && Date.now() - cache.at < 7 * 864e5 ? cache.cat : await artistCatalog(g.name).catch(() => null);
   if (cat && !cache?.cat) db.put('kv', 'cat:' + g.key, { at: Date.now(), cat });
   if (view !== v || catFor !== v) return;
@@ -337,7 +339,8 @@ async function paintArtistCatalog() {
   const albums = cat.albums.filter(x => !x.single), singles = cat.albums.filter(x => x.single);
   box.innerHTML = `<div class="sechead"><div><b>Дискография: ${albums.length} ${albums.length === 1 ? 'альбом' : 'альбомов'}${singles.length ? `, ${singles.length} синглов` : ''}</b><small>Нажми на альбом — увидишь, каких песен не хватает</small></div></div>
     <ul class="rows"><li class="artists albums">${albums.map(tile).join('')}</li></ul>
-    ${singles.length ? `<div class="sechead"><div><b>Синглы</b></div></div><ul class="rows"><li class="artists albums">${singles.map(tile).join('')}</li></ul>` : ''}`;
+    ${singles.length ? `<div class="sechead"><div><b>Синглы</b></div></div><ul class="rows"><li class="artists albums">${singles.map(tile).join('')}</li></ul>` : ''}
+    <div class="sechead"><div><b>Треки у тебя: ${mine.length}</b></div></div>`;
 }
 const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
@@ -363,7 +366,7 @@ function render() {
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
   $('#sort').hidden = ['artists', 'recent', 'albums'].includes(view) || view.startsWith('album:');
   $('#sort').value = settings.sort;
-  if (['fix', 'wave', 'wish', 'artists', 'albums'].includes(view)) { clearList(); $('#extra').innerHTML = ''; }
+  if (['fix', 'wave', 'wish', 'artists', 'albums'].includes(view)) { clearList(); $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; }
   if (view === 'fix') { renderFix(); renderNav(); return; }
   if (view === 'wave') { renderWave(); renderNav(); return; }
   if (view === 'wish') { renderWish(); renderNav(); return; }
@@ -379,10 +382,12 @@ function render() {
   empty.hidden = !!ids.length;
   if (!ids.length) empty.innerHTML = emptyHTML();
   const rows = $('#rows');
-  listIds = ids; listFrom = -1;
+  const cut = view.startsWith('artist:') && !artistAll && ids.length > 6;
+  listIds = cut ? ids.slice(0, 5) : ids; listFrom = -1;
+  if (!view.startsWith('artist:')) $('#disc').innerHTML = '';
   $('#extra').innerHTML = '';
   paintWebSearch();
-  if (view.startsWith('artist:')) paintArtistCatalog();
+  if (view.startsWith('artist:')) { paintArtistCatalog(); if (cut) $('#extra').innerHTML = `<button class="btn showall" data-act="artistAll">Показать все треки (${ids.length})</button>`; }
   if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)) || webAlbum(view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
   renderShelf();
   paintList();
@@ -2119,6 +2124,7 @@ document.addEventListener('click', async e => {
   else if (a === 'pair') openPair();
   else if (a === 'upload') askUpload();
   else if (a === 'musicBot') askMusicBot(() => render());
+  else if (a === 'artistAll') { artistAll = true; render(); }
   else if (a === 'tg') openTg();
   else if (a === 'tgSync') startSync();
   else if (a === 'tgStop') { sync.stop = true; }
@@ -2136,6 +2142,8 @@ document.addEventListener('click', async e => {
   }
   const v = e.target.closest('[data-view]')?.dataset.view;
   if (v) {
+    if (v !== view) { navStack.push({ v: view, top: $('#main').scrollTop }); if (navStack.length > 50) navStack.shift(); history.pushState({ mix: navStack.length }, ''); }
+    artistAll = false;
     view = v; $('#main').scrollTop = 0; render();
     const mainEl = $('#main'); mainEl.classList.remove('fadein'); void mainEl.offsetWidth; mainEl.classList.add('fadein');
     if (v === 'wave' && !sug.items.length && tracks.size && navigator.onLine) loadSuggestions();
@@ -2306,7 +2314,15 @@ document.addEventListener('keydown', e => {
 // ---------- запуск ----------
 window.__mixReady = true;
 setInterval(frame, 250);
-setInterval(() => soundHunt(), 5 * 60e3); // скачались новые треки — сверим и их
+setInterval(() => soundHunt(), 5 * 60e3);
+function goBack() {
+  const p = navStack.pop(); if (!p) return false;
+  if ($('#full').classList.contains('open')) closeFull();
+  artistAll = false; view = p.v; render(); $('#main').scrollTop = p.top || 0;
+  return true;
+}
+addEventListener('popstate', () => { if (layer.firstElementChild) { closeLayer(); return; } goBack(); });
+setupEdgeBack($('#main'), { canBack: () => navStack.length > 0 && !$('#full').classList.contains('open'), onBack: () => history.back() }); // скачались новые треки — сверим и их
 async function boot() {
   // сначала рисуем интерфейс, потом читаем сохранённое — чтобы кнопки работали сразу
   render(); renderTgCard(); paintState(); paintMixChip();

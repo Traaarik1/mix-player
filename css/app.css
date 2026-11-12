@@ -820,3 +820,8 @@ img.cov { object-fit: cover; }
 .row.ghost { opacity: .42; cursor: default; }
 .row.ghost:hover { opacity: .65; background: none; }
 .row.ghost .ib { width: 32px; height: 32px; }
+
+/* страница артиста и «назад» */
+#disc .sechead:first-child { margin-top: 4px; }
+.showall { display: block; margin: 10px auto 0; }
+#main { touch-action: pan-y; }
