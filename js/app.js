@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, fetchArt, albumTracks } from './covers.js';
+import { searchItunes, searchDeezer, fetchArt, albumTracks } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
@@ -254,10 +254,35 @@ async function paintAlbumMissing(g) {
   const have = g.ids.map(id => tracks.get(id));
   const missing = songs.filter(s => !have.some(t => sameTrack(s, t)));
   if (!missing.length) return;
-  albumMissing = missing;
-  box.innerHTML = `<div class="sechead"><div><b>Не хватает: ${missing.length}</b><small>Плюс отправит трек в «Хочу скачать», он заменится полным, когда появится в канале</small></div></div>
-    <ul class="rows">${missing.map((s, i) => `<li class="sug" data-mi="${i}"><span class="art-wrap">${s.art ? `<img src="${esc(s.art)}" alt="" loading="lazy">` : ''}</span><span class="ttl"><span class="t">${s.trackNo ? s.trackNo + '. ' : ''}${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></span>
-    <span class="acts"><button class="ib" data-miss="wish" title="В «Хочу скачать»"><svg><use href="#i-plus"/></svg></button><button class="ib" data-miss="find" title="Найти в Telegram"><svg><use href="#i-copy"/></svg></button></span></li>`).join('')}</ul>`;
+  paintWebList(`Не хватает: ${missing.length}`, 'Плюс отправит трек в «Хочу скачать», он заменится полным, когда появится в канале', missing, true);
+}
+function paintWebList(head, note, list, numbered = false) {
+  albumMissing = list;
+  $('#extra').innerHTML = `<div class="sechead"><div><b>${esc(head)}</b><small>${esc(note)}</small></div></div>
+    <ul class="rows">${list.map((s, i) => `<li class="sug" data-mi="${i}"><span class="art-wrap">${s.art ? `<img src="${esc(s.art)}" alt="" loading="lazy">` : ''}${s.preview ? '<button data-wish="play" title="Послушать 30 секунд"><svg><use href="#i-play"/></svg></button>' : ''}</span><span class="ttl"><span class="t">${numbered && s.trackNo ? s.trackNo + '. ' : ''}${esc(s.title)}</span><span class="a">${esc(s.artist)}${s.album && !numbered ? ' — ' + esc(s.album) : ''}</span></span>
+    <span class="acts"><button class="ib" data-miss="wish" title="В «Хочу скачать»"><svg><use href="#i-plus"/></svg></button><button class="btn primary wishfind" data-miss="find" title="Открыть бота в Telegram"><svg><use href="#i-tg"/></svg>Найти</button></span></li>`).join('')}</ul>`;
+}
+// Поиск любой песни: каталоги iTunes и Deezer, ниже своих треков
+let webQ = '', webT;
+function paintWebSearch() {
+  clearTimeout(webT);
+  const q = query;
+  if (q.length < 3 || !navigator.onLine || !['all', 'wave', 'liked', 'recent'].includes(view)) return;
+  webT = setTimeout(async () => {
+    webQ = q;
+    $('#extra').innerHTML = '<div class="sechead"><div><b>В интернете</b><small>Ищу…</small></div></div>';
+    const [it, dz] = await Promise.all([searchItunes(q, 15, 'RU').catch(() => []), searchDeezer(q, 15).catch(() => [])]);
+    if (webQ !== q || query !== q) return;
+    const seen = new Set(), key = s => normKey(s.artist + ' ' + s.title), mine = [...tracks.values()];
+    let list = [...it, ...dz].filter(s => { const k = key(s); if (seen.has(k)) return false; seen.add(k); return true; })
+      .filter(s => !mine.some(t => sameTrack(s, t)));
+    // выше то, где нашлись все слова запроса (Мияги = Miyagi: сравниваем в транслите)
+    const qw = q.split(/s+/).map(normKey).filter(Boolean);
+    const fit = s => { const w = (normKey(s.artist) + ' ' + normKey(s.title)); return qw.filter(x => w.includes(x)).length; };
+    list.sort((x, y) => fit(y) - fit(x)); list.splice(20);
+    if (!list.length) { $('#extra').innerHTML = '<div class="sechead"><div><b>В интернете</b><small>Ничего не нашлось</small></div></div>'; return; }
+    paintWebList('Найдено в интернете', 'Плюс — в «Хочу скачать», «Найти» — открыть бота в Telegram с этим названием', list);
+  }, 500);
 }
 let albumMissing = [];
 const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('album:') ? albumGroups().find(g => g.key === view.slice(6))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
@@ -302,6 +327,7 @@ function render() {
   const rows = $('#rows');
   listIds = ids; listFrom = -1;
   $('#extra').innerHTML = '';
+  paintWebSearch();
   if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
   renderShelf();
   paintList();
@@ -681,10 +707,28 @@ async function fulfilWish(t) {
 async function scanWishes() {
   for (const w of wishes()) { const t = [...tracks.values()].find(x => !x.previewOnly && sameTrack(w, x)); if (t) await fulfilWish(t); }
 }
+const botName = s => String(s || '').trim().replace(/^https?:\/\/t\.me\//i, '').replace(/^@/, '').replace(/[^\w]/g, '');
+// «Найти»: сразу открывает выбранного музыкального бота с названием трека в поле ввода
 async function findInTelegram(s) {
-  await copyName(s);
-  toast('Название скопировано. Вставь его в поиск Telegram и кинь трек в свой канал');
-  const a = document.createElement('a'); a.href = 'tg://'; a.click(); // открывает приложение Telegram, если оно установлено
+  if (!settings.musicBot) { askMusicBot(() => findInTelegram(s)); return; }
+  const text = `${s.artist ? s.artist + ' - ' : ''}${s.title}`;
+  try { await navigator.clipboard.writeText(text); } catch {} // на всякий случай название ещё и в буфере обмена
+  const q = encodeURIComponent(text);
+  // на телефоне сразу в приложение Telegram; на компьютере — ссылка t.me в новой вкладке (откроет Telegram Desktop или веб-версию)
+  if (matchMedia('(pointer: coarse)').matches) location.href = `tg://resolve?domain=${settings.musicBot}&text=${q}`;
+  else window.open(`https://t.me/${settings.musicBot}?text=${q}`, '_blank', 'noopener');
+  toast('Отправь название боту, потом перешли трек в свой канал');
+}
+function askMusicBot(then) {
+  const d = modal(`<h2>Бот для поиска музыки</h2><p>Напиши имя бота в Telegram, через которого ты находишь треки. Mix будет открывать его с уже вставленным названием песни.</p>
+    <form><input class="inp" name="b" placeholder="@имя_бота" autocomplete="off" value="${settings.musicBot ? '@' + esc(settings.musicBot) : ''}" required>
+    <div class="acts"><button type="button" class="btn" data-x>Отмена</button><button class="btn primary">Сохранить</button></div></form>`);
+  $('[data-x]', d).onclick = closeLayer;
+  $('form', d).onsubmit = e => {
+    e.preventDefault();
+    const b = botName(e.target.b.value); if (!b) return;
+    settings.musicBot = b; saveSettings(); closeLayer(); then?.();
+  };
 }
 function renderWish() {
   const list = wishes(), empty = $('#empty');
@@ -692,7 +736,7 @@ function renderWish() {
   $('#viewSub').textContent = list.length ? tracksWord(list.length) : '';
   empty.hidden = !!list.length;
   if (!list.length) empty.innerHTML = '<h2>Пока пусто</h2><p>Нажми плюс у похожего трека в Волне. Он попадёт сюда, а когда полная версия появится в твоём канале, сама заменит превью.</p>';
-  $('#rows').innerHTML = list.length ? `<li class="sechead"><small>Найди трек, кинь его в свой канал, и Mix сам заменит превью полной версией. Лайки и плейлисты сохранятся.</small></li>` + list.map(w => `<li class="sug" data-w="${esc(w.key)}"><span class="art-wrap">${w.art ? `<img src="${esc(w.art)}" alt="" loading="lazy">` : `<span class="cov" style="--ch:${hash(w.artist)}">${esc(w.artist[0] || '?')}</span>`}${w.preview ? '<button data-wish="play" title="Послушать 30 секунд"><svg><use href="#i-play"/></svg></button>' : ''}</span>
+  $('#rows').innerHTML = list.length ? `<li class="sechead"><small>«Найти» откроет ${settings.musicBot ? '@' + esc(settings.musicBot) : 'твоего музыкального бота'} с названием трека. Перешли трек в свой канал, и Mix сам заменит превью полной версией. <button class="chip" data-act="musicBot">${settings.musicBot ? 'Сменить бота' : 'Выбрать бота'}</button></small></li>` + list.map(w => `<li class="sug" data-w="${esc(w.key)}"><span class="art-wrap">${w.art ? `<img src="${esc(w.art)}" alt="" loading="lazy">` : `<span class="cov" style="--ch:${hash(w.artist)}">${esc(w.artist[0] || '?')}</span>`}${w.preview ? '<button data-wish="play" title="Послушать 30 секунд"><svg><use href="#i-play"/></svg></button>' : ''}</span>
     <span class="ttl"><span class="t">${esc(w.title)}</span><span class="a">${esc(w.artist)}${w.album ? ' — ' + esc(w.album) : ''}</span></span>
     <span class="acts"><button class="btn primary wishfind" data-wish="find">Найти</button><button class="ib" data-wish="del" title="Убрать из списка"><svg><use href="#i-x"/></svg></button></span></li>`).join('') : '';
 }
@@ -2018,6 +2062,7 @@ document.addEventListener('click', async e => {
   else if (a === 'more') openMore();
   else if (a === 'pair') openPair();
   else if (a === 'upload') askUpload();
+  else if (a === 'musicBot') askMusicBot(() => render());
   else if (a === 'tg') openTg();
   else if (a === 'tgSync') startSync();
   else if (a === 'tgStop') { sync.stop = true; }
@@ -2043,7 +2088,7 @@ document.addEventListener('click', async e => {
 $('#extra').addEventListener('click', e => {
   const b = e.target.closest('[data-miss]'), li = e.target.closest('[data-mi]');
   const sng = li && albumMissing[+li.dataset.mi]; if (!sng) return;
-  if (!b) { if (sng.preview) { waveMode = false; const v = previewTrack(sng); queue = queueBase = [v.id]; playId(v.id); } return; }
+  if (!b) { if (sng.preview) { waveMode = false; const v = previewTrack(sng); queue = queueBase = [v.id]; playId(v.id); } else findInTelegram(sng); return; }
   if (b.dataset.miss === 'find') findInTelegram(sng);
   else { addWish(sng); toast('Добавлено в «Хочу скачать»'); b.disabled = true; }
 });

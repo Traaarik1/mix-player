@@ -10,7 +10,7 @@ const SECTIONS = ['likes', 'playlists', 'history', 'tracks', 'settings', 'wave']
 const isNum = v => typeof v === 'number' && Number.isFinite(v), isBool = v => typeof v === 'boolean';
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const SETTINGS = {
-  cf: v => isNum(v) && v >= 0 && v <= 12, trim: isBool, norm: isBool, skipFade: isBool, eqPreset: v => typeof v === 'string' && v.length < 100,
+  cf: v => isNum(v) && v >= 0 && v <= 12, trim: isBool, norm: isBool, musicBot: v => typeof v === 'string' && /^\w{0,64}$/.test(v), skipFade: isBool, eqPreset: v => typeof v === 'string' && v.length < 100,
   eq: v => Array.isArray(v) && v.length <= 32 && v.every(x => isNum(x) && Math.abs(x) <= 40),
 };
 const TRACK_FIELDS = ['title', 'artist', 'album', 'verified', 'conf'];
