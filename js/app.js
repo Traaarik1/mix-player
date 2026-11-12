@@ -1,10 +1,10 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, searchDeezer, fetchArt, albumTracks } from './covers.js';
+import { searchItunes, searchDeezer, fetchArt, albumTracks, artistCatalog } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
-import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, analyzeAudio, normKey } from './wave.js';
+import { buildTaste, nextWave, artistParts, creditsOf, soloArtists, sameTrack, analyzeAudio, normKey, artistAliases } from './wave.js';
 import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { openMini, canMini } from './mini.js';
@@ -182,6 +182,17 @@ function creditIndex() {
     const tidy = p => { const name = p.name.replace(/^(?:группа|гр\.)\s+/i, '').trim(); return name === p.name ? p : { key: normKey(name), name }; };
     return [t.id, c.filter(p => !badArtist(p.name)).map(tidy)];
   }));
+  // склеиваем клоны: одно имя, записанное по-разному, становится одним автором с самым частым (проверенным) написанием
+  const counts = new Map();
+  for (const t of rows) for (const p of creditCache.get(t.id)) {
+    const c = counts.get(p.key) || counts.set(p.key, { name: p.name, n: 0, sure: 0 }).get(p.key);
+    c.n++; if (t.verified || t.conf) c.sure = 1;
+  }
+  const alias = artistAliases(counts);
+  for (const [id, list] of creditCache) {
+    const seen = new Set();
+    creditCache.set(id, list.map(p => { const k = alias.get(p.key) || p.key; return k === p.key ? p : { key: k, name: counts.get(k).name }; }).filter(p => !seen.has(p.key) && seen.add(p.key)));
+  }
   return creditCache;
 }
 function artistGroups() {
@@ -267,7 +278,7 @@ let webQ = '', webT;
 function paintWebSearch() {
   clearTimeout(webT);
   const q = query;
-  if (q.length < 3 || !navigator.onLine || !['all', 'wave', 'liked', 'recent'].includes(view)) return;
+  if (q.length < 3 || !navigator.onLine || !['all', 'wave', 'liked', 'recent', 'artists', 'albums'].includes(view)) return;
   webT = setTimeout(async () => {
     webQ = q;
     $('#extra').innerHTML = '<div class="sechead"><div><b>В интернете</b><small>Ищу…</small></div></div>';
@@ -285,7 +296,36 @@ function paintWebSearch() {
   }, 500);
 }
 let albumMissing = [];
-const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('album:') ? albumGroups().find(g => g.key === view.slice(6))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
+// Альбом из дискографии, которого нет в библиотеке
+const webAlbums = new Map();
+const webAlbum = key => { const w = webAlbums.get(key); return w && { key, name: w.name, artist: w.artist, ids: [], total: w.total, albumId: w.id }; };
+// Карточка артиста: все его альбомы (есть X из N) и чего у тебя нет
+let catFor = '';
+async function paintArtistCatalog() {
+  const g = artistGroups().find(x => x.key === view.slice(7)); if (!g || !navigator.onLine) return;
+  const v = view; catFor = v;
+  const box = $('#extra');
+  box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Ищу альбомы…</small></div></div>';
+  const cache = await db.get('kv', 'cat:' + g.key);
+  const cat = cache && Date.now() - cache.at < 7 * 864e5 ? cache.cat : await artistCatalog(g.name).catch(() => null);
+  if (cat && !cache?.cat) db.put('kv', 'cat:' + g.key, { at: Date.now(), cat });
+  if (view !== v || catFor !== v) return;
+  if (!cat?.albums.length) { box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Не нашлась в каталоге или он сейчас недоступен — открой артиста чуть позже</small></div></div>'; return; }
+  const idx = creditIndex(), mine = order.map(id => tracks.get(id)).filter(t => idx.get(t.id)?.some(p => p.key === g.key));
+  const tile = al => {
+    const key = 'i' + al.id;
+    webAlbums.set(key, { id: al.id, name: al.name, artist: al.artist, total: al.total });
+    const have = mine.filter(t => t.albumId === al.id || (t.album && norm2(t.album) === norm2(al.name))).length;
+    const tag = have >= al.total && al.total ? 'весь альбом' : have ? `есть ${have} из ${al.total}` : `${al.total} ${al.total === 1 ? 'трек' : al.total < 5 ? 'трека' : 'треков'}`;
+    const lib = mine.find(t => t.albumId === al.id && albumKey(t));
+    return `<button class="artist album${have ? '' : ' ghost'}" data-view="album:${esc(lib ? albumKey(lib) : key)}">${al.art ? `<img class="cov" src="${esc(al.art)}" alt="" loading="lazy">` : '<span class="cov">?</span>'}<b>${esc(al.name)}</b><small>${al.year}${al.single ? ' · сингл' : al.ep ? ' · EP' : ''}</small><em>${tag}</em></button>`;
+  };
+  const albums = cat.albums.filter(x => !x.single), singles = cat.albums.filter(x => x.single);
+  box.innerHTML = `<div class="sechead"><div><b>Дискография: ${albums.length} ${albums.length === 1 ? 'альбом' : 'альбомов'}${singles.length ? `, ${singles.length} синглов` : ''}</b><small>Нажми на альбом — увидишь, каких песен не хватает</small></div></div>
+    <ul class="rows"><li class="artists albums">${albums.map(tile).join('')}</li></ul>
+    ${singles.length ? `<div class="sechead"><div><b>Синглы</b></div></div><ul class="rows"><li class="artists albums">${singles.map(tile).join('')}</li></ul>` : ''}`;
+}
+const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
   const liked = lib.likes.has(t.id);
@@ -313,8 +353,8 @@ function render() {
   if (view === 'fix') { renderFix(); renderNav(); return; }
   if (view === 'wave') { renderWave(); renderNav(); return; }
   if (view === 'wish') { renderWish(); renderNav(); return; }
-  if (view === 'artists') { $('#playAll').hidden = true; renderArtists(); renderNav(); return; }
-  if (view === 'albums') { clearList(); $('#playAll').hidden = true; renderAlbums(); renderNav(); return; }
+  if (view === 'artists') { $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderArtists(); renderNav(); paintWebSearch(); return; }
+  if (view === 'albums') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderAlbums(); renderNav(); paintWebSearch(); return; }
   const ids = viewIds();
   $('#viewTitle').firstChild.textContent = viewName();
   const total = ids.reduce((s, id) => s + (tracks.get(id).duration || 0), 0);
@@ -328,7 +368,8 @@ function render() {
   listIds = ids; listFrom = -1;
   $('#extra').innerHTML = '';
   paintWebSearch();
-  if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
+  if (view.startsWith('artist:')) paintArtistCatalog();
+  if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)) || webAlbum(view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
   renderShelf();
   paintList();
   renderNav();
@@ -375,6 +416,7 @@ function emptyHTML() {
   if (query) return `<h2>Ничего не нашлось</h2><p>По запросу «${esc(query)}» треков нет. Попробуй часть названия или имя артиста.</p>`;
   if (view === 'liked') return `<h2>Здесь будет любимое</h2><p>Нажми на сердечко у трека, и он появится в этом списке.</p>`;
   if (view.startsWith('artist:')) return '<h2>Треков этого автора больше нет</h2>';
+  if (view.startsWith('album:')) return '<h2>Из этого альбома у тебя пока ничего нет</h2><p>Ниже весь трек-лист: плюс — в «Хочу скачать», «Найти» — открыть бота.</p>';
   if (view === 'recent') return `<h2>Ты ещё ничего не слушал</h2><p>Включи любой трек, и история появится здесь.</p>`;
   if (view !== 'all') return `<h2>Плейлист пока пустой</h2><p>Нажми «⋯» у любого трека и выбери «Добавить в плейлист».</p>
     <div class="acts"><button class="btn" data-act="delPlaylist">Удалить плейлист</button></div>`;

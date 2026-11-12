@@ -810,3 +810,8 @@ body:not(.playing) .stack { transform: none; }
 /* полоска плеера: больше зона нажатия */
 .fullgrab { cursor: pointer; }
 .fullgrab::after { content: ""; position: absolute; inset: -16px -40px; }
+
+/* дискография артиста */
+.album.ghost { opacity: .72; }
+.album.ghost:hover { opacity: 1; }
+img.cov { object-fit: cover; }

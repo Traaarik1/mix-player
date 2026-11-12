@@ -71,6 +71,36 @@ export function soloArtists(rows) {
   return solo;
 }
 
+// «Клоны» одного артиста: Скриптонит = Scriptonite, BigBabyTape = Big Baby Tape, Egor Creed = Егор Крид
+export function soundKey(key) {
+  return String(key || '').replace(/\s+/g, '')
+    .replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/kh/g, 'h').replace(/[cq]/g, 'k').replace(/w/g, 'v').replace(/x/g, 'ks')
+    .replace(/[yj]/g, 'i').replace(/(.)\1+/g, '$1').replace(/e$/, '');
+}
+const close1 = (a, b) => {
+  if (a === b) return true;
+  if (Math.min(a.length, b.length) < 6 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, miss = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++miss > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return miss + (a.length - i) + (b.length - j) <= 1;
+};
+// counts: Map(key -> {name, n, sure}). Возвращает Map(key -> главный key) для склейки
+export function artistAliases(counts) {
+  const best = [...counts.entries()].sort((x, y) => (y[1].sure - x[1].sure) || (y[1].n - x[1].n));
+  const heads = [], alias = new Map();
+  for (const [key] of best) {
+    const sk = soundKey(key);
+    const dig = sk.replace(/\D/g, ''); // цифры должны совпадать точно: «Артист 2» и «Артист 3» — разные
+    const head = heads.find(h => h.sk === sk || (h.dig === dig && close1(h.sk, sk)));
+    if (head) alias.set(key, head.key); else { heads.push({ key, sk, dig }); alias.set(key, key); }
+  }
+  return alias;
+}
+
 export const trackKey = (artist, title) => `${artistParts(artist)[0]?.key || ''}|${normKey(title)}`;
 
 // Индекс «что уже есть»: совпадает название и хотя бы один артист; трек без артиста — по названию.

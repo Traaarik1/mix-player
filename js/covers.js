@@ -1,4 +1,5 @@
 // Поиск по каталогу iTunes (бесплатно, без ключа): обложки, правильные названия, альбомы.
+import { normKey, soundKey } from './wave.js';
 export const norm = s => (s || '').toLowerCase().replace(/ё/g, 'е').replace(/\(.*?\)|\[.*?\]|feat\..*$|ft\..*$/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 let last = 0;
@@ -65,6 +66,30 @@ export async function albumTracks(albumId) {
     if (songs.length) return songs.sort((a, b) => a.trackNo - b.trackNo);
   }
   return [];
+}
+
+// Дискография артиста: его альбомы и песни из каталога iTunes
+const nk = s => soundKey(normKey(s)); // Кизару = kizaru = KIZARU
+export async function artistCatalog(name) {
+  for (const country of ['RU', 'US']) {
+    await throttle();
+    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&entity=musicArtist&limit=5&country=${country}`).catch(() => null);
+    if (!r?.ok) continue;
+    const { results = [] } = await r.json();
+    const a = results.find(x => nk(x.artistName) === nk(name)) || null;
+    if (!a) continue;
+    await throttle();
+    const r2 = await fetch(`https://itunes.apple.com/lookup?id=${a.artistId}&entity=album&limit=60&country=${country}`).catch(() => null);
+    const items = r2?.ok ? (await r2.json()).results || [] : [];
+    const albums = items.filter(x => x.wrapperType === 'collection' && x.collectionName).map(x => ({
+      id: x.collectionId, name: x.collectionName.replace(/\s+-\s+(Single|EP)$/i, ''), single: / - Single$/i.test(x.collectionName), ep: / - EP$/i.test(x.collectionName),
+      total: x.trackCount || 0, year: (x.releaseDate || '').slice(0, 4), art: x.artworkUrl100?.replace('100x100bb', '400x400bb') || null, artist: x.artistName,
+    }));
+    // повторы (чистая и explicit-версии) убираем, новые сверху
+    const seen = new Set();
+    return { artistId: a.artistId, name: a.artistName, albums: albums.sort((x, y) => (y.year || '').localeCompare(x.year || '')).filter(x => { const k = nk(x.name); if (seen.has(k)) return false; seen.add(k); return true; }) };
+  }
+  return null;
 }
 
 export async function fetchArt(url) {
