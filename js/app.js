@@ -262,10 +262,24 @@ async function paintAlbumMissing(g) {
   if (!g?.albumId || !navigator.onLine) return;
   const songs = await albumTracks(g.albumId).catch(() => []);
   if (view !== 'album:' + g.key) return;
-  const have = g.ids.map(id => tracks.get(id));
-  const missing = songs.filter(s => !have.some(t => sameTrack(s, t)));
-  if (!missing.length) return;
-  paintWebList(`Не хватает: ${missing.length}`, 'Плюс отправит трек в «Хочу скачать», он заменится полным, когда появится в канале', missing, true);
+  if (!songs.length) return;
+  // Весь альбом одним списком по порядку: свои треки как обычно, недостающие — серые и не играют
+  const have = g.ids.map(id => tracks.get(id)), used = new Set();
+  const merged = songs.map(s => { const t = have.find(x => !used.has(x) && sameTrack(s, x)); if (t) used.add(t); return { s, t }; });
+  const rest = have.filter(t => !used.has(t)); // свои треки, которых нет в трек-листе каталога (бонусы, другие версии)
+  albumMissing = merged.filter(m => !m.t).map(m => m.s);
+  if (!albumMissing.length && !rest.length) return;
+  let k = 0;
+  const ghost = (s, n) => `<li class="row ghost" data-mi="${k++}"><span class="idx"><span class="num">${n}</span></span>${s.art ? `<img class="cov" src="${esc(s.art)}" alt="" loading="lazy">` : '<span class="cov"></span>'}
+    <span class="ttl"><span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)} · нет в библиотеке</span></span><span class="alb"></span>
+    <button class="ib" data-miss="wish" title="В «Хочу скачать»"><svg><use href="#i-plus"/></svg></button><button class="ib" data-miss="find" title="Найти через бота в Telegram"><svg><use href="#i-tg"/></svg></button>
+    <span class="dur">${fmt(s.duration)}</span><span></span></li>`;
+  clearList(); listFrom = -2; // список короткий: рисуем целиком, без подгрузки при прокрутке
+  const rows = $('#rows');
+  rows.innerHTML = merged.map((m, i) => m.t ? rowHTML(m.t, m.s.trackNo || i + 1) : ghost(m.s, m.s.trackNo || i + 1)).join('') + rest.map((t, i) => rowHTML(t, songs.length + i + 1)).join('');
+  hydrateIn(rows);
+  $('#empty').hidden = true;
+  listSub = `есть ${have.length} из ${songs.length}` + (albumMissing.length ? ' · серые можно добавить через «Найти»' : ''); paintSub();
 }
 function paintWebList(head, note, list, numbered = false) {
   albumMissing = list;
@@ -2144,6 +2158,14 @@ $('#main').addEventListener('change', e => {
 });
 $('#rows').addEventListener('click', async e => {
   if ($('#rows').dataset.noclick) return;
+  const gh = e.target.closest('.row.ghost');
+  if (gh) {
+    const sng = albumMissing[+gh.dataset.mi], b = e.target.closest('[data-miss]'); if (!sng) return;
+    if (!b) toast('Этого трека у тебя нет. Нажми плюс или кнопку Telegram');
+    else if (b.dataset.miss === 'find') findInTelegram(sng);
+    else { addWish(sng); toast('Добавлено в «Хочу скачать»'); b.disabled = true; }
+    return;
+  }
   const fx = e.target.closest('[data-fix]');
   if (fx) {
     const t = tracks.get(fx.closest('.fix').dataset.id);

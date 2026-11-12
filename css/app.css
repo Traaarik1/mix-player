@@ -815,3 +815,8 @@ body:not(.playing) .stack { transform: none; }
 .album.ghost { opacity: .72; }
 .album.ghost:hover { opacity: 1; }
 img.cov { object-fit: cover; }
+
+/* альбом: треков нет в библиотеке */
+.row.ghost { opacity: .42; cursor: default; }
+.row.ghost:hover { opacity: .65; background: none; }
+.row.ghost .ib { width: 32px; height: 32px; }
