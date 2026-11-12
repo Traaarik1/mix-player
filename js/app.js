@@ -1110,7 +1110,7 @@ function toast(msg) {
   let t = $('#toast');
   if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.append(t);
     Object.assign(t.style, { position: 'fixed', left: '50%', bottom: 'calc(var(--bar-h) + 20px)', transform: 'translateX(-50%)', zIndex: 30, background: 'var(--velvet-2)',
-      border: '1px solid var(--line)', padding: '11px 18px', borderRadius: '12px', fontWeight: 600, boxShadow: '0 14px 40px rgb(0 0 0 / .45)', transition: 'opacity .25s', maxWidth: '90vw' }); }
+      border: '1px solid var(--line)', padding: '11px 18px', borderRadius: '12px', fontWeight: 600, boxShadow: '0 14px 40px rgb(0 0 0 / .45)', transition: 'opacity .25s', maxWidth: '90vw', pointerEvents: 'none' }); } // невидимое уведомление не должно перехватывать нажатия
   t.textContent = msg; t.style.opacity = 1;
   clearTimeout(toastT); toastT = setTimeout(() => t.style.opacity = 0, 2600);
 }
@@ -1288,7 +1288,7 @@ function undoGuess(t) {
   if (t.previewOnly || t.conf || t.ident?.status === 'kept' || ['ok', 'audd'].includes(t.sound?.st)) { if (['ok', 'audd'].includes(t.sound?.st) && !t.conf) { t.conf = true; saveTrack(t); } return false; }
   if (!t.verified && !t.ident) return false;
   if (t.orig) { t.title = t.orig.title; t.artist = t.orig.artist; delete t.orig; }
-  else if (t.source === 'tg' && tgCfg?.chatId) t.resetName = true;
+  else if (t.source === 'tg' && tgCfg?.chatId && tgCfg?.session) t.resetName = true;
   else if (t.fileName) { const p = parseFileName(t.fileName); t.title = cleanTag(p.title) || p.title || t.title; t.artist = cleanTag(p.artist) || ''; } // настоящее название возьмём из поста при следующем просмотре канала
   else if (t.fileTitle) { const p = parseFileName(t.fileName || ''); t.title = cleanTag(t.fileTitle) || t.fileTitle; t.artist = cleanTag(p.artist) || t.artist; }
   if (t.coverOriginal) { t.coverOriginal = false; t.cover = false; db.del('covers', t.id); db.del('covers', 'th:' + t.id); }
@@ -1302,7 +1302,7 @@ function undoGuess(t) {
 let soundRunning = false;
 const soundSkip = new Set();
 const soundState = { done: 0, renamed: 0, bad: 0 };
-const needsSound = t => t && t.downloaded && !t.previewOnly && t.source !== 'preview' && t.sound?.v !== SOUND_V && t.ident?.status !== 'kept';
+const needsSound = t => t && t.downloaded && !t.previewOnly && t.source !== 'preview' && t.sound?.v !== SOUND_V && t.ident?.status !== 'kept' && !t.conf;
 async function soundHunt() {
   if (soundRunning || identRunning || !navigator.onLine) return;
   soundRunning = true; soundSkip.clear();
@@ -1323,14 +1323,16 @@ async function soundHunt() {
         const c = { ...r.cand, source: 'sound', score: r.s };
         const renamed = !sameName(c, t);
         if (renamed || !t.coverOriginal) { await acceptFix(t, c); if (renamed) soundState.renamed++; }
-        else { t.verified = true; t.conf = true; }
+        else { t.verified = true; t.conf = true; t.ident = { status: 'done', v: IDENT_VER }; delete t.soundBad; updateRow(t.id); }
         if (t.chanWait) { delete t.chanWait; if (settings.writeChannel && inCurrentChat(t)) { t.chanPending = true; chanQueue(); } }
         await saveTrack(t);
       } else if (r.st === 'mismatch') {
         // название не подтвердилось: пробуем «Шазам», иначе — в «Проверку названий»
-        const au = auddAllowed() ? await auddFor(blob).catch(() => null) : null;
+        const ac = settings.acoustKey ? await identify({ ...t, title: '', artist: '', fileName: '' }, blob, settings.acoustKey).catch(() => null) : null;
+        if (ac?.source === 'sound' && ac.auto) { await acceptFix(t, ac); t.sound.st = 'ok'; await saveTrack(t); soundState.renamed++; }
+        else { const au = auddAllowed() ? await auddFor(blob).catch(() => null) : null;
         if (au) { await acceptFix(t, { title: au.title, artist: au.artist, album: au.album || '', art: au.art || null, source: 'sound', score: .95 }); t.sound.st = 'audd'; await saveTrack(t); soundState.renamed++; }
-        else { delete t.chanWait; t.soundBad = { title: t.title, artist: t.artist }; t.verified = false; t.ident = { status: 'none', v: IDENT_VER, at: Date.now(), soundBad: true }; soundState.bad++; await saveTrack(t); updateRow(t.id); }
+        else { delete t.chanWait; t.soundBad = { title: t.title, artist: t.artist }; t.verified = false; t.ident = { status: 'none', v: IDENT_VER, at: Date.now(), soundBad: true }; soundState.bad++; await saveTrack(t); updateRow(t.id); } }
       } else await saveTrack(t);
       soundState.done++;
       if (view === 'fix') renderFix();
@@ -1763,6 +1765,10 @@ async function startSync() {
       if (meta?.conf) Object.assign(t, { conf: true, title: meta.title, artist: meta.artist, album: meta.album, verified: meta.verified }, meta.verified ? { ident: { status: 'done' } } : {});
       tracks.set(id, t); await saveTrack(t);
       if (Date.now() - lastPaint > 4000) { lastPaint = Date.now(); rebuildOrder(); if (view === 'all') render(); renderTgCard(); }
+    }
+    if (!sync.stop) for (const t of tracks.values()) if (t.resetName && inCurrentChat(t)) {
+      const p = parseFileName(t.fileName || ''); t.title = cleanTag(p.title) || p.title || t.title; t.artist = cleanTag(p.artist) || '';
+      delete t.resetName; saveTrack(t);
     }
     rebuildOrder(); render(); identHunt();
     const todo = order.map(id => tracks.get(id)).filter(t => t.source === 'tg' && !t.downloaded);
