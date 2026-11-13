@@ -28,6 +28,10 @@ export async function checkSound(t, blob, { rawPrint, maxPreviews = 30 } = {}) {
   if (!mine?.length) return { st: 'unknown' };
   const tried = new Set();
   let catalogKnows = false, best = null;
+  const hits = [];
+  // Одна запись бывает подписана в каталогах по-разному («Платина — Генг» и «ДРЕЙНЕР — Генг»): из совпавших по звуку берём ту, что ближе к исходному названию
+  const own = t.orig ? `${t.orig.artist} - ${t.orig.title}` : `${t.artist} - ${t.title}`;
+  const agree = c => (t.artist || t.orig?.artist) ? scoreCandidate(own, c, 0) >= .78 : false;
   // Похожие песни (тот же бит, тот же продюсер) тоже набирают .7+, поэтому берём не первую подходящую, а самую похожую
   async function tryList(query, list, take) {
     const ranked = list.filter(c => c.preview).map(c => ({ c, n: scoreCandidate(query, c, t.duration || 0) })).sort((a, b) => b.n - a.n);
@@ -38,8 +42,8 @@ export async function checkSound(t, blob, { rawPrint, maxPreviews = 30 } = {}) {
       const pb = await fetch(c.preview).then(r => r.ok ? r.blob() : null).catch(() => null);
       const pf = pb ? await rawPrint(pb, 40).catch(() => null) : null;
       const s = pf ? similarity(mine, pf) : 0;
-      if (s >= MATCH && (!best || s > best.s)) best = { c, s };
-      if (s >= SURE) return best;
+      if (s >= MATCH) { hits.push({ c, s, ok: agree(c) }); if (!best || s > best.s) best = { c, s }; }
+      if (s >= SURE && agree(c)) return { c, s };
     }
     return null;
   }
@@ -64,6 +68,8 @@ export async function checkSound(t, blob, { rawPrint, maxPreviews = 30 } = {}) {
     }
     if (tried.size >= maxPreviews) break;
   }
+  const mineName = hits.filter(h => h.ok && h.s >= best?.s - .1).sort((x, y) => y.s - x.s)[0];
+  if (mineName) return { st: 'ok', cand: mineName.c, s: mineName.s };
   if (best) return { st: 'ok', cand: best.c, s: best.s };
   // В каталоге есть песня с таким названием, но звучит она иначе — название у файла, скорее всего, неверное
   return { st: catalogKnows ? 'mismatch' : 'unknown' };
