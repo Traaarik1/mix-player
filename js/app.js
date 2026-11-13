@@ -2368,10 +2368,12 @@ async function boot() {
     tgCfg = await db.get('kv', 'tg') || null;
     const resetFix = settings.fixReset !== 1;
     // AcoustID иногда подписывает отпечаток чужой песней: то, что подтвердил только он, сверим ещё раз с фрагментами каталогов
-    const recheck = settings.acoustRecheck !== 1;
+    const recheck = settings.acoustRecheck !== 2;
     for (const t of await db.all('tracks')) {
       if (resetFix) undoGuess(t);
-      if (recheck && t.conf && t.fixedBy !== 'manual' && !['ok', 'audd'].includes(t.sound?.st) && t.ident?.status !== 'kept') { delete t.conf; delete t.sound; saveTrack(t); }
+      // слабое «совпало» старой сверки (меньше 0,9) тоже под сомнением: похожий бит у разных песен давал 0,75
+      const weak = t.sound?.st === 'ok' && (t.sound.v || 1) < 2 && !(t.sound.s >= .9);
+      if (recheck && t.fixedBy !== 'manual' && t.ident?.status !== 'kept' && ((t.conf && !['ok', 'audd'].includes(t.sound?.st)) || weak)) { delete t.conf; delete t.sound; saveTrack(t); }
       // старый поиск часто не находил русские треки: проверяем их заново
       if (!t.verified && t.ident && t.ident.v !== IDENT_VER) delete t.ident;
       // каталоги пополняются: не найденное пробуем снова раз в две недели
@@ -2382,7 +2384,7 @@ async function boot() {
       tracks.set(t.id, t);
     }
     if (resetFix) { settings.fixReset = 1; saveSettings(); }
-    if (recheck) { settings.acoustRecheck = 1; saveSettings(); }
+    if (recheck) { settings.acoustRecheck = 2; saveSettings(); }
   } catch (e) {
     window.__mixErr?.('Не открывается хранилище: ' + e.message + '. Без него плеер не сможет сохранять музыку.');
       return;
