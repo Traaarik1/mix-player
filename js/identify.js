@@ -184,7 +184,7 @@ export async function identify(t, blob, key, { audd } = {}) {
     if (hit) {
       const it = await findOriginal(hit.artist, hit.title, d);
       const art = it?.art || (hit.rgid ? `https://coverartarchive.org/release-group/${hit.rgid}/front-500` : null);
-      return { title: hit.title, artist: hit.artist, album: hit.album || it?.album || '', art, source: 'sound', score: hit.score, auto: hit.score >= .8 };
+      return { title: hit.title, artist: hit.artist, album: hit.album || it?.album || '', art, source: 'sound', from: 'acoustid', score: hit.score, auto: hit.score >= .8 };
     }
   }
   let best = null, top = 0;

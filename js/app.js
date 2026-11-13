@@ -633,6 +633,7 @@ engine.addEventListener('track', () => {
   if (lyricsOn) loadLyrics();
 });
 engine.addEventListener('state', paintState);
+engine.addEventListener('state', () => { if (engine.paused && !document.hidden) setTimeout(soundHunt, 3000); });
 engine.addEventListener('ended', paintState);
 
 // ---------- что и сколько слушал: основа вкуса для Волны ----------
@@ -1268,8 +1269,20 @@ async function coverHunt() {
   try {
     for (;;) {
       // оригинальную обложку ищем только для проверенных названий
-      const t = order.map(id => tracks.get(id)).find(x => x && !x.artChecked && x.title && x.verified && x.ident?.status !== 'kept');
+      const t = order.map(id => tracks.get(id)).find(x => x && !x.artChecked && x.title && x.verified && x.ident?.status !== 'kept')
+        || order.map(id => tracks.get(id)).find(x => x && !x.verified && !x.cover && !x.artGuess && x.title && !x.previewOnly);
       if (!t || !navigator.onLine) break;
+      if (!t.verified) {
+        // ещё не проверен по звуку: обложку ищем в интернете по названию, но только при точном совпадении названия и артиста.
+        // Название и альбом не трогаем, в канал не пишем; после проверки по звуку обложка заменится оригинальной.
+        t.artGuess = true;
+        try {
+          const it = await findOriginal(t.artist, t.title, t.duration);
+          const b = it?.art && !t.cover && scoreCandidate(`${t.artist} - ${t.title}`, it) >= .9 ? await fetchArt(it.art).catch(() => null) : null;
+          if (b) await setCover(t, b); else await saveTrack(t);
+        } catch { await saveTrack(t); }
+        continue;
+      }
       try {
         const it = await findOriginal(t.artist, t.title, t.duration);
         t.artChecked = true;
@@ -1362,10 +1375,19 @@ async function identHunt() {
       }
       const t = todo[0];
       try {
+        // на телефоне распознавание по звуку ждёт паузы: раскодировать трек во время игры — риск, что iOS выгрузит плеер
+        if (t.downloaded && settings.acoustKey && matchMedia('(pointer: coarse)').matches) while (!engine.paused || document.hidden) await new Promise(r => setTimeout(r, 5000));
         const blob = t.downloaded ? await db.get('blobs', t.id) : null;
         const used = auddCalls();
         let cand = await identify(t, blob, settings.acoustKey, { audd: auddFor });
         if (cand && t.soundBad && sameName(cand, t.soundBad) && cand.source !== 'sound') cand = null; // по звуку уже выяснили, что это не она
+        if (cand?.from === 'acoustid' && blob) {
+          const { rawPrint } = await import('./audiokey.js');
+          const r = await checkSound({ ...t, artist: cand.artist, title: cand.title, fileName: '' }, blob, { rawPrint, maxPreviews: 6 }).catch(() => ({ st: 'unknown' }));
+          t.sound = { v: SOUND_V, st: r.st === 'ok' ? 'ok' : 'unknown', s: r.s ? +r.s.toFixed(2) : undefined };
+          if (r.st === 'ok') cand = { ...r.cand, source: 'sound', score: r.s, auto: true }; // каталог подтвердил звук — берём его точное название и обложку
+          else cand = { ...cand, auto: false }; // не подтвердилось — только подсказка в «Проверке названий»
+        }
         if (!cand) t.ident = { status: 'none', v: IDENT_VER, auddTried: auddCalls() > used, at: Date.now() };
         // уверены или название и так совпало — сразу ставим оригинальные название и обложку
         else if (cand.auto || sameName(cand, t)) { await acceptFix(t, cand); identState.fixed = (identState.fixed || 0) + 1; coverHunt(); }
@@ -1417,6 +1439,8 @@ async function soundHunt() {
     const { rawPrint } = await import('./audiokey.js');
     for (;;) {
       if (identRunning || !navigator.onLine) break;
+      // на телефоне памяти мало: пока играет музыка, не раскодируем целые треки, иначе iOS выгружает плеер
+      if (matchMedia('(pointer: coarse)').matches && (!engine.paused || document.hidden)) break;
       while (sugFetching) await new Promise(r => setTimeout(r, 1000));
       const t = order.map(id => tracks.get(id)).find(x => needsSound(x) && !soundSkip.has(x.id));
       if (!t) break;
@@ -1436,7 +1460,8 @@ async function soundHunt() {
       } else if (r.st === 'mismatch') {
         // название не подтвердилось: пробуем «Шазам», иначе — в «Проверку названий»
         const ac = settings.acoustKey ? await identify({ ...t, title: '', artist: '', fileName: '' }, blob, settings.acoustKey).catch(() => null) : null;
-        if (ac?.source === 'sound' && ac.auto) { await acceptFix(t, ac); t.sound.st = 'ok'; await saveTrack(t); soundState.renamed++; }
+        const ok = ac?.source === 'sound' && ac.auto ? await checkSound({ ...t, artist: ac.artist, title: ac.title, fileName: '' }, blob, { rawPrint, maxPreviews: 6 }).catch(() => null) : null;
+        if (ok?.st === 'ok') { await acceptFix(t, { ...ok.cand, source: 'sound', score: ok.s }); t.sound.st = 'ok'; await saveTrack(t); soundState.renamed++; } // AcoustID и каталог сошлись
         else { const au = auddAllowed() ? await auddFor(blob).catch(() => null) : null;
         if (au) { await acceptFix(t, { title: au.title, artist: au.artist, album: au.album || '', art: au.art || null, source: 'sound', score: .95 }); t.sound.st = 'audd'; await saveTrack(t); soundState.renamed++; }
         else { delete t.chanWait; t.soundBad = { title: t.title, artist: t.artist }; t.verified = false; t.ident = { status: 'none', v: IDENT_VER, at: Date.now(), soundBad: true }; soundState.bad++; await saveTrack(t); updateRow(t.id); } }
@@ -1846,6 +1871,7 @@ async function startSync() {
     initCloud().catch(e => console.warn('sync', e));
     const chat = await resolveChat(tg);
     const skip = new Set(tgCfg.skip || []);
+    const needThumb = [];
     const known = tgByMsg();
     let lastPaint = 0;
     for await (const it of tg.audioMessages(chat)) {
@@ -1853,6 +1879,7 @@ async function startSync() {
       const old = known.get(it.msgId);
       if (old) {
         tgItems.set(old.id, it); sync.scanned++;
+        if (!old.cover && it.hasThumb) needThumb.push([old, it]);
         if (old.resetName) { // вернуть название как в посте
           const p = parseFileName(it.fileName || '');
           old.title = cleanTag(it.title) || cleanTag(p.title) || p.title || old.title; old.artist = cleanTag(it.artist) || cleanTag(p.artist) || '';
@@ -1873,6 +1900,8 @@ async function startSync() {
       tracks.set(id, t); await saveTrack(t);
       if (Date.now() - lastPaint > 4000) { lastPaint = Date.now(); rebuildOrder(); if (view === 'all') render(); renderTgCard(); }
     }
+    // картинки постов — маленькие, качаем по одной в фоне; сначала ищем в интернете, картинка поста — запасной вариант
+    (async () => { for (const [t, it] of needThumb) { if (t.cover || (!t.artGuess && !t.verified)) continue; const b = await tg.downloadThumb(it).catch(() => null); if (b) await setCover(t, b); } })();
     if (!sync.stop) for (const t of tracks.values()) if (t.resetName && inCurrentChat(t)) {
       const p = parseFileName(t.fileName || ''); t.title = cleanTag(p.title) || p.title || t.title; t.artist = cleanTag(p.artist) || '';
       delete t.resetName; saveTrack(t);
