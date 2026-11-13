@@ -48,7 +48,7 @@ export async function searchDeezer(term, limit = 10) {
   const j = await jsonp(`https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=${limit}`);
   return (j?.data || []).filter(x => x.title && x.artist?.name).map(x => ({
     title: x.title, artist: x.artist.name, album: x.album?.title || '',
-    art: x.album?.cover_xl || x.album?.cover_big || null, duration: x.duration || 0, preview: null, released: '', genre: '', albumId: null, albumTotal: 0, trackNo: 0, from: 'deezer',
+    art: x.album?.cover_xl || x.album?.cover_big || null, duration: x.duration || 0, preview: x.preview || null, released: '', genre: '', albumId: null, albumTotal: 0, trackNo: 0, from: 'deezer',
   }));
 }
 

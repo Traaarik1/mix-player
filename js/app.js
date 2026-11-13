@@ -1431,7 +1431,7 @@ function undoGuess(t) {
 let soundRunning = false;
 const soundSkip = new Set();
 const soundState = { done: 0, renamed: 0, bad: 0 };
-const needsSound = t => t && t.downloaded && !t.previewOnly && t.source !== 'preview' && t.sound?.v !== SOUND_V && t.ident?.status !== 'kept' && !t.conf;
+const needsSound = t => t && t.downloaded && !t.previewOnly && t.source !== 'preview' && t.sound?.v !== SOUND_V && !['ok', 'audd'].includes(t.sound?.st) && t.ident?.status !== 'kept' && !t.conf;
 async function soundHunt() {
   if (soundRunning || identRunning || !navigator.onLine) return;
   soundRunning = true; soundSkip.clear();
@@ -1523,6 +1523,7 @@ async function acceptFix(t, c) {
   const renamed = t.title !== c.title || t.artist !== c.artist;
   if (renamed && !t.orig) t.orig = { title: t.title, artist: t.artist }; // чтобы можно было вернуть
   if (c.source === 'sound' || c.source === 'manual') t.conf = true; else delete t.conf;
+  if (c.source === 'manual') t.fixedBy = 'manual'; else delete t.fixedBy;
   t.title = c.title; t.artist = c.artist; if (c.album) t.album = c.album; if (c.released) t.released = c.released; if (c.genre) t.genre = c.genre;
   if (c.albumId) { t.albumId = c.albumId; t.albumTotal = c.albumTotal; t.trackNo = c.trackNo; t.metaV = 2; }
   t.verified = true; t.ident = { status: 'done', v: IDENT_VER };
@@ -2366,8 +2367,11 @@ async function boot() {
     db.put('kv', 'deviceId', deviceId);
     tgCfg = await db.get('kv', 'tg') || null;
     const resetFix = settings.fixReset !== 1;
+    // AcoustID иногда подписывает отпечаток чужой песней: то, что подтвердил только он, сверим ещё раз с фрагментами каталогов
+    const recheck = settings.acoustRecheck !== 1;
     for (const t of await db.all('tracks')) {
       if (resetFix) undoGuess(t);
+      if (recheck && t.conf && t.fixedBy !== 'manual' && !['ok', 'audd'].includes(t.sound?.st) && t.ident?.status !== 'kept') { delete t.conf; delete t.sound; saveTrack(t); }
       // старый поиск часто не находил русские треки: проверяем их заново
       if (!t.verified && t.ident && t.ident.v !== IDENT_VER) delete t.ident;
       // каталоги пополняются: не найденное пробуем снова раз в две недели
@@ -2378,6 +2382,7 @@ async function boot() {
       tracks.set(t.id, t);
     }
     if (resetFix) { settings.fixReset = 1; saveSettings(); }
+    if (recheck) { settings.acoustRecheck = 1; saveSettings(); }
   } catch (e) {
     window.__mixErr?.('Не открывается хранилище: ' + e.message + '. Без него плеер не сможет сохранять музыку.');
       return;
