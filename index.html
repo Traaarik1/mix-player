@@ -180,7 +180,12 @@
         if (n === 'AbortError' || n === 'NotAllowedError' || n === 'NotSupportedError') return; // браузер прервал звук — это не поломка
         show(String(e.reason && (e.reason.stack || e.reason.message) || e.reason));
       });
-      setTimeout(function () { if (!window.__mixReady) show('Код плеера не загрузился за 8 секунд.' + (location.protocol === 'file:' ? ' Страница открыта как файл, открой http://localhost:5173' : '')); }, 8000);
+      setTimeout(function () {
+        if (window.__mixReady) return;
+        // Обычно это обновление пришло наполовину (часть файлов новые, часть старые): один раз перезагружаемся сами
+        var last = 0; try { last = +sessionStorage.getItem('mixRetry') || 0; } catch (e) {}
+        if (Date.now() - last > 60000 && location.protocol !== 'file:') { try { sessionStorage.setItem('mixRetry', Date.now()); } catch (e) {} location.reload(); return; }
+        show('Код плеера не загрузился за 8 секунд.' + (location.protocol === 'file:' ? ' Страница открыта как файл, открой http://localhost:5173' : '')); }, 8000);
     })();
   </script>
   <script type="module" src="js/app.js"></script>

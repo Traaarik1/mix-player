@@ -58,7 +58,7 @@ export async function* audioMessages(entity) {
     yield {
       msg: m, msgId: m.id, docId: doc.id.toString(), size: Number(doc.size), mime: doc.mimeType || 'audio/mpeg',
       title: audio?.title || '', artist: audio?.performer || '', duration: audio?.duration || 0,
-      fileName: file?.fileName || '', date: m.date, hasThumb: !!doc.thumbs?.length,
+      fileName: file?.fileName || '', date: m.date, hasThumb: !!doc.thumbs?.length, caption: (m.message || '').slice(0, 300),
     };
   }
 }

@@ -46,7 +46,8 @@ export async function checkSound(t, blob, { rawPrint, maxPreviews = 30 } = {}) {
   // «Ispoved'» в базе AcoustID — это «Исповедь»: ищем и кириллицей
   const latin = s => /[a-z]/i.test(s) && !/[а-яё]/i.test(s);
   const cyr = t.title && latin(t.title) ? `${t.artist || ''} ${toCyrillic(t.title.replace(/['’]/g, 'ь'))}`.trim() : '';
-  const queries = [t.artist && t.title ? `${t.artist} ${t.title}` : '', cyr, cleanName(t.fileName || ''), t.title, t.artist].filter(Boolean);
+  const cap = String(t.caption || '').split('\n').map(x => cleanName(x)).find(x => /\S\s+[-–—]\s+\S/.test(x) && x.length < 120) || '';
+  const queries = [t.artist && t.title ? `${t.artist} ${t.title}` : '', cyr, cap, cleanName(t.fileName || ''), t.title, t.artist].filter(Boolean);
   for (const q of [...new Set(queries)]) {
     // по названию хватит пары лучших версий; по одному артисту перебираем больше его песен
     const take = q === t.artist ? 12 : 3;

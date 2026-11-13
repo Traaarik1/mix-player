@@ -2,7 +2,7 @@
 import { searchItunes, searchDeezer, norm } from './covers.js';
 import { normKey } from './wave.js';
 
-export const IDENT_VER = 5;
+export const IDENT_VER = 6; // 6: текст поста, Deezer, двойная проверка — нераспознанное пробуем заново
 export const AUTO_SCORE = .78; // с такой уверенностью название и обложка меняются сами, без проверки
 
 // Мусор, который каналы и сайты дописывают к именам файлов
@@ -166,6 +166,9 @@ function queriesFor(t) {
   const lead = String(t.artist || '').split(/\s*(?:,|;|&|\/|\sx\s|\sfeat\.?\s|\sft\.?\s)\s*/i)[0];
   if (t.artist && t.title) add(`${t.artist} - ${t.title}`);
   add(t.fileName);
+  // первая строка подписи к посту, если похожа на «Артист — Название»
+  const cap = String(t.caption || '').split('\n').map(s => cleanTag(s)).find(s => /\S\s+[-–—]\s+\S/.test(s) && s.length < 120);
+  if (cap) add(cap);
   if (lead && t.title) add(`${lead} - ${bare(t.title)}`);
   const name = cleanName(t.fileName || '');
   if (name) add(bare(name));

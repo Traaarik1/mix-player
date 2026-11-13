@@ -1880,6 +1880,7 @@ async function startSync() {
       const old = known.get(it.msgId);
       if (old) {
         tgItems.set(old.id, it); sync.scanned++;
+        if (it.caption && old.caption !== it.caption) { old.caption = it.caption; if (!old.verified && old.ident?.status === 'none') delete old.ident; saveTrack(old); } // подпись появилась — попробуем распознать заново
         if (!old.cover && it.hasThumb) needThumb.push([old, it]);
         if (old.resetName) { // вернуть название как в посте
           const p = parseFileName(it.fileName || '');
@@ -1893,7 +1894,7 @@ async function startSync() {
       sync.scanned++;
       if (skip.has(id) || tracks.has(id)) continue;
       const p = parseFileName(it.fileName || 'Без названия');
-      const t = { id, source: 'tg', msgId: it.msgId, fileName: it.fileName, title: cleanTag(it.title) || cleanTag(p.title) || p.title, fileTitle: p.title, artist: cleanTag(it.artist) || cleanTag(p.artist), album: '',
+      const t = { id, source: 'tg', msgId: it.msgId, fileName: it.fileName, caption: it.caption || undefined, title: cleanTag(it.title) || cleanTag(p.title) || p.title, fileTitle: p.title, artist: cleanTag(it.artist) || cleanTag(p.artist), album: '',
         duration: it.duration, size: it.size, mime: it.mime, downloaded: false, addedAt: it.date * 1000 + (it.msgId % 1000) };
       // другое устройство уже могло исправить название этого трека
       const meta = cloud?.trackMeta(id);
