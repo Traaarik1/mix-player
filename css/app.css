@@ -825,3 +825,24 @@ img.cov { object-fit: cover; }
 #disc .sechead:first-child { margin-top: 4px; }
 .showall { display: block; margin: 10px auto 0; }
 #main { touch-action: pan-y; }
+
+/* шапка артиста, итоги */
+.arthead { display: flex; gap: 18px; align-items: center; margin: 4px 0 18px; }
+.arthead img { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; flex: none; box-shadow: 0 10px 30px rgb(0 0 0 / .35); }
+.arthead b { display: block; font-size: 26px; line-height: 1.15; }
+.arthead small { color: var(--mist); }
+.poplist .sug.ghost { opacity: .5; }
+.stats { list-style: none; }
+.statnums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 8px; }
+.statnums div { background: var(--velvet-2); border-radius: 14px; padding: 14px 16px; }
+.statnums b { display: block; font-size: 26px; color: var(--accent); }
+.statnums small { color: var(--mist); }
+.toplist { list-style: none; padding: 0; margin: 0 0 8px; }
+.toplist li { display: flex; align-items: center; gap: 12px; padding: 8px 6px; border-radius: 10px; cursor: pointer; }
+.toplist li:hover { background: var(--velvet-2); }
+.toplist .num { width: 22px; text-align: right; color: var(--mist); font-weight: 700; }
+.toplist .cov { width: 44px; height: 44px; border-radius: 8px; flex: none; }
+.toplist .ttl { display: flex; flex-direction: column; min-width: 0; }
+.toplist .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toplist .a { color: var(--mist); font-size: 13px; }
+@media (max-width: 900px) { .statnums { grid-template-columns: repeat(2, minmax(0, 1fr)); } .arthead img { width: 84px; height: 84px; } .arthead b { font-size: 22px; } }

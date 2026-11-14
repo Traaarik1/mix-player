@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog } from './covers.js';
+import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog, artistTop } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
@@ -143,6 +143,8 @@ function viewIds() {
   else if (view === 'artists' || view === 'albums') ids = order;
   else if (view.startsWith('album:')) { const k = view.slice(6); ids = order.filter(id => albumKey(tracks.get(id)) === k).sort((x, y) => (tracks.get(x).trackNo || 99) - (tracks.get(y).trackNo || 99)); return ids; }
   else if (view.startsWith('webartist:')) ids = [];
+  else if (SMART[view]) ids = smartIds(view);
+  else if (view === 'news' || view === 'stats') ids = [];
   else ids = (lib.playlists.find(p => p.id === view)?.ids || []).filter(id => tracks.has(id));
   if (query) {
     const q = query.toLowerCase();
@@ -346,12 +348,123 @@ async function paintArtistCatalog() {
     return `<button class="artist album${have ? '' : ' ghost'}" data-view="album:${esc(lib ? albumKey(lib) : key)}">${al.art ? `<img class="cov" src="${esc(al.art)}" alt="" loading="lazy">` : '<span class="cov">?</span>'}<b>${esc(al.name)}</b><small>${al.year}${al.single ? ' · сингл' : al.ep ? ' · EP' : ''}</small><em>${tag}</em></button>`;
   };
   const albums = cat.albums.filter(x => !x.single), singles = cat.albums.filter(x => x.single);
-  box.innerHTML = `<div class="sechead"><div><b>Дискография: ${albums.length} ${albums.length === 1 ? 'альбом' : 'альбомов'}${singles.length ? `, ${singles.length} синглов` : ''}</b><small>Нажми на альбом — увидишь, каких песен не хватает</small></div></div>
+  box.innerHTML = `<div class="arthead">${cat.pic ? `<img src="${esc(cat.pic)}" alt="">` : ''}<div><b>${esc(cat.name)}</b><small>${albums.length} альбомов · ${singles.length} синглов · у тебя ${tracksWord(mine.length)}</small></div></div>
+    <div class="sechead"><div><b>Дискография: ${albums.length} ${albums.length === 1 ? 'альбом' : 'альбомов'}${singles.length ? `, ${singles.length} синглов` : ''}</b><small>Нажми на альбом — увидишь, каких песен не хватает</small></div></div>
     <ul class="rows"><li class="artists albums">${albums.map(tile).join('')}</li></ul>
     ${singles.length ? `<div class="sechead"><div><b>Синглы</b></div></div><ul class="rows"><li class="artists albums">${singles.map(tile).join('')}</li></ul>` : ''}
     <div class="sechead"><div><b>Треки у тебя: ${mine.length}</b></div></div>`;
+  paintArtistTop(box, cat, mine);
 }
-const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
+// ---------- умные плейлисты: собираются сами из прослушиваний ----------
+const SMART = {
+  'smart:month': 'Любимое за месяц',
+  'smart:often': 'Часто слушаю',
+  'smart:forgot': 'Давно не слушал',
+  'smart:new': 'Новое в канале',
+};
+function smartIds(kind) {
+  const now = Date.now(), DAY = 864e5, count = (from = 0) => {
+    const m = new Map();
+    for (const l of lib.listens) if (l.at >= from && tracks.has(l.id) && l.played >= 30) m.set(l.id, (m.get(l.id) || 0) + 1);
+    return m;
+  };
+  const top = m => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+  if (kind === 'smart:new') return order.filter(id => (tracks.get(id).addedAt || 0) > now - 14 * DAY && !tracks.get(id).previewOnly).sort((a, b) => tracks.get(b).addedAt - tracks.get(a).addedAt);
+  if (kind === 'smart:month') return top(count(now - 30 * DAY)).slice(0, 50);
+  if (kind === 'smart:often') return top(count()).filter(id => count().get(id) >= 3).slice(0, 50);
+  if (kind === 'smart:forgot') {
+    const all = count(), recent = count(now - 45 * DAY);
+    return top(all).filter(id => all.get(id) >= 3 && !recent.has(id)).concat(order.filter(id => lib.likes.has(id) && !recent.has(id) && !all.has(id))).slice(0, 50);
+  }
+  return [];
+}
+
+// ---------- новинки любимых артистов ----------
+let news = { at: 0, items: [] };
+function favArtists(limit = 25) {
+  const idx = creditIndex(), n = new Map();
+  for (const id of order) for (const p of idx.get(id) || []) { const g = n.get(p.key) || n.set(p.key, { name: p.name, n: 0 }).get(p.key); g.n++; }
+  for (const l of lib.listens) { const p = idx.get(l.id)?.[0]; if (p && n.has(p.key)) n.get(p.key).n += .3; } // слушаю чаще — важнее
+  return [...n.values()].filter(x => x.n >= 3).sort((a, b) => b.n - a.n).slice(0, limit);
+}
+let newsRunning = false;
+async function newsHunt(force = false) {
+  if (newsRunning || !navigator.onLine) return;
+  if (!force && Date.now() - (news.at || 0) < 864e5) return; // раз в сутки
+  newsRunning = true;
+  try {
+    const since = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10), items = [];
+    for (const a of favArtists()) {
+      const cat = await artistCatalog(a.name).catch(() => null);
+      if (cat) db.put('kv', 'cat2:' + normKey(a.name), { at: Date.now(), cat });
+      for (const al of cat?.albums || []) if (al.date && al.date >= since) items.push({ ...al, who: cat.name });
+    }
+    const seen = new Set();
+    news = { at: Date.now(), items: items.filter(x => { const k = normKey(x.who + ' ' + x.name); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60) };
+    db.put('kv', 'news', news);
+    renderNav(); if (view === 'news') render();
+  } finally { newsRunning = false; }
+}
+const newsUnseen = () => news.items.filter(x => x.date > (settings.newsSeen || '')).length;
+function renderNews() {
+  const empty = $('#empty'), rows = $('#rows'), items = news.items;
+  $('#viewTitle').firstChild.textContent = 'Новинки';
+  $('#viewSub').textContent = items.length ? 'Новые релизы твоих артистов за 4 месяца' : '';
+  empty.hidden = !!items.length;
+  if (!items.length) empty.innerHTML = newsRunning || !news.at ? '<h2>Ищу новинки…</h2><p>Mix смотрит дискографии артистов, которых у тебя больше всего. Это займёт пару минут.</p>' : '<h2>Новинок нет</h2><p>За последние 4 месяца у твоих артистов ничего не выходило. Mix проверяет раз в сутки.</p>';
+  const seen = settings.newsSeen || '';
+  rows.innerHTML = items.length ? `<li class="artists albums">${items.map(al => {
+    const key = 'i' + al.id; webAlbums.set(key, { id: al.id, name: al.name, artist: al.who, total: al.total });
+    return `<button class="artist album" data-view="album:${esc(key)}">${al.art ? `<img class="cov" src="${esc(al.art)}" alt="" loading="lazy">` : '<span class="cov">?</span>'}<b>${esc(al.name)}</b><small>${esc(al.who)}</small><em>${al.date > seen ? 'новое · ' : ''}${al.date.split('-').reverse().join('.')}${al.single ? ' · сингл' : al.ep ? ' · EP' : ''}</em></button>`;
+  }).join('')}</li>` : '';
+  if (items.length) { settings.newsSeen = items[0].date; saveSettings(); }
+}
+
+// ---------- итоги: что и сколько слушал ----------
+let statsPeriod = 'month';
+function renderStats() {
+  const empty = $('#empty'), rows = $('#rows'), DAY = 864e5, now = Date.now();
+  const from = { month: now - 30 * DAY, year: now - 365 * DAY, all: 0 }[statsPeriod];
+  const ls = lib.listens.filter(l => l.at >= from);
+  $('#viewTitle').firstChild.textContent = 'Итоги';
+  $('#viewSub').textContent = '';
+  empty.hidden = !!ls.length;
+  if (!ls.length) empty.innerHTML = '<h2>Пока нечего считать</h2><p>Слушай музыку, и здесь появятся твои топ-артисты и треки.</p>';
+  const idx = creditIndex(), arts = new Map(), trs = new Map();
+  let sec = 0;
+  for (const l of ls) {
+    sec += l.played || 0;
+    const t = tracks.get(l.id), p = (t && idx.get(t.id)?.[0]) || { key: normKey(l.artist || ''), name: l.artist || 'Неизвестный артист' };
+    const a = arts.get(p.key) || arts.set(p.key, { key: p.key, name: p.name, n: 0, sec: 0, t }).get(p.key); a.n++; a.sec += l.played || 0;
+    if (t) { const x = trs.get(t.id) || trs.set(t.id, { t, n: 0 }).get(t.id); x.n++; }
+  }
+  const ta = [...arts.values()].sort((a, b) => b.sec - a.sec).slice(0, 10), tt = [...trs.values()].sort((a, b) => b.n - a.n).slice(0, 10);
+  const chip = (k, n) => `<button class="chip${statsPeriod === k ? ' on' : ''}" data-act="stats:${k}">${n}</button>`;
+  const lib2 = artistGroups();
+  rows.innerHTML = `<li class="stats">
+    <div class="presets">${chip('month', 'Месяц')}${chip('year', 'Год')}${chip('all', 'Всё время')}</div>
+    <div class="statnums"><div><b>${Math.round(sec / 60).toLocaleString('ru')}</b><small>минут музыки</small></div><div><b>${ls.length}</b><small>прослушиваний</small></div><div><b>${trs.size}</b><small>разных треков</small></div><div><b>${arts.size}</b><small>артистов</small></div></div>
+    ${ta.length ? `<div class="sechead"><div><b>Топ артистов</b></div></div><ol class="toplist">${ta.map((a, i) => `<li${lib2.some(g => g.key === a.key) ? ` data-view="artist:${esc(a.key)}"` : ''}><span class="num">${i + 1}</span>${a.t ? coverHTML(a.t) : '<span class="cov"></span>'}<span class="ttl"><span class="t">${esc(a.name)}</span><span class="a">${Math.round(a.sec / 60)} мин · ${a.n} раз</span></span></li>`).join('')}</ol>` : ''}
+    ${tt.length ? `<div class="sechead"><div><b>Топ треков</b></div></div><ol class="toplist">${tt.map((x, i) => `<li data-stat-play="${esc(x.t.id)}"><span class="num">${i + 1}</span>${coverHTML(x.t)}<span class="ttl"><span class="t">${esc(x.t.title)}</span><span class="a">${esc(x.t.artist || '')} · ${x.n} раз</span></span></li>`).join('')}</ol>` : ''}
+  </li>`;
+  hydrateIn(rows);
+}
+
+// ---------- шапка артиста: фото и популярное ----------
+let popular = [];
+async function paintArtistTop(box, cat, mine) {
+  if (!cat.dzId) return;
+  const top = await artistTop(cat.dzId).catch(() => []);
+  if (!top.length || !box.isConnected) return;
+  popular = top.map(s => ({ ...s, own: mine.find(t => sameTrack(s, t))?.id || null }));
+  const html = `<div class="sechead"><div><b>Популярное</b><small>Серые — нет в библиотеке: плюс или кнопка Telegram</small></div></div>
+    <ul class="rows poplist">${popular.slice(0, 10).map((s, i) => `<li class="sug${s.own ? ' own' : ' ghost'}" data-pi="${i}"><span class="art-wrap">${s.art ? `<img src="${esc(s.art)}" alt="" loading="lazy">` : ''}${s.own || s.preview ? '<button data-pp title="Играть"><svg><use href="#i-play"/></svg></button>' : ''}</span>
+    <span class="ttl"><span class="t">${esc(s.title)}</span><span class="a">${esc(s.album || s.artist)}${s.own ? '' : ' · нет в библиотеке'}</span></span>
+    <span class="acts">${s.own ? '' : '<button class="ib" data-miss="wish" title="В «Хочу скачать»"><svg><use href="#i-plus"/></svg></button><button class="ib" data-miss="find" title="Найти через бота"><svg><use href="#i-tg"/></svg></button>'}</span></li>`).join('')}</ul>`;
+  box.querySelector('.arthead')?.insertAdjacentHTML('afterend', html);
+}
+
+const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
   const liked = lib.likes.has(t.id);
@@ -373,12 +486,13 @@ function render() {
   $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish';
   $('.fixbar')?.remove();
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
-  $('#sort').hidden = ['artists', 'recent', 'albums'].includes(view) || view.startsWith('album:');
+  $('#sort').hidden = ['artists', 'recent', 'albums', 'news', 'stats'].includes(view) || !!SMART[view] || view.startsWith('album:');
   $('#sort').value = settings.sort;
   if (['fix', 'wave', 'wish', 'artists', 'albums'].includes(view)) { clearList(); $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; }
   if (view === 'fix') { renderFix(); renderNav(); return; }
   if (view === 'wave') { renderWave(); renderNav(); return; }
   if (view === 'wish') { renderWish(); renderNav(); return; }
+  if (view === 'news' || view === 'stats') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; view === 'news' ? renderNews() : renderStats(); renderNav(); if (view === 'news') newsHunt(); return; }
   if (view === 'artists') { $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderArtists(); renderNav(); paintWebSearch(); return; }
   if (view === 'albums') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderAlbums(); renderNav(); paintWebSearch(); return; }
   const ids = viewIds();
@@ -445,6 +559,7 @@ function emptyHTML() {
   if (query) return `<h2>Ничего не нашлось</h2><p>По запросу «${esc(query)}» треков нет. Попробуй часть названия или имя артиста.</p>`;
   if (view === 'liked') return `<h2>Здесь будет любимое</h2><p>Нажми на сердечко у трека, и он появится в этом списке.</p>`;
   if (view.startsWith('artist:')) return '<h2>Треков этого автора больше нет</h2>';
+  if (SMART[view]) return '<h2>Пока пусто</h2><p>Подборка соберётся сама, когда ты послушаешь больше музыки.</p>';
   if (view.startsWith('album:')) return '<h2>Из этого альбома у тебя пока ничего нет</h2><p>Ниже весь трек-лист: плюс — в «Хочу скачать», «Найти» — открыть бота.</p>';
   if (view === 'recent') return `<h2>Ты ещё ничего не слушал</h2><p>Включи любой трек, и история появится здесь.</p>`;
   if (view !== 'all') return `<h2>Плейлист пока пустой</h2><p>Нажми «⋯» у любого трека и выбери «Добавить в плейлист».</p>
@@ -479,6 +594,9 @@ function openMore() {
   modal(`<div class="grab"></div>
     ${row('data-view="albums"', 'list', 'Альбомы')}
     ${row('data-view="recent"', 'clock', 'Недавние')}
+    ${row('data-view="news"', 'wave', 'Новинки', newsUnseen())}
+    ${row('data-view="stats"', 'clock', 'Итоги')}
+    ${Object.entries(SMART).map(([k, n]) => row(`data-view="${k}"`, 'list', n)).join('')}
     ${row('data-view="wish"', 'wish', 'Хочу скачать', wishes().length)}
     ${row('data-view="fix"', 'wand', 'Проверка названий', fixCount())}
     ${row('data-act="listen"', 'mic', 'Что играет?')}
@@ -495,9 +613,12 @@ function renderNav() {
     + item('albums', 'list', 'Альбомы')
     + item('liked', 'heart', 'Любимое', lib.likes.size || null)
     + item('recent', 'clock', 'Недавние')
+    + item('news', 'wave', 'Новинки', newsUnseen() || null)
+    + item('stats', 'clock', 'Итоги')
     + item('wish', 'wish', 'Хочу скачать', wishes().length || null)
     + item('fix', 'wand', 'Проверка названий', fixCount() || null)
     + `<button data-act="listen"><svg><use href="#i-mic"/></svg>Что играет?</button>`
+    + `<div class="nav-title" style="margin-top:14px">Подборки</div>` + Object.entries(SMART).map(([k, n]) => item(k, 'list', n)).join('')
     + `<div class="nav-title" style="margin-top:14px">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>`
     + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('');
 }
@@ -659,7 +780,7 @@ function closeListen() {
   if (!t || l.played < 3) return;
   const d = t.duration || t.bounds?.d || 0;
   lib.listens.push({ id: t.id, artist: t.artist, title: t.title, at: Date.now(), played: Math.round(l.played), playedFraction: d ? Math.min(1, l.played / d) : 0 });
-  if (lib.listens.length > 2000) lib.listens.splice(0, lib.listens.length - 2000);
+  if (lib.listens.length > 10000) lib.listens.splice(0, lib.listens.length - 10000);
   saveLib();
 }
 
@@ -1163,6 +1284,7 @@ function openMenu(id, x, y) {
     <button data-m="toPl">Добавить в плейлист</button>
     ${inPl ? '<button data-m="fromPl">Убрать из плейлиста</button>' : ''}
     <hr>
+    ${t.orig ? `<button data-m="orig">Вернуть исходное название: ${esc(t.orig.artist ? t.orig.artist + ' — ' : '')}${esc(t.orig.title)}</button>` : ''}
     ${t.source === 'tg' && t.downloaded ? '<button data-m="free">Удалить файл с устройства</button>' : ''}
     <button data-m="del" class="danger">Удалить из библиотеки</button></div>`;
   const m = layer.firstElementChild;
@@ -1176,6 +1298,17 @@ function openMenu(id, x, y) {
       addToQueue(id, a === 'playNext');
     } else if (a === 'toPl') pickPlaylist(id);
     else if (a === 'fromPl') { inPl.ids = inPl.ids.filter(q => q !== id); saveLib(); render(); }
+    else if (a === 'orig') {
+      // Mix ошибся: возвращаем как было и больше этот трек сам не трогаем
+      t.title = t.orig.title; t.artist = t.orig.artist || ''; delete t.orig;
+      for (const k of ['album', 'albumId', 'albumTotal', 'trackNo', 'genre', 'released']) delete t[k];
+      if (t.coverOriginal) { t.coverOriginal = false; t.cover = false; db.del('covers', t.id); db.del('covers', 'th:' + t.id); coverUrls.delete(t.id); thumbUrls.delete(t.id); thumbReady.delete(t.id); }
+      t.verified = true; t.conf = true; t.fixedBy = 'manual'; t.ident = { status: 'kept' }; t.album = '';
+      if (settings.writeChannel && inCurrentChat(t)) { t.chanPending = true; t.artChecked = true; }
+      await saveTrack(t); updateRow(t.id); if (t.id === curId) { paintNow(); mediaMeta(t); }
+      if (t.chanPending) chanQueue();
+      toast('Название возвращено');
+    }
     else if (a === 'free') { await db.del('blobs', id); t.downloaded = false; saveTrack(t); updateRow(id); toast('Файл удалён, трек скачается снова при прослушивании'); }
     else if (a === 'del') {
       if (!confirm(`Удалить «${t.title}» из библиотеки?`)) return;
@@ -2166,6 +2299,7 @@ document.addEventListener('click', async e => {
   else if (a === 'upload') askUpload();
   else if (a === 'musicBot') askMusicBot(() => render());
   else if (a === 'artistAll') { artistAll = true; render(); }
+  else if (a?.startsWith('stats:')) { statsPeriod = a.slice(6); render(); }
   else if (a === 'tg') openTg();
   else if (a === 'tgSync') startSync();
   else if (a === 'tgStop') { sync.stop = true; }
@@ -2189,6 +2323,19 @@ document.addEventListener('click', async e => {
     const mainEl = $('#main'); mainEl.classList.remove('fadein'); void mainEl.offsetWidth; mainEl.classList.add('fadein');
     if (v === 'wave' && !sug.items.length && tracks.size && navigator.onLine) loadSuggestions();
   }
+});
+$('#disc').addEventListener('click', e => {
+  const li = e.target.closest('[data-pi]'); if (!li) return;
+  const s = popular[+li.dataset.pi]; if (!s) return;
+  const b = e.target.closest('[data-miss]');
+  if (b) { if (b.dataset.miss === 'find') findInTelegram(s); else { addWish(s); toast('Добавлено в «Хочу скачать»'); b.disabled = true; } return; }
+  if (s.own) { waveMode = false; queue = queueBase = popular.filter(x => x.own).map(x => x.own); playId(s.own); }
+  else if (s.preview) { waveMode = false; const v = previewTrack(s); queue = queueBase = [v.id]; playId(v.id); }
+});
+$('#rows').addEventListener('click', e => {
+  const p = e.target.closest('[data-stat-play]'); if (!p) return;
+  const ids = [...$('#rows').querySelectorAll('[data-stat-play]')].map(x => x.dataset.statPlay);
+  waveMode = false; queue = queueBase = ids; playId(p.dataset.statPlay);
 });
 $('#extra').addEventListener('click', e => {
   const b = e.target.closest('[data-miss]'), li = e.target.closest('[data-mi]');
@@ -2356,6 +2503,8 @@ document.addEventListener('keydown', e => {
 window.__mixReady = true;
 setInterval(frame, 250);
 setInterval(() => soundHunt(), 5 * 60e3);
+setTimeout(async () => { news = await db.get('kv', 'news').catch(() => null) || news; renderNav(); setTimeout(newsHunt, 20000); }, 1500);
+setInterval(() => newsHunt(), 3 * 36e5);
 function goBack() {
   const p = navStack.pop(); if (!p) return false;
   if ($('#full').classList.contains('open')) closeFull();
