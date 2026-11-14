@@ -58,7 +58,15 @@ export async function searchDeezer(term, limit = 10) {
 }
 
 // Весь трек-лист альбома: чтобы показать, каких песен не хватает
+async function deezerAlbum(id) {
+  const a = await jsonp(`https://api.deezer.com/album/${id}?x=1`);
+  return (a?.tracks?.data || []).map((x, i) => ({
+    title: x.title, artist: x.artist?.name || a.artist?.name || '', album: a.title || '', trackNo: i + 1,
+    art: a.cover_xl || a.cover_big || null, preview: x.preview || null, duration: x.duration || 0,
+  }));
+}
 export async function albumTracks(albumId) {
+  if (String(albumId).startsWith('dz')) return deezerAlbum(String(albumId).slice(2));
   for (const country of ['RU', 'US']) {
     await throttle();
     const r = await fetch(`https://itunes.apple.com/lookup?id=${albumId}&entity=song&country=${country}`).catch(() => null);
@@ -75,7 +83,24 @@ export async function albumTracks(albumId) {
 
 // Дискография артиста: его альбомы и песни из каталога iTunes
 const nk = s => soundKey(normKey(s)); // Кизару = kizaru = KIZARU
+async function deezerCatalog(name) {
+  const s = await jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=5`);
+  const a = (s?.data || []).find(x => nk(x.name) === nk(name));
+  if (!a) return null;
+  const j = await jsonp(`https://api.deezer.com/artist/${a.id}/albums?limit=200`);
+  return { name: a.name, pic: a.picture_xl || a.picture_big || null, albums: (j?.data || []).map(x => ({
+    id: 'dz' + x.id, name: x.title, single: x.record_type === 'single', ep: x.record_type === 'ep', total: x.nb_tracks || 0,
+    year: (x.release_date || '').slice(0, 4), art: x.cover_xl || x.cover_big || null, artist: a.name,
+  })) };
+}
 export async function artistCatalog(name) {
+  const [it, dz] = await Promise.all([itunesCatalog(name).catch(() => null), deezerCatalog(name).catch(() => null)]);
+  if (!it && !dz) return null;
+  const seen = new Set(), albums = [];
+  for (const x of [...(it?.albums || []), ...(dz?.albums || [])]) { const k = nk(x.name); if (seen.has(k)) continue; seen.add(k); albums.push(x); }
+  return { name: it?.name || dz.name, pic: dz?.pic || null, albums: albums.sort((x, y) => (y.year || '').localeCompare(x.year || '')) };
+}
+async function itunesCatalog(name) {
   for (const country of ['RU', 'US']) {
     await throttle();
     const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&entity=musicArtist&limit=5&country=${country}`).catch(() => null);

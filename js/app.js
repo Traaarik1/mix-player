@@ -330,10 +330,10 @@ async function paintArtistCatalog() {
   if (!g || !navigator.onLine) return;
   const v = view; catFor = v;
   const box = $('#disc');
-  const cache = await db.get('kv', 'cat:' + g.key);
+  const cache = await db.get('kv', 'cat2:' + g.key);
   if (!cache) box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Ищу альбомы…</small></div></div>';
   const cat = cache && Date.now() - cache.at < 7 * 864e5 ? cache.cat : await artistCatalog(g.name).catch(() => null);
-  if (cat && !cache?.cat) db.put('kv', 'cat:' + g.key, { at: Date.now(), cat });
+  if (cat && !cache?.cat) db.put('kv', 'cat2:' + g.key, { at: Date.now(), cat });
   if (view !== v || catFor !== v) return;
   if (!cat?.albums.length) { box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Не нашлась в каталоге или он сейчас недоступен — открой артиста чуть позже</small></div></div>'; return; }
   const idx = creditIndex(), gk = g.web ? normKey(g.name) : g.key, mine = order.map(id => tracks.get(id)).filter(t => idx.get(t.id)?.some(p => p.key === gk));
@@ -341,7 +341,7 @@ async function paintArtistCatalog() {
     const key = 'i' + al.id;
     webAlbums.set(key, { id: al.id, name: al.name, artist: al.artist, total: al.total });
     const have = mine.filter(t => t.albumId === al.id || (t.album && norm2(t.album) === norm2(al.name))).length;
-    const tag = have >= al.total && al.total ? 'весь альбом' : have ? `есть ${have} из ${al.total}` : `${al.total} ${al.total === 1 ? 'трек' : al.total < 5 ? 'трека' : 'треков'}`;
+    const tag = al.total && have >= al.total ? 'весь альбом' : have ? (al.total ? `есть ${have} из ${al.total}` : `есть ${have}`) : al.total ? `${al.total} ${al.total === 1 ? 'трек' : al.total < 5 ? 'трека' : 'треков'}` : 'нет в библиотеке';
     const lib = mine.find(t => t.albumId === al.id && albumKey(t));
     return `<button class="artist album${have ? '' : ' ghost'}" data-view="album:${esc(lib ? albumKey(lib) : key)}">${al.art ? `<img class="cov" src="${esc(al.art)}" alt="" loading="lazy">` : '<span class="cov">?</span>'}<b>${esc(al.name)}</b><small>${al.year}${al.single ? ' · сингл' : al.ep ? ' · EP' : ''}</small><em>${tag}</em></button>`;
   };
