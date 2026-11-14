@@ -42,6 +42,11 @@ function jsonp(url) {
     document.head.appendChild(s);
   });
 }
+// Авторы по запросу (Deezer): имя и фото
+export async function searchArtists(term, limit = 6) {
+  const j = await jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(term)}&limit=${limit}`);
+  return (j?.data || []).filter(x => x.name).map(x => ({ name: x.name, pic: x.picture_medium || null, fans: x.nb_fan || 0 }));
+}
 export async function searchDeezer(term, limit = 10) {
   const wait = dzLast + 150 - Date.now(); dzLast = Math.max(Date.now(), dzLast + 150); // лимит Deezer — 50 запросов за 5 секунд
   if (wait > 0) await new Promise(r => setTimeout(r, wait));

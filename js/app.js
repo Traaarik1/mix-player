@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, searchDeezer, fetchArt, albumTracks, artistCatalog } from './covers.js';
+import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
@@ -142,6 +142,7 @@ function viewIds() {
   else if (view.startsWith('artist:')) { const k = view.slice(7), idx = creditIndex(); ids = order.filter(id => idx.get(id).some(p => p.key === k)); }
   else if (view === 'artists' || view === 'albums') ids = order;
   else if (view.startsWith('album:')) { const k = view.slice(6); ids = order.filter(id => albumKey(tracks.get(id)) === k).sort((x, y) => (tracks.get(x).trackNo || 99) - (tracks.get(y).trackNo || 99)); return ids; }
+  else if (view.startsWith('webartist:')) ids = [];
   else ids = (lib.playlists.find(p => p.id === view)?.ids || []).filter(id => tracks.has(id));
   if (query) {
     const q = query.toLowerCase();
@@ -298,8 +299,14 @@ function paintWebSearch() {
   webT = setTimeout(async () => {
     webQ = q;
     $('#extra').innerHTML = '<div class="sechead"><div><b>В интернете</b><small>Ищу…</small></div></div>';
-    const [it, dz] = await Promise.all([searchItunes(q, 15, 'RU').catch(() => []), searchDeezer(q, 15).catch(() => [])]);
+    const [it, dz, ar] = await Promise.all([searchItunes(q, 15, 'RU').catch(() => []), searchDeezer(q, 15).catch(() => []), searchArtists(q).catch(() => [])]);
     if (webQ !== q || query !== q) return;
+    const groups = artistGroups(), qk = normKey(q);
+    const arts = ar.filter(x => normKey(x.name).includes(qk) || qk.includes(normKey(x.name))).slice(0, 6);
+    const artHTML = arts.length ? `<div class="sechead"><div><b>Авторы</b><small>Нажми — откроется вся дискография</small></div></div><ul class="rows"><li class="artists">${arts.map(x => {
+      const mine = groups.find(g => g.key === normKey(x.name));
+      return `<button class="artist" data-view="${mine ? 'artist:' + esc(mine.key) : 'webartist:' + esc(encodeURIComponent(x.name))}">${x.pic ? `<img class="cov" src="${esc(x.pic)}" alt="" loading="lazy" style="border-radius:50%">` : '<span class="cov">?</span>'}<b>${esc(x.name)}</b><small>${mine ? tracksWord(mine.n) + ' у тебя' : 'нет в библиотеке'}</small></button>`;
+    }).join('')}</li></ul>` : '';
     const seen = new Set(), key = s => normKey(s.artist + ' ' + s.title), mine = [...tracks.values()];
     let list = [...it, ...dz].filter(s => { const k = key(s); if (seen.has(k)) return false; seen.add(k); return true; })
       .filter(s => !mine.some(t => sameTrack(s, t)));
@@ -307,8 +314,9 @@ function paintWebSearch() {
     const qw = q.split(/s+/).map(normKey).filter(Boolean);
     const fit = s => { const w = (normKey(s.artist) + ' ' + normKey(s.title)); return qw.filter(x => w.includes(x)).length; };
     list.sort((x, y) => fit(y) - fit(x)); list.splice(20);
-    if (!list.length) { $('#extra').innerHTML = '<div class="sechead"><div><b>В интернете</b><small>Ничего не нашлось</small></div></div>'; return; }
+    if (!list.length) { $('#extra').innerHTML = artHTML || '<div class="sechead"><div><b>В интернете</b><small>Ничего не нашлось</small></div></div>'; return; }
     paintWebList('Найдено в интернете', 'Плюс — в «Хочу скачать», «Найти» — открыть бота в Telegram с этим названием', list);
+    if (artHTML) $('#extra').insertAdjacentHTML('afterbegin', artHTML);
   }, 500);
 }
 let albumMissing = [];
@@ -318,7 +326,8 @@ const webAlbum = key => { const w = webAlbums.get(key); return w && { key, name:
 // Карточка артиста: все его альбомы (есть X из N) и чего у тебя нет
 let catFor = '';
 async function paintArtistCatalog() {
-  const g = artistGroups().find(x => x.key === view.slice(7)); if (!g || !navigator.onLine) return;
+  const g = view.startsWith('webartist:') ? { key: 'w' + normKey(decodeURIComponent(view.slice(10))), name: decodeURIComponent(view.slice(10)), web: true } : artistGroups().find(x => x.key === view.slice(7));
+  if (!g || !navigator.onLine) return;
   const v = view; catFor = v;
   const box = $('#disc');
   const cache = await db.get('kv', 'cat:' + g.key);
@@ -327,7 +336,7 @@ async function paintArtistCatalog() {
   if (cat && !cache?.cat) db.put('kv', 'cat:' + g.key, { at: Date.now(), cat });
   if (view !== v || catFor !== v) return;
   if (!cat?.albums.length) { box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Не нашлась в каталоге или он сейчас недоступен — открой артиста чуть позже</small></div></div>'; return; }
-  const idx = creditIndex(), mine = order.map(id => tracks.get(id)).filter(t => idx.get(t.id)?.some(p => p.key === g.key));
+  const idx = creditIndex(), gk = g.web ? normKey(g.name) : g.key, mine = order.map(id => tracks.get(id)).filter(t => idx.get(t.id)?.some(p => p.key === gk));
   const tile = al => {
     const key = 'i' + al.id;
     webAlbums.set(key, { id: al.id, name: al.name, artist: al.artist, total: al.total });
@@ -342,7 +351,7 @@ async function paintArtistCatalog() {
     ${singles.length ? `<div class="sechead"><div><b>Синглы</b></div></div><ul class="rows"><li class="artists albums">${singles.map(tile).join('')}</li></ul>` : ''}
     <div class="sechead"><div><b>Треки у тебя: ${mine.length}</b></div></div>`;
 }
-const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
+const viewName = () => ({ all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
   const liked = lib.likes.has(t.id);
@@ -384,9 +393,10 @@ function render() {
   const rows = $('#rows');
   const cut = view.startsWith('artist:') && !artistAll && ids.length > 6;
   listIds = cut ? ids.slice(0, 5) : ids; listFrom = -1;
-  if (!view.startsWith('artist:')) $('#disc').innerHTML = '';
+  if (!view.startsWith('artist:') && !view.startsWith('webartist:')) $('#disc').innerHTML = '';
   $('#extra').innerHTML = '';
   paintWebSearch();
+  if (view.startsWith('webartist:')) { paintArtistCatalog(); $('#empty').hidden = true; $('#playAll').hidden = true; }
   if (view.startsWith('artist:')) { paintArtistCatalog(); if (cut) $('#extra').innerHTML = `<button class="btn showall" data-act="artistAll">Показать все треки (${ids.length})</button>`; }
   if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)) || webAlbum(view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
   renderShelf();
