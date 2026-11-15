@@ -1282,6 +1282,7 @@ function openMenu(id, x, y) {
     <button data-m="playNext">Играть следующим</button>
     <button data-m="qadd">В очередь</button>
     <button data-m="toPl">Добавить в плейлист</button>
+    <button data-m="rename">Изменить название</button>
     ${inPl ? '<button data-m="fromPl">Убрать из плейлиста</button>' : ''}
     <hr>
     ${t.orig ? `<button data-m="orig">Вернуть исходное название: ${esc(t.orig.artist ? t.orig.artist + ' — ' : '')}${esc(t.orig.title)}</button>` : ''}
@@ -1297,6 +1298,7 @@ function openMenu(id, x, y) {
     if (a === 'playNext' || a === 'qadd') {
       addToQueue(id, a === 'playNext');
     } else if (a === 'toPl') pickPlaylist(id);
+    else if (a === 'rename') openFind(t);
     else if (a === 'fromPl') { inPl.ids = inPl.ids.filter(q => q !== id); saveLib(); render(); }
     else if (a === 'orig') {
       // Mix ошибся: возвращаем как было и больше этот трек сам не трогаем
@@ -1651,6 +1653,7 @@ function renderFix() {
   bar.innerHTML = `<span class="note">${key ? 'Треки распознаются по звуку и по названию файла.' : 'Сейчас треки ищутся только по названию файла. По звуку получится точнее.'}</span>
     <button class="btn" data-act="acoust">${key ? 'Ключ AcoustID' : 'Включить распознавание по звуку'}</button>
     ${tgCfg?.chatId ? `<label><input type="checkbox" class="sw" id="writeChan"${settings.writeChannel ? ' checked' : ''}>Исправлять и в канале</label>` : ''}
+    <button class="btn" data-act="identAll" title="Заново распознать всё, что не подтверждено по звуку или тобой">Найти все треки</button>
     ${found.length ? `<button class="btn primary" data-act="acceptAll">Принять все (${found.length})</button>` : ''}`;
   const empty = $('#empty');
   empty.hidden = !!(found.length || none.length || identRunning);
@@ -2288,6 +2291,17 @@ document.addEventListener('click', async e => {
   else if (a === 'listen') openListen();
   else if (a === 'lyrics') { if (engine.track) setLyrics(!lyricsOn); }
   else if (a === 'acoust') openAcoust();
+  else if (a === 'identAll') {
+    let n = 0;
+    for (const t of tracks.values()) {
+      if (t.previewOnly || t.conf || t.fixedBy === 'manual' || t.ident?.status === 'kept') continue;
+      if (t.verified && ['ok', 'audd'].includes(t.sound?.st)) continue;
+      delete t.ident; delete t.sound; t.verified = false; n++; saveTrack(t);
+    }
+    soundSkip.clear(); identState.done = 0; identState.total = n;
+    toast(n ? `Ищу заново: ${tracksWord(n)}. Это идёт в фоне` : 'Все треки уже подтверждены');
+    renderFix(); identHunt(); setTimeout(soundHunt, 2000);
+  }
   else if (a === 'acceptAll') {
     const list = [...tracks.values()].filter(t => t.ident?.status === 'found' && !t.verified);
     e.target.closest('button').disabled = true;
