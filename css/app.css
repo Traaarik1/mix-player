@@ -846,3 +846,33 @@ img.cov { object-fit: cover; }
 .toplist .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toplist .a { color: var(--mist); font-size: 13px; }
 @media (max-width: 900px) { .statnums { grid-template-columns: repeat(2, minmax(0, 1fr)); } .arthead img { width: 84px; height: 84px; } .arthead b { font-size: 22px; } }
+
+/* ---------- фон из обложки ---------- */
+@property --h { syntax: '<number>'; inherits: true; initial-value: 258; }
+@property --s { syntax: '<percentage>'; inherits: true; initial-value: 100%; }
+:root { transition: --h 1.4s ease, --s 1.4s ease; }
+.backdrop { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.fullbg { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.backdrop i, .fullbg i { position: absolute; inset: -20%; background: center / cover no-repeat; filter: blur(80px) saturate(1.6); opacity: 0; transform: scale(1.15); transition: opacity 1.6s ease; }
+.backdrop i.on { opacity: .2; }
+.fullbg i.on { opacity: .8; }
+.fullbg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, hsl(var(--h) 35% 10% / .25), hsl(var(--h) 35% 7% / .88)); }
+body { background: radial-gradient(120% 80% at 70% -10%, hsl(var(--h) 45% 18%), var(--night) 60%); }
+
+/* ---------- лого ---------- */
+svg.logo-mark { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 4px 12px rgb(255 143 184 / .35)); }
+svg.logo-mark rect { transform-box: fill-box; transform-origin: center; }
+body.playing svg.logo-mark rect { animation: eqbar .9s ease-in-out infinite alternate; }
+body.playing svg.logo-mark rect:nth-child(2) { animation-delay: -.3s; }
+body.playing svg.logo-mark rect:nth-child(3) { animation-delay: -.6s; }
+@keyframes eqbar { from { transform: scaleY(.55); } to { transform: scaleY(1); } }
+@media (max-width: 900px) { svg.logo-mark { width: 24px; height: 24px; } }
+
+/* ---------- полировка ---------- */
+.btn.primary { background: linear-gradient(135deg, hsl(var(--h) 90% 80%), hsl(calc(var(--h) + 35) 90% 74%)); color: #1a1226; }
+.album .cov, .artist .cov { transition: transform .25s var(--ease), box-shadow .25s var(--ease); }
+.album:hover .cov, .artist:hover .cov { box-shadow: 0 14px 30px rgb(0 0 0 / .45); }
+.stack img, .stack .cov { box-shadow: 0 30px 70px rgb(0 0 0 / .55); }
+.row { transition: background .15s ease; }
+.sechead b { letter-spacing: -.2px; }
+@media (prefers-reduced-motion: reduce) { body.playing svg.logo-mark rect { animation: none; } :root { transition: none; } }

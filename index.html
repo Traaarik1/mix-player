@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+  <div class="backdrop" id="backdrop" aria-hidden="true"><i></i><i></i></div>
   <svg width="0" height="0" style="position:absolute">
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.1v13.8a1 1 0 0 0 1.5.9l10.8-6.9a1 1 0 0 0 0-1.7L9.5 4.2A1 1 0 0 0 8 5.1Z"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></symbol>
@@ -52,7 +53,7 @@
 
   <div class="app">
     <aside class="rail">
-      <div class="logo"><span class="logo-mark"><span></span><span></span></span>Mix</div>
+      <div class="logo"><svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="lgMix" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B69CFF"/><stop offset=".5" stop-color="#FF8FB8"/><stop offset="1" stop-color="#FFC56B"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#lgMix)"/><g fill="#fff"><rect x="29" y="33" width="10" height="34" rx="5"/><rect x="45" y="24" width="10" height="52" rx="5"/><rect x="61" y="37" width="10" height="26" rx="5"/></g></svg>Mix</div>
       <nav class="nav" id="nav"></nav>
       <div class="rail-foot">
         <div class="tgcard" id="tgcard"></div>
@@ -119,6 +120,7 @@
   </footer>
 
   <section class="full" id="full" aria-label="Сейчас играет">
+    <div class="fullbg" id="fullbg" aria-hidden="true"><i></i><i></i></div>
     <div class="grab fullgrab"></div>
     <button class="close" id="closeFull" title="Свернуть"><svg style="margin:auto"><use href="#i-down"/></svg></button>
     <div class="stack" id="stack"></div>

@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog, artistTop } from './covers.js';
+import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog, artistTop, artistRelated } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
@@ -462,6 +462,15 @@ async function paintArtistTop(box, cat, mine) {
     <span class="ttl"><span class="t">${esc(s.title)}</span><span class="a">${esc(s.album || s.artist)}${s.own ? '' : ' · нет в библиотеке'}</span></span>
     <span class="acts">${s.own ? '' : '<button class="ib" data-miss="wish" title="В «Хочу скачать»"><svg><use href="#i-plus"/></svg></button><button class="ib" data-miss="find" title="Найти через бота"><svg><use href="#i-tg"/></svg></button>'}</span></li>`).join('')}</ul>`;
   box.querySelector('.arthead')?.insertAdjacentHTML('afterend', html);
+  const rel = await artistRelated(cat.dzId).catch(() => []);
+  if (!rel.length || !box.isConnected) return;
+  const groups = artistGroups();
+  const relHTML = `<div class="sechead"><div><b>Похожие артисты</b><small>Нажми — откроется дискография</small></div></div><ul class="rows"><li class="artists">${rel.map(x => {
+    const mine = groups.find(g => g.key === normKey(x.name));
+    return `<button class="artist" data-view="${mine ? 'artist:' + esc(mine.key) : 'webartist:' + esc(encodeURIComponent(x.name))}">${x.pic ? `<img class="cov" src="${esc(x.pic)}" alt="" loading="lazy" style="border-radius:50%">` : '<span class="cov">?</span>'}<b>${esc(x.name)}</b><small>${mine ? tracksWord(mine.n) + ' у тебя' : 'нет в библиотеке'}</small></button>`;
+  }).join('')}</li></ul>`;
+  const last = [...box.querySelectorAll(':scope > .sechead')].at(-1);
+  last ? last.insertAdjacentHTML('beforebegin', relHTML) : box.insertAdjacentHTML('beforeend', relHTML);
 }
 
 const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
@@ -798,6 +807,16 @@ function currentTaste() {
 const recentIds = () => lib.history.slice(0, 40).map(h => h.id).reverse();
 // без сети играть можно только уже скачанное
 const waveLibrary = () => { const all = [...tracks.values()]; return navigator.onLine ? all : all.filter(t => t.downloaded); };
+// Радио: начинаем с выбранного трека, дальше Волна подбирает похожие по звучанию, темпу и жанру
+function startRadio(id) {
+  const t = getT(id); if (!t) return;
+  const picks = nextWave(waveLibrary().filter(x => x.id !== id), currentTaste(), { count: 12, history: recentIds(), after: t });
+  waveMode = true;
+  queue = queueBase = [id, ...picks.map(x => x.id)];
+  injectPreviews();
+  playId(id);
+  toast(`Радио по треку «${t.title}»`);
+}
 function startWave() {
   const library = waveLibrary();
   if (!library.length) { toast(tracks.size ? 'Без интернета волне нечего играть: треки ещё не скачаны' : 'Сначала добавь музыку'); return; }
@@ -1121,8 +1140,20 @@ async function loadAudio(t) {
 }
 
 // ---------- отрисовка плеера ----------
+let bdUrl = '', bdFlip = 0;
+async function paintBackdrop(t) {
+  const url = !t ? '' : t.cover ? await coverUrl(t.id).catch(() => '') : (t.art || '');
+  if (url === bdUrl) return;
+  bdUrl = url; bdFlip ^= 1;
+  for (const box of $$('#backdrop, #fullbg')) {
+    const [x, y] = box.children, on = bdFlip ? y : x, off = bdFlip ? x : y;
+    if (url) on.style.backgroundImage = `url("${url}")`;
+    on.classList.toggle('on', !!url); off.classList.remove('on');
+  }
+}
 async function paintNow() {
   const t = engine.track;
+  paintBackdrop(t);
   $('#npTitle').textContent = t ? t.title : 'Ничего не играет';
   $('#npArtist').textContent = t ? (t.artist || 'Неизвестный артист') + (t.source === 'preview' ? ', превью 30 секунд' : '') : 'Выбери трек';
   $('#npLike').hidden = !t; $('#npAdd').hidden = !t;
@@ -1282,6 +1313,7 @@ function openMenu(id, x, y) {
     <button data-m="playNext">Играть следующим</button>
     <button data-m="qadd">В очередь</button>
     <button data-m="toPl">Добавить в плейлист</button>
+    <button data-m="radio">Радио по этому треку</button>
     <button data-m="rename">Изменить название</button>
     ${inPl ? '<button data-m="fromPl">Убрать из плейлиста</button>' : ''}
     <hr>
@@ -1299,6 +1331,7 @@ function openMenu(id, x, y) {
       addToQueue(id, a === 'playNext');
     } else if (a === 'toPl') pickPlaylist(id);
     else if (a === 'rename') openFind(t);
+    else if (a === 'radio') startRadio(id);
     else if (a === 'fromPl') { inPl.ids = inPl.ids.filter(q => q !== id); saveLib(); render(); }
     else if (a === 'orig') {
       // Mix ошибся: возвращаем как было и больше этот трек сам не трогаем

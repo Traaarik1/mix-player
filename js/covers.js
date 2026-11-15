@@ -88,6 +88,11 @@ export async function artistTop(dzId, limit = 10) {
   const j = await jsonp(`https://api.deezer.com/artist/${dzId}/top?limit=${limit}`);
   return (j?.data || []).map(x => ({ title: x.title, artist: x.artist?.name || '', album: x.album?.title || '', art: x.album?.cover_xl || x.album?.cover_big || null, preview: x.preview || null, duration: x.duration || 0 }));
 }
+// Похожие артисты (Deezer)
+export async function artistRelated(dzId, limit = 12) {
+  const j = await jsonp(`https://api.deezer.com/artist/${dzId}/related?limit=${limit}`);
+  return (j?.data || []).map(x => ({ name: x.name, pic: x.picture_medium || null }));
+}
 async function deezerCatalog(name) {
   const s = await jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=5`);
   const a = (s?.data || []).find(x => nk(x.name) === nk(name));
