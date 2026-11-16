@@ -151,6 +151,8 @@
   <h2 id="faq"><span class="n">9</span>FAQ</h2>
   <details><summary>Is it safe? Who sees my music?</summary>
     <p>Mix is a page that runs on your device. It connects directly to Telegram with your keys; everything is stored in your browser and your Telegram. Other Mix users (and the author of Mix) can’t see your data.</p></details>
+  <details><summary>Does Mix send anything about me?</summary>
+    <p>Only anonymous counters: “Mix installed”, “Telegram connected”, “came via an invite”. No name, number, tracks or cookies — just numbers so the author can see how many people use Mix.</p></details>
   <details><summary>How much does it cost?</summary><p>Nothing. Mix is free, so is Telegram.</p></details>
   <details><summary>Why does a track take a while to start the first time?</summary>
     <p>If a track isn’t downloaded yet, Mix gets it from Telegram. After the first time it stays on the device and starts instantly, even offline.</p></details>
@@ -163,5 +165,14 @@
 
   <footer>Mix · free and ad-free · <a href="./">open the player</a></footer>
 </main>
+<script>
+  // кто пригласил: код из ссылки запоминаем, Mix засчитает приглашение, когда друг подключит Telegram
+  (function () {
+    var ref = new URLSearchParams(location.search).get('ref');
+    if (!ref || !/^[a-z0-9]{4,16}$/.test(ref)) return;
+    try { if (!localStorage.getItem('mixRef')) localStorage.setItem('mixRef', ref); } catch (e) {}
+    document.querySelectorAll('a[href="./"]').forEach(function (a) { a.href = './?ref=' + ref; });
+  })();
+</script>
 </body>
 </html>

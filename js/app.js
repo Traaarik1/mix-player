@@ -10,6 +10,7 @@ import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js
 import { openMini, canMini } from './mini.js';
 import { setupGestures, setupRowSwipe, setupEdgeBack } from './gestures.js';
 import { setLang, defaultLang } from './i18n.js';
+import { count, countOf, dashboard, GC } from './counter.js';
 import { checkSound, SOUND_V } from './soundcheck.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -523,7 +524,19 @@ async function paintArtistTop(box, cat, mine) {
 
 // ---------- импорт плейлиста: Deezer по ссылке, Spotify через локальный сервер, любой список текстом ----------
 const SITE = 'https://traaarik1.github.io/mix-player/';
-const guideUrl = () => SITE + (settings.lang === 'en' ? 'guide-en.html' : 'guide.html');
+const guideUrl = () => SITE + (settings.lang === 'en' ? 'guide-en.html' : 'guide.html') + (settings.refId ? '?ref=' + settings.refId : '');
+// ---------- анонимные счётчики: установки, пользователи, приглашённые ----------
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } }, lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+function countUsage() {
+  if (!GC) return;
+  if (!lsGet('mixInstalled')) { lsSet('mixInstalled', '1'); count('/install'); }
+  // пользователь — тот, кто подключил свой канал; засчитываем один раз на человека
+  if (tgCfg?.chatId && !settings.counted) {
+    settings.counted = true; saveSettings(); count('/user');
+    const ref = lsGet('mixRef');
+    if (ref && ref !== settings.refId) count('/ref/' + ref);
+  }
+}
 function parseLines(text) {
   return text.split(/\r?\n/).map(s => s.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean).map(s => {
     const m = s.split(/\s+[-–—]\s+/);
@@ -675,7 +688,13 @@ async function openInvite() {
 }
 
 // ---------- настройки: всё в одном месте ----------
+async function paintCounts() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v == null ? 'нет связи' : v; };
+  countOf('/ref/' + settings.refId).then(n => set('invCount', n == null ? null : n === 0 ? 'пока никого — отправь ссылку другу' : plural(n, 'человек', 'человека', 'человек')));
+  if (settings.owner) { countOf('/install').then(n => set('stInst', n)); countOf('/user').then(n => set('stUsers', n)); }
+}
 function renderSettings() {
+  setTimeout(paintCounts, 0);
   const empty = $('#empty'), rows = $('#rows');
   empty.hidden = true;
   $('#viewTitle').firstChild.textContent = 'Настройки';
@@ -700,6 +719,10 @@ function renderSettings() {
     <div class="sechead"><div><b>Друзья</b></div></div>
     ${row('data-act="invite"', 'artist', 'Mix для друга', 'Отправь другу — там всё по шагам')}
     ${row('data-act="copyInvite"', 'copy', 'Ссылка-приглашение', guideUrl())}
+    ${GC ? `<div class="setrow statline"><span>Ты пригласил<small id="invCount">считаю…</small></span></div>` : ''}
+    ${GC && settings.owner ? `<div class="sechead"><div><b>Статистика Mix</b><small>Видно только тебе</small></div></div>
+      <div class="statnums"><div><b id="stInst">…</b><small>установок</small></div><div><b id="stUsers">…</b><small>пользователей</small></div></div>
+      ${row('data-act="openStats"', 'list', 'Подробная статистика', dashboard())}` : ''}
     <div class="sechead"><div><b>Память</b></div></div>
     <div class="store">${$('#store').innerHTML}</div>
   </li>`;
@@ -2571,6 +2594,7 @@ document.addEventListener('click', async e => {
   else if (a === 'listen') openListen();
   else if (a === 'import') openImport();
   else if (a === 'setMix') openMix();
+  else if (a === 'openStats') window.open(dashboard(), '_blank', 'noopener');
   else if (a === 'setEq') openEq();
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
   else if (a?.startsWith('lang:')) { settings.lang = a.slice(5); await saveSettings(); location.reload(); }
@@ -2810,6 +2834,7 @@ document.addEventListener('keydown', e => {
 window.__mixReady = true;
 setInterval(frame, 250);
 setInterval(() => soundHunt(), 5 * 60e3);
+setTimeout(countUsage, 5000); setInterval(countUsage, 60e3);
 setTimeout(async () => { news = await db.get('kv', 'news').catch(() => null) || news; renderNav(); setTimeout(newsHunt, 20000); }, 1500);
 setInterval(() => newsHunt(), 3 * 36e5);
 setTimeout(async () => { const l = await db.get('kv', 'lyidx').catch(() => null); if (l) lyIndex = new Map(l); setTimeout(lyricsHunt, 30000); }, 2000);
@@ -2829,6 +2854,9 @@ async function boot() {
   try {
     Object.assign(settings, await db.get('kv', 'settings') || {});
     if (!settings.lang) { settings.lang = defaultLang(); saveSettings(); }
+    if (!settings.refId) { settings.refId = Math.random().toString(36).slice(2, 10); saveSettings(); }
+    { const ref = new URLSearchParams(location.search).get('ref'); if (ref && /^[a-z0-9]{4,16}$/.test(ref) && !lsGet('mixRef')) lsSet('mixRef', ref); }
+    if (new URLSearchParams(location.search).has('owner')) { settings.owner = true; saveSettings(); }
     setLang(settings.lang);
     const l = await db.get('kv', 'library');
     if (l) { lib.likes = new Set(l.likes); lib.playlists = l.playlists || []; lib.history = l.history || []; lib.listens = l.listens || []; waveFx = l.wave || {}; }

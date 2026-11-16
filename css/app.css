@@ -1055,3 +1055,5 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
 @media (pointer: coarse), (max-width: 900px) { .head.stuck { background: hsl(var(--h) 28% 10% / .88) !important; } }
 .settings .setrow { display: flex; align-items: center; gap: 14px; }
 .settings .setrow > svg { width: 22px; height: 22px; flex: none; color: var(--accent); }
+
+.settings .statline { cursor: default; }
