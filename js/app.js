@@ -883,23 +883,13 @@ async function next() {
   const my = ++skipToken;
   let id = curId && neighbour(curId, 1), first = id;
   for (let i = 0; id && i < 25; i++) {
-    if (await playId(id, 0, true)) { if (settings.shuffle && !waveMode) setTimeout(reshuffleAhead, 400); return; }
+    if (await playId(id, 0, true)) return; // очередь не пересобираем: она должна оставаться такой, какой её видишь
     if (my !== skipToken) return;
     if (userQueue[0] === id) { userQueue.shift(); saveQueue(); }
     id = neighbour(id, 1);
     if (id === first) break;
   }
   if (my === skipToken && first) toast('Дальше нет треков, которые можно включить');
-}
-// Вперемешку: пропустил трек — ближайшие 30 в очереди пересобираем с учётом пропуска, настроения и времени суток
-function reshuffleAhead() {
-  const i = queue.indexOf(curId); if (i < 0) return;
-  const ahead = queue.slice(i + 1), rows = ahead.map(id => getT(id)).filter(t => t && !t.previewOnly);
-  if (rows.length < 3) return;
-  const top = nextWave(rows, currentTaste(), { count: Math.min(30, rows.length), history: recentIds(), after: engine.track }).map(t => t.id);
-  const used = new Set(top);
-  queue = [...queue.slice(0, i + 1), ...top, ...ahead.filter(id => !used.has(id))];
-  engine.refreshNext(); paintNext(); paintQueue();
 }
 const saveQueue = () => db.put('kv', 'userQueue', userQueue);
 function addToQueue(id, first = false) {
@@ -1472,8 +1462,7 @@ function dismissLayer() {
 }
 function popup(html, anchorRight = true) {
   closeLayer();
-  layer.innerHTML = `<div class="pop"><button class="popclose" title="Закрыть"><svg><use href="#i-x"/></svg></button>${html}</div>`;
-  layer.querySelector('.popclose').onclick = dismissLayer;
+  layer.innerHTML = `<div class="pop">${html}</div>`; // закрывается тапом мимо окна, свайпом или Esc
   return layer.firstElementChild;
 }
 document.addEventListener('pointerdown', e => {

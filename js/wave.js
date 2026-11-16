@@ -20,7 +20,7 @@ export const WAVE = {
   W_JITTER: .15, KNOWN_NOVELTY: .3, ARTIST_DROP: -.5, MAX_SHARE_PER_SEED: .4, COLLAB_SIM: .7,
   // настроение сессии, время суток, забытые любимые
   SESSION_MIN: 60, SESSION_SKIP: .35, SESSION_KEEP: 1.25, SESSION_GENRE_SKIP: .6, SESSION_EXPLORE: .1,
-  HOUR_BOOST: .35, REDISCOVER_DAYS: 30, REDISCOVER: 1.35,
+  HOUR_BOOST: .35, REDISCOVER_DAYS: 30, REDISCOVER: 1.35, NEW_DAYS: 14, NEW_BONUS: 1.5,
 };
 
 const DAY = 864e5, HOUR = 36e5;
@@ -313,7 +313,9 @@ export function nextWave(library, taste, { count = 10, history = [], after = nul
     const hrs = r.s?.lastAt ? Math.max(0, now - r.s.lastAt) / HOUR : Infinity;
     const cool = r.s?.lastSkipAt && now - r.s.lastSkipAt < DAY ? .15 : 1; // пропустил за последние сутки — пока не надо
     const fresh = cool * (hrs === Infinity ? 1 + W.UNPLAYED_BONUS : 1 - Math.exp(-hrs / W.FRESH_TAU_HOURS));
-    return { w: base * base * fresh * flowScore(prev, r.t, taste.trans, taste.solo) * moodOf(r) * hourOf(r) * rediscover(r, hrs), fresh, aff };
+    // новое в канале первые 2 недели попадается заметно чаще, потом приоритет плавно уходит
+    const age = r.t.addedAt ? (now - r.t.addedAt) / DAY : Infinity, novel = age < W.NEW_DAYS ? 1 + W.NEW_BONUS * (1 - age / W.NEW_DAYS) : 1;
+    return { w: base * base * fresh * novel * flowScore(prev, r.t, taste.trans, taste.solo) * moodOf(r) * hourOf(r) * rediscover(r, hrs), fresh, aff };
   };
   // Настроение: только что пропущенное — реже, дослушанное — чуть чаще
   const ses = taste.session || { skipStreak: 0, skipped: {}, kept: {}, skippedGenres: {} };
