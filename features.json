@@ -1,0 +1,17 @@
+[
+  { "added": "2026-11-01", "ru": "<b>Волна</b> — бесконечная подборка из твоей музыки и похожих новых треков. Учится на том, что ты слушаешь и пропускаешь, учитывает настроение и время суток.", "en": "<b>Wave</b> — an endless mix of your music and similar new tracks. Learns from what you play and skip, adapts to your mood and the time of day." },
+  { "added": "2026-11-01", "ru": "<b>Плавные переходы</b> как у диджея, ровная громкость, эквалайзер.", "en": "<b>Smooth DJ-style crossfades</b>, even volume, equalizer." },
+  { "added": "2026-11-01", "ru": "<b>Работает без интернета</b>: скачанные треки играют всегда.", "en": "<b>Works offline</b>: downloaded tracks always play." },
+  { "added": "2026-11-09", "ru": "<b>Сам узнаёт треки по звуку</b>, исправляет кривые названия и ставит оригинальные обложки.", "en": "<b>Recognizes tracks by sound</b>, fixes messy titles and adds original covers." },
+  { "added": "2026-11-12", "ru": "<b>Артисты и альбомы</b>: дискография, популярное, похожие артисты, чего не хватает в альбоме.", "en": "<b>Artists and albums</b>: discography, popular tracks, similar artists, what’s missing from an album." },
+  { "added": "2026-11-12", "ru": "<b>Поиск любой песни</b> в интернете и кнопка «Найти», которая открывает твоего музыкального бота с названием.", "en": "<b>Search any song</b> on the web and a “Find” button that opens your music bot with the title." },
+  { "added": "2026-11-14", "ru": "<b>Новинки</b> твоих артистов, <b>подборки</b> (любимое за месяц, давно не слушал, новое в канале) и <b>итоги</b> — сколько и что ты слушал.", "en": "<b>New releases</b> from your artists, <b>mixes</b> (top of the month, haven’t heard in a while, new in channel) and <b>stats</b> — what and how much you listened to." },
+  { "added": "2026-11-16", "ru": "<b>Импорт плейлистов</b> из Spotify, Apple Music, Deezer или списком текстом.", "en": "<b>Import playlists</b> from Spotify, Apple Music, Deezer or as plain text." },
+  { "added": "2026-11-16", "ru": "<b>Тексты песен</b> синхронно с музыкой и поиск песни по строчке.", "en": "<b>Synced lyrics</b> and finding a song by a line." },
+  { "added": "2026-11-16", "ru": "<b>Радио по треку</b>: «⋯» у песни → Mix подберёт похожие.", "en": "<b>Radio from a track</b>: “⋯” on a song → Mix picks similar ones." },
+  { "added": "2026-11-16", "ru": "<b>Дубликаты</b>: находит одинаковые треки и оставляет по одной копии.", "en": "<b>Duplicates</b>: finds identical tracks and keeps one copy." },
+  { "added": "2026-11-16", "ru": "<b>Живой фон</b> в цветах обложки и новое оформление.", "en": "<b>Living background</b> in the colors of the cover and a fresh look." },
+  { "added": "2026-11-16", "ru": "<b>Английский интерфейс</b> и экран «Настройки».", "en": "<b>English interface</b> and a Settings screen." },
+  { "added": "2026-11-01", "ru": "<b>«Что играет?»</b> — узнаёт песню вокруг по микрофону.", "en": "<b>“What’s playing?”</b> — recognizes a song around you via the microphone." },
+  { "added": "2026-11-01", "ru": "Очередь, свайпы на телефоне, управление с экрана блокировки, клавиш и наушников, мини-плеер поверх окон.", "en": "Queue, swipes on the phone, controls from the lock screen, keyboard and headphones, mini player on top of windows." }
+]

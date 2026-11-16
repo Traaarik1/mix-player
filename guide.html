@@ -39,6 +39,11 @@
   summary { cursor: pointer; font-weight: 700; }
   footer { margin-top: 48px; color: var(--mist); font-size: 14px; text-align: center; }
   @media (max-width: 560px) { h1 { font-size: 25px; } .toc { columns: 1; } }
+  .new { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #1a1226; background: linear-gradient(135deg, var(--lilac), var(--amber)); vertical-align: 1px; }
+  .news ul { list-style: none; padding: 0; margin: 8px 0 0; }
+  .news li { margin: 8px 0; }
+  .news .date { color: var(--mist); font-size: 13px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+  kbd { background: var(--velvet-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font: 600 .9em system-ui; }
 </style>
 </head>
 <body>
@@ -49,6 +54,8 @@
   </header>
   <p class="lead">Mix — бесплатный музыкальный плеер. Музыка хранится в твоём собственном Telegram-канале, а Mix играет её на телефоне и компьютере: с плавными переходами, без интернета, с обложками, текстами и подборками.</p>
   <p><a class="btn" href="./">Открыть Mix</a> <a href="guide-en.html" style="margin-left:12px">Guide in English</a></p>
+
+  <div class="card news" hidden><b>Что нового</b><ul id="newsList"></ul></div>
 
   <div class="card">
     <b>Коротко, что понадобится</b>
@@ -61,7 +68,7 @@
   </div>
 
   <ol class="toc">
-    <li><a href="#install">Установить Mix</a></li>
+    <li><a href="#install">Установить Mix</a> · <a href="#mac">Mac</a></li>
     <li><a href="#channel">Создать канал с музыкой</a></li>
     <li><a href="#keys">Получить ключи Telegram</a></li>
     <li><a href="#connect">Подключить Telegram к Mix</a></li>
@@ -87,6 +94,15 @@
   <ol>
     <li>Просто открой ссылку в браузере (Chrome, Edge, Firefox). В Chrome и Edge справа в адресной строке есть кнопка «Установить» — Mix откроется отдельным окном.</li>
   </ol>
+
+  <h3 id="mac">MacBook / Mac</h3>
+  <ol>
+    <li><b>Как отдельное приложение.</b> В <b>Safari</b> (macOS Sonoma и новее): открой Mix → меню «Файл» → <b>«Добавить в Dock»</b>. В <b>Chrome</b>: значок «Установить» в правой части адресной строки (или меню ⋮ → «Сохранить и поделиться» → «Установить»). Mix появится в Dock и Launchpad и откроется своим окном.</li>
+    <li><b>Запуск при включении Mac:</b> «Системные настройки» → «Основные» → «Объекты входа» → «+» → выбери Mix в папке «Программы» (у Chrome — в «Программы Chrome»).</li>
+    <li><b>Управление без окна.</b> Пока Mix играет, он есть в <b>«Пункте управления»</b> (значок в правом верхнем углу экрана → «Сейчас играет»): пауза, перемотка, следующий трек. Работают и клавиши <kbd>F7</kbd> <kbd>F8</kbd> <kbd>F9</kbd> на клавиатуре, и кнопки на AirPods.</li>
+    <li><b>Мини-плеер поверх окон</b> — ближайшее к виджету. В Mix нажми кнопку мини-плеера внизу справа (рядом с очередью). Маленькое окно с обложкой и кнопками будет висеть поверх всех программ. Работает в Chrome и Edge; в Safari его нет.</li>
+  </ol>
+  <div class="card tip"><b>А настоящий виджет на рабочем столе?</b>macOS даёт виджеты только обычным программам из App Store, сайтам — нет. Поэтому вместо виджета: мини-плеер поверх окон и «Сейчас играет» в «Пункте управления».</div>
 
   <h2 id="channel"><span class="n">2</span>Создать канал с музыкой</h2>
   <ol>
@@ -140,7 +156,7 @@
   </ul>
 
   <h2 id="features"><span class="n">8</span>Что умеет Mix</h2>
-  <ul>
+  <ul id="featList">
     <li><b>Волна</b> — бесконечная подборка из твоей музыки и похожих новых треков, учится на том, что ты слушаешь и пропускаешь.</li>
     <li><b>Плавные переходы</b> как у диджея, ровная громкость, эквалайзер.</li>
     <li><b>Работает без интернета</b>: скачанные треки играют всегда.</li>
@@ -169,14 +185,6 @@
 
   <footer>Mix · бесплатно и без рекламы · <a href="./">открыть плеер</a></footer>
 </main>
-<script>
-  // кто пригласил: код из ссылки запоминаем, Mix засчитает приглашение, когда друг подключит Telegram
-  (function () {
-    var ref = new URLSearchParams(location.search).get('ref');
-    if (!ref || !/^[a-z0-9]{4,16}$/.test(ref)) return;
-    try { if (!localStorage.getItem('mixRef')) localStorage.setItem('mixRef', ref); } catch (e) {}
-    document.querySelectorAll('a[href="./"]').forEach(function (a) { a.href = './?ref=' + ref; });
-  })();
-</script>
+<script src="guide.js"></script>
 </body>
 </html>

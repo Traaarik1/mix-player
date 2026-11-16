@@ -39,6 +39,11 @@
   summary { cursor: pointer; font-weight: 700; }
   footer { margin-top: 48px; color: var(--mist); font-size: 14px; text-align: center; }
   @media (max-width: 560px) { h1 { font-size: 25px; } .toc { columns: 1; } }
+  .new { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #1a1226; background: linear-gradient(135deg, var(--lilac), var(--amber)); vertical-align: 1px; }
+  .news ul { list-style: none; padding: 0; margin: 8px 0 0; }
+  .news li { margin: 8px 0; }
+  .news .date { color: var(--mist); font-size: 13px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+  kbd { background: var(--velvet-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font: 600 .9em system-ui; }
 </style>
 </head>
 <body>
@@ -49,6 +54,8 @@
   </header>
   <p class="lead">Mix is a free music player. Your music lives in your own Telegram channel, and Mix plays it on your phone and computer: with smooth crossfades, offline, with covers, lyrics and smart mixes.</p>
   <p><a class="btn" href="./">Open Mix</a> <a href="guide.html" style="margin-left:12px">Инструкция на русском</a></p>
+
+  <div class="card news" hidden><b>Latest updates</b> <small style="color:var(--mist)">(from the update history, in Russian)</small><ul id="newsList"></ul></div>
 
   <div class="card">
     <b>In short, you’ll need</b>
@@ -61,7 +68,7 @@
   </div>
 
   <ol class="toc">
-    <li><a href="#install">Install Mix</a></li>
+    <li><a href="#install">Install Mix</a> · <a href="#mac">Mac</a></li>
     <li><a href="#channel">Create a music channel</a></li>
     <li><a href="#keys">Get Telegram keys</a></li>
     <li><a href="#connect">Connect Telegram to Mix</a></li>
@@ -84,6 +91,15 @@
   <h3>Computer</h3>
   <ol><li>Just open the link in a browser (Chrome, Edge, Firefox). In Chrome and Edge there’s an “Install” button in the address bar — Mix will open in its own window.</li></ol>
   <p>To switch the language: Mix → Settings → Language → English.</p>
+
+  <h3 id="mac">MacBook / Mac</h3>
+  <ol>
+    <li><b>As a separate app.</b> In <b>Safari</b> (macOS Sonoma and later): open Mix → File menu → <b>“Add to Dock”</b>. In <b>Chrome</b>: the “Install” icon on the right of the address bar (or ⋮ menu → “Cast, save and share” → “Install”). Mix appears in the Dock and Launchpad and opens in its own window.</li>
+    <li><b>Launch at login:</b> System Settings → General → Login Items → “+” → choose Mix in Applications (for Chrome — in “Chrome Apps”).</li>
+    <li><b>Control without the window.</b> While Mix plays, it shows up in <b>Control Center</b> (top-right icon → “Now Playing”): pause, seek, next track. The <kbd>F7</kbd> <kbd>F8</kbd> <kbd>F9</kbd> keys and AirPods buttons work too.</li>
+    <li><b>Mini player on top of windows</b> — the closest thing to a widget. In Mix tap the mini player button at the bottom right (next to the queue). A small window with the cover and buttons stays on top of all apps. Works in Chrome and Edge; not available in Safari.</li>
+  </ol>
+  <div class="card tip"><b>What about a real desktop widget?</b>macOS only allows widgets for regular App Store apps, not websites. So instead: the mini player on top of windows and “Now Playing” in Control Center.</div>
 
   <h2 id="channel"><span class="n">2</span>Create a music channel</h2>
   <ol>
@@ -137,7 +153,7 @@
   </ul>
 
   <h2 id="features"><span class="n">8</span>What Mix can do</h2>
-  <ul>
+  <ul id="featList">
     <li><b>Wave</b> — an endless mix of your music and similar new tracks that learns from what you play and skip.</li>
     <li><b>Smooth crossfades</b> like a DJ, even volume, equalizer.</li>
     <li><b>Works offline</b>: downloaded tracks always play.</li>
@@ -165,14 +181,6 @@
 
   <footer>Mix · free and ad-free · <a href="./">open the player</a></footer>
 </main>
-<script>
-  // кто пригласил: код из ссылки запоминаем, Mix засчитает приглашение, когда друг подключит Telegram
-  (function () {
-    var ref = new URLSearchParams(location.search).get('ref');
-    if (!ref || !/^[a-z0-9]{4,16}$/.test(ref)) return;
-    try { if (!localStorage.getItem('mixRef')) localStorage.setItem('mixRef', ref); } catch (e) {}
-    document.querySelectorAll('a[href="./"]').forEach(function (a) { a.href = './?ref=' + ref; });
-  })();
-</script>
+<script src="guide.js"></script>
 </body>
 </html>
