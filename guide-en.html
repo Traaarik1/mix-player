@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1C1530">
+<title>Getting started with Mix</title>
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root { --night: #1C1530; --velvet: #271E3D; --velvet-2: #31274B; --paper: #F4EFFA; --mist: #A69CB8; --lilac: #B69CFF; --pink: #FF8FB8; --amber: #FFC56B; --line: rgb(255 255 255 / .08); }
+  * { box-sizing: border-box; }
+  html { background: var(--night); }
+  body { margin: 0; color: var(--paper); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased;
+    background: radial-gradient(120% 60% at 80% -10%, #3a2a5c, var(--night) 60%) no-repeat, var(--night); }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 18px 80px; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  header svg { width: 52px; height: 52px; flex: none; filter: drop-shadow(0 6px 18px rgb(255 143 184 / .35)); }
+  h1 { font-size: 30px; line-height: 1.15; margin: 0; letter-spacing: -.5px; }
+  .lead { color: var(--mist); font-size: 18px; margin: 10px 0 24px; }
+  h2 { font-size: 22px; margin: 36px 0 12px; letter-spacing: -.3px; }
+  h2 .n { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; margin-right: 10px; font-size: 16px; color: #1a1226;
+    background: linear-gradient(135deg, var(--lilac), var(--pink) 55%, var(--amber)); vertical-align: 2px; }
+  h3 { font-size: 17px; margin: 22px 0 6px; }
+  p, li { color: #e6def2; }
+  ol, ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  a { color: var(--lilac); }
+  b { color: var(--paper); }
+  .card { background: var(--velvet); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; margin: 14px 0; }
+  .tip { border-left: 3px solid var(--amber); background: rgb(255 197 107 / .07); }
+  .warn { border-left: 3px solid var(--pink); background: rgb(255 143 184 / .07); }
+  .tip b:first-child, .warn b:first-child { display: block; margin-bottom: 4px; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 999px; font-weight: 700; text-decoration: none; color: #1a1226;
+    background: linear-gradient(135deg, var(--lilac), var(--pink) 55%, var(--amber)); }
+  code { background: var(--velvet-2); padding: 2px 7px; border-radius: 6px; font-size: .92em; }
+  .toc { columns: 2; column-gap: 24px; padding-left: 20px; }
+  .toc li { break-inside: avoid; }
+  details { background: var(--velvet); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; margin: 10px 0; }
+  summary { cursor: pointer; font-weight: 700; }
+  footer { margin-top: 48px; color: var(--mist); font-size: 14px; text-align: center; }
+  @media (max-width: 560px) { h1 { font-size: 25px; } .toc { columns: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B69CFF"/><stop offset=".5" stop-color="#FF8FB8"/><stop offset="1" stop-color="#FFC56B"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><g fill="#fff"><rect x="29" y="33" width="10" height="34" rx="5"/><rect x="45" y="24" width="10" height="52" rx="5"/><rect x="61" y="37" width="10" height="26" rx="5"/></g></svg>
+    <h1>Getting started with Mix</h1>
+  </header>
+  <p class="lead">Mix is a free music player. Your music lives in your own Telegram channel, and Mix plays it on your phone and computer: with smooth crossfades, offline, with covers, lyrics and smart mixes.</p>
+  <p><a class="btn" href="./">Open Mix</a> <a href="guide.html" style="margin-left:12px">Инструкция на русском</a></p>
+
+  <div class="card">
+    <b>In short, you’ll need</b>
+    <ul>
+      <li>A Telegram account.</li>
+      <li>Your own Telegram channel for music (takes a minute to create).</li>
+      <li>Two free Telegram keys — <code>api_id</code> and <code>api_hash</code> (5 minutes, once).</li>
+    </ul>
+    Everything is free, no subscriptions or ads. Your music, likes and playlists are visible only to you.
+  </div>
+
+  <ol class="toc">
+    <li><a href="#install">Install Mix</a></li>
+    <li><a href="#channel">Create a music channel</a></li>
+    <li><a href="#keys">Get Telegram keys</a></li>
+    <li><a href="#connect">Connect Telegram to Mix</a></li>
+    <li><a href="#add">Adding music</a></li>
+    <li><a href="#import">Move playlists from Spotify &amp; co</a></li>
+    <li><a href="#devices">Computer and phone together</a></li>
+    <li><a href="#features">What Mix can do</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ol>
+
+  <h2 id="install"><span class="n">1</span>Install Mix</h2>
+  <h3>iPhone</h3>
+  <ol>
+    <li>Open the <a href="./">Mix link</a> in <b>Safari</b> (Safari specifically, not inside Telegram or Chrome).</li>
+    <li>Tap “Share” (square with an up arrow) → <b>“Add to Home Screen”</b> → “Add”.</li>
+    <li>Open Mix from the Home Screen icon — that way it works like a normal app and keeps playing with the screen off.</li>
+  </ol>
+  <h3>Android</h3>
+  <ol><li>Open the link in Chrome → “⋮” menu → <b>“Install app”</b> (or “Add to Home screen”).</li></ol>
+  <h3>Computer</h3>
+  <ol><li>Just open the link in a browser (Chrome, Edge, Firefox). In Chrome and Edge there’s an “Install” button in the address bar — Mix will open in its own window.</li></ol>
+  <p>To switch the language: Mix → Settings → Language → English.</p>
+
+  <h2 id="channel"><span class="n">2</span>Create a music channel</h2>
+  <ol>
+    <li>In Telegram tap “New message” (pencil) → <b>“New Channel”</b>.</li>
+    <li>Name it anything, e.g. “My music”. Make it <b>private</b> so only you can see it.</li>
+    <li>Done. Anything you send or forward there as audio will appear in Mix.</li>
+  </ol>
+  <div class="card tip"><b>Already have a channel or chat with music?</b>That works too, even “Saved Messages”. You don’t have to create a new channel.</div>
+
+  <h2 id="keys"><span class="n">3</span>Get Telegram keys</h2>
+  <p>Mix connects to Telegram directly from your device, without third-party servers. For that, Telegram gives everyone free keys.</p>
+  <ol>
+    <li>Open <a href="https://my.telegram.org/apps" target="_blank" rel="noopener">my.telegram.org</a> and log in with your phone number. The code arrives in Telegram itself (from the official “Telegram” account).</li>
+    <li>Tap <b>“API development tools”</b>.</li>
+    <li>Fill in the form: <b>App title</b> — <code>Mix</code>, <b>Short name</b> — <code>mixplayer</code> (any Latin word), Platform — <b>Web</b>. Leave the rest. Tap “Create application”.</li>
+    <li>You’ll see <b>App api_id</b> (a number) and <b>App api_hash</b> (a long string). Paste them into Mix in the next step.</li>
+  </ol>
+  <div class="card warn"><b>Never send your keys or Telegram codes to anyone</b>Enter them only in Mix itself. Mix keeps them on your device and doesn’t send them anywhere.</div>
+  <details><summary>The site shows “ERROR” when creating the app</summary>
+    <p>It happens: turn off VPN and ad blockers, try from a computer or another browser, change the Short name to another word. Sometimes retrying a few minutes later helps.</p></details>
+
+  <h2 id="connect"><span class="n">4</span>Connect Telegram to Mix</h2>
+  <ol>
+    <li>In Mix tap <b>“Connect Telegram”</b>.</li>
+    <li>Paste api_id and api_hash.</li>
+    <li>Enter your phone number and the code Telegram sends (and your cloud password if you have one).</li>
+    <li>Pick your music channel from the list.</li>
+    <li>Mix starts loading tracks. On a computer it downloads the whole channel; on a phone — what you play.</li>
+  </ol>
+
+  <h2 id="add"><span class="n">5</span>Adding music</h2>
+  <ul>
+    <li><b>Forward to the channel</b> any audio from Telegram: chats, channels, music bots.</li>
+    <li><b>Files from your computer</b>: drag mp3/m4a/flac into the Mix window or tap “+ Files”. Mix offers to send them to the channel so they appear on your phone too.</li>
+    <li><b>“Wishlist”</b>: in the Wave, search, albums and artist pages there’s a plus — the song goes to your wishlist. The “Find” button opens your music bot in Telegram with the title already filled in. Forward the found track to your channel — Mix replaces the preview with the full version.</li>
+  </ul>
+  <div class="card tip"><b>Titles and covers</b>Mix recognizes tracks by sound, fixes messy titles, adds original covers and sorts tracks into albums and artists. For the best recognition add a free AcoustID key: Settings → AcoustID key.</div>
+
+  <h2 id="import"><span class="n">6</span>Move playlists from Spotify, Apple Music &amp; co</h2>
+  <ol>
+    <li>In Mix: menu → <b>“Import playlist”</b>.</li>
+    <li>Paste a <b>Deezer</b> playlist link (works everywhere), <b>Spotify</b> or <b>Apple Music</b> (work in Mix on a computer launched via the desktop shortcut). From any other service paste a list of songs as text: one per line, “Artist - Title”.</li>
+    <li>Mix builds a playlist from what you already have and puts the rest into “Wishlist” — easy to add with the “Find” button.</li>
+  </ol>
+  <p>Spotify and Apple Music don’t share the song files, so Mix moves the list, and you add the music to your channel.</p>
+
+  <h2 id="devices"><span class="n">7</span>Computer and phone together</h2>
+  <ul>
+    <li>Log in to Mix with the same Telegram on all devices — likes, playlists, history and fixed titles become shared. Sync works through “Saved Messages” in your Telegram (a service file <code>mix-sync.json</code> appears there, don’t delete it).</li>
+    <li>The fastest way to connect a phone: in Mix on the computer tap “Connect phone” and point the phone camera at the QR code.</li>
+  </ul>
+
+  <h2 id="features"><span class="n">8</span>What Mix can do</h2>
+  <ul>
+    <li><b>Wave</b> — an endless mix of your music and similar new tracks that learns from what you play and skip.</li>
+    <li><b>Smooth crossfades</b> like a DJ, even volume, equalizer.</li>
+    <li><b>Works offline</b>: downloaded tracks always play.</li>
+    <li><b>Artists and albums</b>: discography, popular tracks, similar artists, what’s missing from an album.</li>
+    <li><b>New releases</b> from your artists, <b>mixes</b> (top of the month, haven’t heard in a while…), <b>stats</b> — what and how much you listened to.</li>
+    <li><b>Synced lyrics</b> and finding a song by a line.</li>
+    <li><b>“What’s playing?”</b> — recognizes a song around you via the microphone.</li>
+    <li><b>Radio from a track</b>, queue, swipes on the phone, lock-screen and keyboard controls.</li>
+  </ul>
+
+  <h2 id="faq"><span class="n">9</span>FAQ</h2>
+  <details><summary>Is it safe? Who sees my music?</summary>
+    <p>Mix is a page that runs on your device. It connects directly to Telegram with your keys; everything is stored in your browser and your Telegram. Other Mix users (and the author of Mix) can’t see your data.</p></details>
+  <details><summary>How much does it cost?</summary><p>Nothing. Mix is free, so is Telegram.</p></details>
+  <details><summary>Why does a track take a while to start the first time?</summary>
+    <p>If a track isn’t downloaded yet, Mix gets it from Telegram. After the first time it stays on the device and starts instantly, even offline.</p></details>
+  <details><summary>A track was recognized wrong</summary>
+    <p>“⋯” on the track → “Edit title” (search or type manually) or “Restore original title”. After a manual fix Mix never touches that track again.</p></details>
+  <details><summary>On iPhone music stops when the screen turns off</summary>
+    <p>Open Mix from the Home Screen icon, not from Safari. Then it plays in the background and works from the lock screen.</p></details>
+  <details><summary>Everything disappeared after refreshing the page</summary>
+    <p>Wait a few seconds — Mix reloads itself if an update arrived only partly. Data is stored on the device and doesn’t go anywhere. Don’t clear site data in browser settings.</p></details>
+
+  <footer>Mix · free and ad-free · <a href="./">open the player</a></footer>
+</main>
+</body>
+</html>

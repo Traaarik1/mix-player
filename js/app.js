@@ -9,6 +9,7 @@ import { fetchSuggestions } from './similar.js';
 import { registerSW, artworkFor, keepAwake, needsIosInstallHint } from './pwa.js';
 import { openMini, canMini } from './mini.js';
 import { setupGestures, setupRowSwipe, setupEdgeBack } from './gestures.js';
+import { setLang, defaultLang } from './i18n.js';
 import { checkSound, SOUND_V } from './soundcheck.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -188,7 +189,7 @@ function viewIds() {
   else if (view.startsWith('album:')) { const k = view.slice(6); ids = order.filter(id => albumKey(tracks.get(id)) === k).sort((x, y) => (tracks.get(x).trackNo || 99) - (tracks.get(y).trackNo || 99)); return ids; }
   else if (view.startsWith('webartist:')) ids = [];
   else if (SMART[view]) ids = smartIds(view);
-  else if (view === 'news' || view === 'stats' || view === 'dups') ids = [];
+  else if (view === 'news' || view === 'stats' || view === 'dups' || view === 'settings') ids = [];
   else ids = (lib.playlists.find(p => p.id === view)?.ids || []).filter(id => tracks.has(id));
   if (query) {
     const q = query.toLowerCase();
@@ -521,7 +522,8 @@ async function paintArtistTop(box, cat, mine) {
 }
 
 // ---------- импорт плейлиста: Deezer по ссылке, Spotify через локальный сервер, любой список текстом ----------
-const SITE = 'https://traaarik1.github.io/mix-player/', GUIDE = SITE + 'guide.html';
+const SITE = 'https://traaarik1.github.io/mix-player/';
+const guideUrl = () => SITE + (settings.lang === 'en' ? 'guide-en.html' : 'guide.html');
 function parseLines(text) {
   return text.split(/\r?\n/).map(s => s.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean).map(s => {
     const m = s.split(/\s+[-–—]\s+/);
@@ -660,7 +662,7 @@ async function openInvite() {
   const d = modal(`<h2>Mix для друга</h2>
     <p>У каждого свой Mix: вход через свой Telegram, своя музыка из своего канала, свои лайки и плейлисты. Твои данные он не увидит, а ты — его.</p>
     <div class="pairqr" id="invQr" style="display:flex;justify-content:center;margin:10px 0"></div>
-    <p style="text-align:center"><a href="${GUIDE}" target="_blank" rel="noopener"><b>Инструкция для друга</b></a> <button class="chip" id="invCopy">Скопировать</button></p>
+    <p style="text-align:center"><a href="${guideUrl()}" target="_blank" rel="noopener"><b>Инструкция для друга</b></a> <button class="chip" id="invCopy">Скопировать</button></p>
     <ol><li>Открыть ссылку на телефоне в Safari → «Поделиться» → «На экран Домой».</li>
     <li>Нажать «Подключить Telegram» и войти своим номером.</li>
     <li>Ключи api_id и api_hash — бесплатно на my.telegram.org → API development tools (Mix сам покажет, как).</li>
@@ -668,11 +670,41 @@ async function openInvite() {
     <p class="morenote">Свои плейлисты и лайки на компьютере и телефоне у тебя уже общие: они синхронизируются через «Избранное» в твоём Telegram на всех устройствах, где ты вошёл.</p>
     <div class="acts"><button class="btn primary" data-x>Готово</button></div>`);
   $('[data-x]', d).onclick = closeLayer;
-  $('#invCopy', d).onclick = async () => { try { await navigator.clipboard.writeText(GUIDE); toast('Ссылка скопирована'); } catch { toast(GUIDE); } };
-  try { await loadQr(); const q = window.qrcode(0, 'M'); q.addData(GUIDE); q.make(); $('#invQr', d).innerHTML = q.createSvgTag({ cellSize: 5, margin: 2 }); } catch {}
+  $('#invCopy', d).onclick = async () => { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } };
+  try { await loadQr(); const q = window.qrcode(0, 'M'); q.addData(guideUrl()); q.make(); $('#invQr', d).innerHTML = q.createSvgTag({ cellSize: 5, margin: 2 }); } catch {}
 }
 
-const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', dups: 'Дубликаты', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
+// ---------- настройки: всё в одном месте ----------
+function renderSettings() {
+  const empty = $('#empty'), rows = $('#rows');
+  empty.hidden = true;
+  $('#viewTitle').firstChild.textContent = 'Настройки';
+  $('#viewSub').textContent = '';
+  const row = (attr, icon, name, note = '') => `<button class="morerow setrow" ${attr}><svg><use href="#i-${icon}"/></svg><span>${esc(name)}${note ? `<small>${esc(note)}</small>` : ''}</span></button>`;
+  const sw = (id, on, name, note) => `<label class="check setrow"><input type="checkbox" class="sw" id="${id}"${on ? ' checked' : ''}><span>${esc(name)}<small>${esc(note)}</small></span></label>`;
+  rows.innerHTML = `<li class="stats settings">
+    <div class="sechead"><div><b>Язык</b></div></div>
+    <div class="presets"><button class="chip${settings.lang !== 'en' ? ' on' : ''}" data-act="lang:ru">Русский</button><button class="chip${settings.lang === 'en' ? ' on' : ''}" data-act="lang:en">English</button></div>
+    <div class="sechead"><div><b>Воспроизведение</b></div></div>
+    ${row('data-act="setMix"', 'wave', 'Переход между треками', 'Плавный переход, срез тишины')}
+    ${row('data-act="setEq"', 'eq', 'Эквалайзер', 'Частоты под твои наушники')}
+    ${sw('setNorm', settings.norm !== false, 'Ровная громкость', 'Громкие треки чуть тише, тихие — громче, чтобы не крутить звук от песни к песне')}
+    ${sw('setTrim', !!settings.trim, 'Умный микс', 'Срезать тишину в начале и конце треков, чтобы на стыке не было паузы')}
+    <div class="sechead"><div><b>Распознавание</b></div></div>
+    ${row('data-act="acoust"', 'wand', 'Ключ AcoustID', 'Ключ AcoustID для распознавания по звуку')}
+    ${row('data-act="identAll"', 'wand', 'Найти все треки', 'Заново распознать всё, что не подтверждено по звуку или тобой')}
+    ${tgCfg?.chatId ? sw('writeChan', settings.writeChannel, 'Исправлять и в канале', 'Треки распознаются по звуку и по названию файла') : ''}
+    <div class="sechead"><div><b>Telegram</b></div></div>
+    <div class="tgcard moretg">${$('#tgcard').innerHTML}</div>
+    ${row('data-act="musicBot"', 'tg', 'Музыкальный бот', settings.musicBot ? '@' + settings.musicBot : 'Кнопка «Найти» откроет этого бота с названием трека')}
+    <div class="sechead"><div><b>Друзья</b></div></div>
+    ${row('data-act="invite"', 'artist', 'Mix для друга', 'Отправь другу — там всё по шагам')}
+    ${row('data-act="copyInvite"', 'copy', 'Ссылка-приглашение', guideUrl())}
+    <div class="sechead"><div><b>Память</b></div></div>
+    <div class="store">${$('#store').innerHTML}</div>
+  </li>`;
+}
+const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', dups: 'Дубликаты', settings: 'Настройки', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
   const liked = lib.likes.has(t.id);
@@ -691,16 +723,16 @@ function rowHTML(t, n) {
 
 function render() {
   creditCache = null;
-  $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish';
+  $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish' || view === 'settings';
   $('.fixbar')?.remove();
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
-  $('#sort').hidden = ['artists', 'recent', 'albums', 'news', 'stats', 'dups'].includes(view) || !!SMART[view] || view.startsWith('album:');
+  $('#sort').hidden = ['artists', 'recent', 'albums', 'news', 'stats', 'dups', 'settings'].includes(view) || !!SMART[view] || view.startsWith('album:');
   $('#sort').value = settings.sort;
   if (['fix', 'wave', 'wish', 'artists', 'albums'].includes(view)) { clearList(); $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; }
   if (view === 'fix') { renderFix(); renderNav(); return; }
   if (view === 'wave') { renderWave(); renderNav(); return; }
   if (view === 'wish') { renderWish(); renderNav(); return; }
-  if (view === 'news' || view === 'stats' || view === 'dups') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; view === 'news' ? renderNews() : view === 'dups' ? renderDups() : renderStats(); renderNav(); if (view === 'news') newsHunt(); return; }
+  if (view === 'news' || view === 'stats' || view === 'dups' || view === 'settings') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; view === 'news' ? renderNews() : view === 'dups' ? renderDups() : view === 'settings' ? renderSettings() : renderStats(); renderNav(); if (view === 'news') newsHunt(); return; }
   if (view === 'artists') { $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderArtists(); renderNav(); paintWebSearch(); return; }
   if (view === 'albums') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderAlbums(); renderNav(); paintWebSearch(); return; }
   const ids = viewIds();
@@ -811,6 +843,7 @@ function openMore() {
     ${row('data-act="import"', 'plus', 'Импорт плейлиста')}
     ${row('data-view="dups"', 'copy', 'Дубликаты')}
     ${row('data-act="invite"', 'artist', 'Mix для друга')}
+    ${row('data-view="settings"', 'eq', 'Настройки')}
     <div class="morehead">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>
     ${lib.playlists.map(p => row(`data-view="${esc(p.id)}"`, 'list', p.name, p.ids.length)).join('') || '<p class="morenote">Пока нет. Нажми плюс, чтобы создать первый.</p>'}
     <div class="tgcard moretg">${$('#tgcard').innerHTML}</div>`);
@@ -832,6 +865,7 @@ function renderNav() {
     + `<button data-act="import"><svg><use href="#i-plus"/></svg>Импорт плейлиста</button>`
     + item('dups', 'copy', 'Дубликаты')
     + `<button data-act="invite"><svg><use href="#i-artist"/></svg>Mix для друга</button>`
+    + item('settings', 'eq', 'Настройки')
     + `<div class="nav-title" style="margin-top:14px">Подборки</div>` + Object.entries(SMART).map(([k, n]) => item(k, 'list', n)).join('')
     + `<div class="nav-title" style="margin-top:14px">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>`
     + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('');
@@ -2536,6 +2570,10 @@ document.addEventListener('click', async e => {
   }
   else if (a === 'listen') openListen();
   else if (a === 'import') openImport();
+  else if (a === 'setMix') openMix();
+  else if (a === 'setEq') openEq();
+  else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
+  else if (a?.startsWith('lang:')) { settings.lang = a.slice(5); await saveSettings(); location.reload(); }
   else if (a === 'invite') openInvite();
   else if (a === 'dupsAll') { for (const g of dupGroups()) { const k = bestCopy(g); for (const t of g) if (t !== k) dropTrack(t.id, k.id); } saveLib(); saveQueue(); rebuildOrder(); render(); toast('Лишние копии убраны'); }
   else if (a === 'lyrics') { if (engine.track) setLyrics(!lyricsOn); }
@@ -2613,6 +2651,8 @@ $('#extra').addEventListener('click', e => {
 });
 $('#main').addEventListener('change', e => {
   if (e.target.id === 'writeChan') { settings.writeChannel = e.target.checked; saveSettings(); }
+  if (e.target.id === 'setNorm') { settings.norm = e.target.checked; engine.setNorm(settings.norm); saveSettings(); }
+  if (e.target.id === 'setTrim') { settings.trim = e.target.checked; engine.setTrim(settings.trim); saveSettings(); engine.refreshNext(); }
   if (e.target.id === 'waveSim') {
     settings.waveSimilar = e.target.checked; saveSettings();
     if (!settings.waveSimilar && waveMode) { queue = queueBase = queue.filter(id => id === curId || getT(id)?.source !== 'preview'); engine.refreshNext(); paintNext(); }
@@ -2788,6 +2828,8 @@ async function boot() {
   registerSW({ onUpdate: () => toast('Новая версия включится при следующем запуске') });
   try {
     Object.assign(settings, await db.get('kv', 'settings') || {});
+    if (!settings.lang) { settings.lang = defaultLang(); saveSettings(); }
+    setLang(settings.lang);
     const l = await db.get('kv', 'library');
     if (l) { lib.likes = new Set(l.likes); lib.playlists = l.playlists || []; lib.history = l.history || []; lib.listens = l.listens || []; waveFx = l.wave || {}; }
     waveSeen = await db.get('kv', 'waveSeen') || [];

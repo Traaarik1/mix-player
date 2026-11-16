@@ -1040,3 +1040,18 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
 
 /* телефон: большой плеер на весь экран, без полосы снизу */
 @media (pointer: coarse), (max-width: 900px) { .full { top: 0 !important; bottom: 0 !important; height: auto !important; min-height: 100%; } }
+
+/* ---------- настройки ---------- */
+.settings { max-width: 640px; }
+.settings .sechead { margin-top: 22px; }
+.settings .setrow { width: 100%; border-radius: 14px; padding: 12px 14px; background: rgb(255 255 255 / .04); margin: 6px 0; text-align: left; }
+.settings .setrow span { display: flex; flex-direction: column; }
+.settings .setrow small { color: var(--mist); font-weight: 500; font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.settings .presets .chip.on { background: var(--accent); color: var(--night); }
+.settings .tgcard, .settings .store { margin: 6px 0; }
+
+/* прилипшая шапка: не чёрная, а полупрозрачная в цвет фона — шары просвечивают */
+.head.stuck { background: linear-gradient(180deg, hsl(var(--h) 30% 10% / .55), hsl(var(--h) 30% 10% / .3)) !important; border-bottom-color: rgb(255 255 255 / .06); }
+@media (pointer: coarse), (max-width: 900px) { .head.stuck { background: hsl(var(--h) 28% 10% / .88) !important; } }
+.settings .setrow { display: flex; align-items: center; gap: 14px; }
+.settings .setrow > svg { width: 22px; height: 22px; flex: none; color: var(--accent); }
