@@ -908,3 +908,33 @@ body:not(.playing) .backdrop::before, body:not(.playing) .backdrop::after, body:
   .backdrop i { display: none; }
   .backdrop::before, .backdrop::after { filter: blur(60px); opacity: .32; width: 90vmax; height: 90vmax; }
 }
+
+/* ---------- цветные шары в цвета обложки: крутятся и плывут ---------- */
+:root { --c1: hsl(258 80% 60%); --c2: hsl(320 80% 58%); --c3: hsl(30 85% 58%); }
+.backdrop::before, .backdrop::after { display: none; }
+.backdrop i.on { opacity: .16; }
+.orbs { position: absolute; inset: -15%; animation: orbspin 80s linear infinite; will-change: transform; }
+.orbs span { position: absolute; width: 58vmax; height: 58vmax; border-radius: 50%; opacity: .5;
+  -webkit-mask: radial-gradient(circle, #000 0%, rgb(0 0 0 / .5) 38%, transparent 70%); mask: radial-gradient(circle, #000 0%, rgb(0 0 0 / .5) 38%, transparent 70%);
+  transition: background-color 1.8s ease; will-change: transform; }
+.orbs span:nth-child(1) { left: 0; top: 0; background-color: var(--c1); animation: orbA 27s ease-in-out infinite alternate; }
+.orbs span:nth-child(2) { right: 0; top: 20%; background-color: var(--c2); animation: orbB 33s ease-in-out infinite alternate; }
+.orbs span:nth-child(3) { left: 22%; bottom: 0; background-color: var(--c3); animation: orbC 39s ease-in-out infinite alternate; }
+@keyframes orbspin { to { transform: rotate(360deg); } }
+@keyframes orbC { from { transform: translate(0, 0) scale(.9); } to { transform: translate(18vmax, -20vmax) scale(1.2); } }
+body:not(.playing) .orbs, body:not(.playing) .orbs span { animation-play-state: paused; }
+.fullbg .orbs span { opacity: .6; }
+.fullbg::after { background: linear-gradient(180deg, rgb(0 0 0 / .1), rgb(10 6 20 / .55)); }
+@media (pointer: coarse), (max-width: 900px) { .orbs span { opacity: .45; width: 75vmax; height: 75vmax; } }
+@media (prefers-reduced-motion: reduce) { .orbs, .orbs span { animation: none; } }
+/* шары меньше и ярче — чтобы читались как отдельные цветные шары */
+.orbs span { width: 42vmax; height: 42vmax; opacity: .7;
+  -webkit-mask: radial-gradient(circle, #000 0%, rgb(0 0 0 / .75) 30%, rgb(0 0 0 / .25) 55%, transparent 70%); mask: radial-gradient(circle, #000 0%, rgb(0 0 0 / .75) 30%, rgb(0 0 0 / .25) 55%, transparent 70%); }
+.orbs span:nth-child(1) { left: 8%; top: 8%; }
+.orbs span:nth-child(2) { right: 6%; top: 30%; }
+.orbs span:nth-child(3) { left: 30%; bottom: 6%; }
+.fullbg .orbs span { opacity: .8; }
+@media (pointer: coarse), (max-width: 900px) { .orbs span { width: 60vmax; height: 60vmax; opacity: .65; } }
+/* фон только у html: если он есть и у body, body закрывает шары (они лежат под содержимым) */
+html { background-color: #1C1530; background-image: radial-gradient(120% 80% at 70% -10%, hsl(var(--h) 45% 18%), #1C1530 60%); background-attachment: fixed; }
+body { background: transparent !important; }

@@ -111,6 +111,40 @@ async function toneOf(blob) {
   return [Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360), Math.round(Math.min(100, sat / w * 110))];
 }
 const toneFor = t => t?.tone || [t ? hash(t.title + t.artist) : 258, 70];
+// Три главных цвета обложки — для цветных шаров на фоне
+async function paletteOf(blob) {
+  const bmp = await createImageBitmap(blob);
+  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, 32, 32);
+  const px = g.getImageData(0, 0, 32, 32).data, bins = [...Array(12)].map(() => ({ r: 0, g: 0, b: 0, w: 0 }));
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i] / 255, gg = px[i + 1] / 255, b = px[i + 2] / 255;
+    const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), l = (mx + mn) / 2, d = mx - mn;
+    if (d < .12 || l < .12 || l > .9) continue; // серое, чёрное и белое на шары не годится
+    const s = d / (1 - Math.abs(2 * l - 1));
+    let h = mx === r ? ((gg - b) / d) % 6 : mx === gg ? (b - r) / d + 2 : (r - gg) / d + 4;
+    h = (h * 60 + 360) % 360;
+    const bin = bins[Math.floor(h / 30)], wt = s * s;
+    bin.r += px[i] * wt; bin.g += px[i + 1] * wt; bin.b += px[i + 2] * wt; bin.w += wt;
+  }
+  const top = bins.filter(x => x.w > .5).sort((a, b) => b.w - a.w).slice(0, 3).map(x => [x.r / x.w, x.g / x.w, x.b / x.w].map(Math.round));
+  return top;
+}
+const palCache = new Map();
+function setPalette(pal, tone) {
+  const [h, s] = tone, r = document.documentElement.style;
+  // не хватило ярких цветов — добираем соседними оттенками основного
+  const fill = [`hsl(${h} ${Math.max(55, s)}% 58%)`, `hsl(${(h + 40) % 360} ${Math.max(55, s)}% 55%)`, `hsl(${(h + 320) % 360} ${Math.max(50, s)}% 50%)`];
+  // цвета обложки часто тёмные и тусклые: на фоне они пропадают, поэтому делаем их ярче и сочнее, сохраняя оттенок
+  const vivid = ([R, G, B]) => {
+    const r1 = R / 255, g1 = G / 255, b1 = B / 255, mx = Math.max(r1, g1, b1), mn = Math.min(r1, g1, b1), d = mx - mn;
+    let hh = !d ? 0 : mx === r1 ? ((g1 - b1) / d) % 6 : mx === g1 ? (b1 - r1) / d + 2 : (r1 - g1) / d + 4;
+    hh = Math.round((hh * 60 + 360) % 360);
+    const l = (mx + mn) / 2, ss = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+    return `hsl(${hh} ${Math.round(Math.max(.72, ss) * 100)}% ${Math.round(Math.min(.66, Math.max(.56, l)) * 100)}%)`;
+  };
+  for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), pal[i] ? vivid(pal[i]) : fill[i]);
+}
 // Цвет обложки меняется плавно (1,2 с): анимируем сами, без CSS @property — его Safari на iPhone ломал
 let toneNow = null, toneAnim = 0;
 function setToneVars(h, s) {
@@ -565,9 +599,9 @@ async function lyricsHunt() {
       const t = tracks.get(id);
       if (!t || t.previewOnly || lyIndex.has(id) || !t.title || (!t.verified && !t.conf)) continue;
       if (!navigator.onLine) break;
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 2500));
       let text = '';
-      try { const l = await findLyrics({ title: t.title, artist: t.artist, album: t.album, duration: t.duration || t.bounds?.d }); text = l?.plain || (l?.synced || []).map(x => x.text).join('\n'); } catch { continue; }
+      try { const l = await findLyrics({ title: t.title, artist: t.artist, album: t.album, duration: t.duration || t.bounds?.d }); text = l?.plain || (l?.synced || []).map(x => x.text).join('\n'); } catch (e) { if (/429/.test(e.message)) { setTimeout(lyricsHunt, 10 * 60e3); break; } continue; } // LRCLIB просит подождать — пауза 10 минут
       lyIndex.set(id, lyNorm(text));
       if (++lyDirty >= 20) { lyDirty = 0; db.put('kv', 'lyidx', [...lyIndex]); }
     }
@@ -1315,6 +1349,12 @@ let bdUrl = '', bdFlip = 0;
 async function paintBackdrop(t) {
   const url = !t ? '' : t.cover ? await coverUrl(t.id).catch(() => '') : (t.art || '');
   if (url === bdUrl) return;
+  // цвета шаров
+  if (t) {
+    let pal = palCache.get(url);
+    if (!pal && url) { pal = await fetch(url).then(r => r.blob()).then(paletteOf).catch(() => []); palCache.set(url, pal); }
+    if (engine.track?.id === t.id) setPalette(pal || [], toneFor(t));
+  }
   bdUrl = url; bdFlip ^= 1;
   for (const box of $$('#backdrop, #fullbg')) {
     const [x, y] = box.children, on = bdFlip ? y : x, off = bdFlip ? x : y;
