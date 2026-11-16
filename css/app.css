@@ -887,3 +887,24 @@ body:not(.playing) .fullbg i.on { animation-play-state: paused; }
   .fullbg i.on { opacity: .7; }
 }
 @media (prefers-reduced-motion: reduce) { .fullbg i.on { animation: none; } }
+
+/* ---------- фон живой и на компьютере ---------- */
+.fullbg { z-index: -2; }
+.backdrop i.on { opacity: .3; animation: drift 30s ease-in-out infinite alternate; }
+/* цветные пятна в тон обложки медленно плывут за всем интерфейсом */
+.backdrop::before, .backdrop::after { content: ""; position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; filter: blur(90px); opacity: .28; will-change: transform; }
+.backdrop::before { left: -20vmax; top: -25vmax; background: hsl(var(--h) 85% 60%); animation: orbA 34s ease-in-out infinite alternate; }
+.backdrop::after { right: -25vmax; bottom: -30vmax; background: hsl(calc(var(--h) + 60) 85% 58%); animation: orbB 42s ease-in-out infinite alternate; }
+@keyframes orbA { from { transform: translate(0, 0) scale(1); } to { transform: translate(28vmax, 18vmax) scale(1.25); } }
+@keyframes orbB { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-30vmax, -14vmax) scale(.9); } }
+body:not(.playing) .backdrop::before, body:not(.playing) .backdrop::after, body:not(.playing) .backdrop i.on { animation-play-state: paused; }
+/* перелив в большом плеере на компьютере */
+@media (pointer: fine) and (min-width: 901px) { .full::before { display: block; opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .backdrop::before, .backdrop::after, .backdrop i.on { animation: none; } }
+
+/* телефон: живой фон тоже, но лёгкий — только цветные пятна, без размытой обложки */
+@media (pointer: coarse), (max-width: 900px) {
+  .backdrop { display: block; }
+  .backdrop i { display: none; }
+  .backdrop::before, .backdrop::after { filter: blur(60px); opacity: .32; width: 90vmax; height: 90vmax; }
+}
