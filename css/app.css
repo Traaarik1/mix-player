@@ -998,3 +998,15 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
   .orbs span { opacity: .35; }
   .orbs span:nth-child(n+4) { width: 42vmax; height: 42vmax; }
 }
+
+/* ---------- телефон: лёгкий фон, иначе iOS выгружает плеер из-за нехватки видеопамяти ---------- */
+@media (pointer: coarse), (max-width: 900px) {
+  .fullbg { display: none !important; }            /* второй набор шаров и размытая обложка — главные пожиратели памяти */
+  .full { background: rgb(14 10 24 / .35) !important; } /* сквозь большой плеер видны шары главного экрана */
+  .orbs { inset: 0; animation: none; will-change: auto; }
+  .orbs span { will-change: auto; }
+  .orbs span:nth-child(n+4) { display: none; }
+  .orbs span::before { display: none; }
+  .orbs span::after { will-change: auto; }
+  .backdrop i { display: none; }
+}
