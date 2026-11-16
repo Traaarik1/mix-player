@@ -977,3 +977,9 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
   .bar { -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5); }
   .bar .pp { background: none; box-shadow: none; }
 }
+
+/* без косых краёв по углам: конический градиент давал прямые лучи, а поворот размытой обложки — видимые края */
+.full::before, .full:not(.x)::before { display: none !important; }
+.fullbg i, .backdrop i { inset: -35%; }
+@keyframes drift { from { transform: scale(1.1) translate(-2%, -2%); } to { transform: scale(1.22) translate(2%, 2%); } }
+.orbs { inset: -40%; }
