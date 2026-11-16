@@ -1030,3 +1030,10 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
   .orbs span::after { display: none; }
   body:has(#layer > *) .backdrop, body:has(#layer > *) .fullbg .orbs { display: none !important; } /* открыто окно — шары не рисуем */
 }
+
+/* вкладки внизу у самого края: запас под полоску «домой» вдвое меньше, иконки ниже */
+@media (max-width: 900px) {
+  :root { --tabs-h: calc(50px + env(safe-area-inset-bottom) * .5); }
+  .tabs { padding-bottom: calc(env(safe-area-inset-bottom) * .5); align-items: end; }
+  .tabs button { justify-content: flex-end; padding-bottom: 4px; }
+}
