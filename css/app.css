@@ -938,3 +938,42 @@ body:not(.playing) .orbs, body:not(.playing) .orbs span { animation-play-state: 
 /* фон только у html: если он есть и у body, body закрывает шары (они лежат под содержимым) */
 html { background-color: #1C1530; background-image: radial-gradient(120% 80% at 70% -10%, hsl(var(--h) 45% 18%), #1C1530 60%); background-attachment: fixed; }
 body { background: transparent !important; }
+
+/* ---------- переливающиеся шары: в каждом второй оттенок проявляется и уплывает ---------- */
+.orbs span::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+  -webkit-mask: radial-gradient(circle at 35% 35%, #000 0%, rgb(0 0 0 / .6) 30%, transparent 62%); mask: radial-gradient(circle at 35% 35%, #000 0%, rgb(0 0 0 / .6) 30%, transparent 62%);
+  transition: background-color 1.8s ease; animation: shade 11s ease-in-out infinite alternate; will-change: transform, opacity; }
+.orbs span:nth-child(1)::after { background-color: var(--c2); }
+.orbs span:nth-child(2)::after { background-color: var(--c3); animation-duration: 13s; animation-delay: -4s; }
+.orbs span:nth-child(3)::after { background-color: var(--c1); animation-duration: 15s; animation-delay: -8s; }
+.orbs span::before { content: ""; position: absolute; inset: 18%; border-radius: 50%; background: rgb(255 255 255 / .9);
+  -webkit-mask: radial-gradient(circle at 30% 30%, #000 0%, transparent 45%); mask: radial-gradient(circle at 30% 30%, #000 0%, transparent 45%);
+  opacity: .12; animation: glint 17s ease-in-out infinite alternate; }
+@keyframes shade { 0% { opacity: .15; transform: translate(-12%, 8%) scale(.85); } 50% { opacity: .85; } 100% { opacity: .35; transform: translate(14%, -10%) scale(1.1); } }
+@keyframes glint { from { transform: translate(-8%, -6%); opacity: .06; } to { transform: translate(10%, 12%); opacity: .18; } }
+body:not(.playing) .orbs span::after, body:not(.playing) .orbs span::before { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .orbs span::after, .orbs span::before { animation: none; } }
+
+/* ---------- визуал плеера ---------- */
+/* нижняя панель: стекло, сквозь которое видны шары */
+.bar { background: rgb(22 16 36 / .62) !important; -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6); border-top: 1px solid rgb(255 255 255 / .08); }
+/* прогресс: перелив цветов обложки и мягкое свечение */
+.track::before { background: rgb(255 255 255 / .12); }
+.fill, .track:hover .fill { background: linear-gradient(90deg, var(--c1), var(--c2), var(--c3)); box-shadow: 0 0 12px color-mix(in srgb, var(--c2) 60%, transparent); }
+.knob { background: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c1) 35%, transparent); }
+input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 / var(--p, 50%) 100% no-repeat, rgb(255 255 255 / .12); }
+/* кнопка «играть»: перелив и свечение */
+.pp { background: linear-gradient(135deg, #fff, color-mix(in srgb, var(--c2) 30%, #fff)); box-shadow: 0 6px 22px color-mix(in srgb, var(--c1) 45%, transparent); }
+.ib { transition: transform .15s var(--ease), color .2s, background .2s; }
+.ib:hover { transform: scale(1.08); }
+.ib.on, .ib[aria-pressed="true"] { color: var(--c2); }
+/* маленькая обложка в панели */
+.np-cover .cov, .np-cover img { border-radius: 10px; box-shadow: 0 6px 18px rgb(0 0 0 / .4); }
+/* большой плеер: обложка светится своими цветами */
+.stack img, .stack .cov { box-shadow: 0 30px 80px rgb(0 0 0 / .5), 0 0 90px -10px color-mix(in srgb, var(--c1) 55%, transparent); transition: box-shadow 1.8s ease; }
+.full .pp { box-shadow: 0 10px 34px color-mix(in srgb, var(--c1) 55%, transparent); }
+#fTitle { letter-spacing: -.5px; text-shadow: 0 2px 20px rgb(0 0 0 / .35); }
+@media (pointer: coarse), (max-width: 900px) {
+  .bar { -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5); }
+  .bar .pp { background: none; box-shadow: none; }
+}
