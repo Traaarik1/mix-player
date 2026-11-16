@@ -983,3 +983,18 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
 .fullbg i, .backdrop i { inset: -35%; }
 @keyframes drift { from { transform: scale(1.1) translate(-2%, -2%); } to { transform: scale(1.22) translate(2%, 2%); } }
 .orbs { inset: -40%; }
+
+/* ---------- спокойнее, больше шаров, движение при смене трека ---------- */
+.orbs span { opacity: .4; transition: background-color 1.8s ease, translate 2.2s cubic-bezier(.22, 1, .36, 1); }
+.fullbg .orbs span { opacity: .5; }
+.orbs span:nth-child(4) { width: 30vmax; height: 30vmax; left: 55%; top: 2%; background-color: var(--c3); animation: orbB 29s ease-in-out infinite alternate-reverse; }
+.orbs span:nth-child(5) { width: 26vmax; height: 26vmax; left: 4%; bottom: 12%; background-color: var(--c2); animation: orbA 35s ease-in-out infinite alternate-reverse; }
+.orbs span:nth-child(6) { width: 34vmax; height: 34vmax; right: 18%; bottom: 4%; background-color: var(--c1); animation: orbC 31s ease-in-out infinite alternate-reverse; }
+.orbs span:nth-child(4)::after { background-color: var(--c1); }
+.orbs span:nth-child(5)::after { background-color: var(--c3); animation-duration: 12s; }
+.orbs span:nth-child(6)::after { background-color: var(--c2); animation-duration: 14s; animation-delay: -6s; }
+.fill, .track:hover .fill { opacity: .85; box-shadow: 0 0 8px color-mix(in srgb, var(--c2) 35%, transparent); }
+@media (pointer: coarse), (max-width: 900px) {
+  .orbs span { opacity: .35; }
+  .orbs span:nth-child(n+4) { width: 42vmax; height: 42vmax; }
+}

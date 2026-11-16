@@ -141,7 +141,7 @@ function setPalette(pal, tone) {
     let hh = !d ? 0 : mx === r1 ? ((g1 - b1) / d) % 6 : mx === g1 ? (b1 - r1) / d + 2 : (r1 - g1) / d + 4;
     hh = Math.round((hh * 60 + 360) % 360);
     const l = (mx + mn) / 2, ss = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
-    return `hsl(${hh} ${Math.round(Math.max(.72, ss) * 100)}% ${Math.round(Math.min(.66, Math.max(.56, l)) * 100)}%)`;
+    return `hsl(${hh} ${Math.round(Math.max(.5, Math.min(.8, ss)) * 100)}% ${Math.round(Math.min(.52, Math.max(.42, l)) * 100)}%)`;
   };
   for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), pal[i] ? vivid(pal[i]) : fill[i]);
 }
@@ -1356,6 +1356,9 @@ async function paintBackdrop(t) {
     if (engine.track?.id === t.id) setPalette(pal || [], toneFor(t));
   }
   bdUrl = url; bdFlip ^= 1;
+  // при смене трека шары плавно разъезжаются на новые места
+  const rnd = m => ((Math.random() * 2 - 1) * m).toFixed(1);
+  for (const o of $$('.orbs span')) o.style.translate = `${rnd(16)}vmax ${rnd(12)}vmax`;
   for (const box of $$('#backdrop, #fullbg')) {
     const [x, y] = box.children, on = bdFlip ? y : x, off = bdFlip ? x : y;
     if (url) on.style.backgroundImage = `url("${url}")`;
