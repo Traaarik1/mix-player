@@ -1,11 +1,11 @@
 // Анонимные счётчики (GoatCounter, бесплатно, без cookies): сколько установок, пользователей и приглашённых.
 // Никаких имён, номеров и треков — только пути вида /install, /user, /ref/<код приглашения>.
 // GC — код счётчика с goatcounter.com (часть адреса до .goatcounter.com). Пусто — счётчики выключены.
-export const GC = '';
+export const GC = 'traaarik1';
 const base = () => `https://${GC}.goatcounter.com`;
 
 export function count(path) {
-  if (!GC || !navigator.onLine) return;
+  if (!GC || !navigator.onLine || location.hostname !== 'traaarik1.github.io') return; // локальные запуски и тесты не считаем
   const img = new Image();
   img.src = `${base()}/count?p=${encodeURIComponent(path)}&t=${encodeURIComponent(path)}&rnd=${Math.random().toString(36).slice(2)}`;
 }
