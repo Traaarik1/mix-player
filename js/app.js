@@ -111,9 +111,19 @@ async function toneOf(blob) {
   return [Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360), Math.round(Math.min(100, sat / w * 110))];
 }
 const toneFor = t => t?.tone || [t ? hash(t.title + t.artist) : 258, 70];
+// Цвет обложки меняется плавно (1,2 с): анимируем сами, без CSS @property — его Safari на iPhone ломал
+let toneNow = null, toneAnim = 0;
 function setToneVars(h, s) {
-  const r = document.documentElement.style;
-  r.setProperty('--h', h.toFixed(1)); r.setProperty('--s', s.toFixed(1) + '%');
+  const r = document.documentElement.style, put = (a, b) => { r.setProperty('--h', a.toFixed(1)); r.setProperty('--s', b.toFixed(1) + '%'); };
+  cancelAnimationFrame(toneAnim);
+  if (!toneNow || matchMedia('(prefers-reduced-motion: reduce)').matches) { toneNow = [h, s]; put(h, s); return; }
+  const [h0, s0] = toneNow, dh = ((h - h0 + 540) % 360) - 180, t0 = performance.now(), D = 1200; // по кругу цветов коротким путём
+  const step = now => {
+    const k = Math.min(1, (now - t0) / D), e = k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+    toneNow = [(h0 + dh * e + 360) % 360, s0 + (s - s0) * e]; put(...toneNow);
+    if (k < 1) toneAnim = requestAnimationFrame(step);
+  };
+  toneAnim = requestAnimationFrame(step);
 }
 const applyTone = t => setToneVars(...toneFor(t));
 function coverHTML(t, cls = 'cov') {

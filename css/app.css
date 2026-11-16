@@ -875,3 +875,15 @@ body.playing svg.logo-mark rect:nth-child(3) { animation-delay: -.6s; }
 .row { transition: background .15s ease; }
 .sechead b { letter-spacing: -.2px; }
 @media (prefers-reduced-motion: reduce) { body.playing svg.logo-mark rect { animation: none; } }
+
+/* ---------- фон плеера переливается; на телефоне легче ---------- */
+.fullbg i.on { animation: drift 26s ease-in-out infinite alternate; will-change: transform; }
+@keyframes drift { from { transform: scale(1.15) translate(-3%, -2%) rotate(0deg); } to { transform: scale(1.32) translate(3%, 3%) rotate(8deg); } }
+body:not(.playing) .fullbg i.on { animation-play-state: paused; }
+.backdrop i, .fullbg i { will-change: opacity; }
+@media (pointer: coarse), (max-width: 900px) {
+  .backdrop { display: none; } /* размытие на весь экран тяжело для телефона: от него дёргались анимации */
+  .fullbg i { filter: blur(36px) saturate(1.5); inset: -12%; }
+  .fullbg i.on { opacity: .7; }
+}
+@media (prefers-reduced-motion: reduce) { .fullbg i.on { animation: none; } }
