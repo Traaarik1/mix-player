@@ -31,7 +31,7 @@ export async function searchItunes(term, limit = 10, country = 'RU') {
 
 // Deezer: бесплатно, без ключа, много русской музыки. Браузеру он отвечает только через JSONP.
 let dzSeq = 0, dzLast = 0;
-function jsonp(url) {
+export function jsonp(url) {
   if (typeof document === 'undefined') return Promise.resolve(null);
   return new Promise(res => {
     const cb = '__dz' + (++dzSeq), s = document.createElement('script');

@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog, artistTop, artistRelated } from './covers.js';
+import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog, artistTop, artistRelated, jsonp } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
@@ -144,7 +144,7 @@ function viewIds() {
   else if (view.startsWith('album:')) { const k = view.slice(6); ids = order.filter(id => albumKey(tracks.get(id)) === k).sort((x, y) => (tracks.get(x).trackNo || 99) - (tracks.get(y).trackNo || 99)); return ids; }
   else if (view.startsWith('webartist:')) ids = [];
   else if (SMART[view]) ids = smartIds(view);
-  else if (view === 'news' || view === 'stats') ids = [];
+  else if (view === 'news' || view === 'stats' || view === 'dups') ids = [];
   else ids = (lib.playlists.find(p => p.id === view)?.ids || []).filter(id => tracks.has(id));
   if (query) {
     const q = query.toLowerCase();
@@ -303,6 +303,8 @@ function paintWebSearch() {
     $('#extra').innerHTML = '<div class="sechead"><div><b>В интернете</b><small>Ищу…</small></div></div>';
     const [it, dz, ar] = await Promise.all([searchItunes(q, 15, 'RU').catch(() => []), searchDeezer(q, 15).catch(() => []), searchArtists(q).catch(() => [])]);
     if (webQ !== q || query !== q) return;
+    const ly = lyricHits(q);
+    const lyHTML = ly.length ? `<div class="sechead"><div><b>Найдено по тексту песни</b><small>Среди твоих треков</small></div></div><ol class="toplist">${ly.map(x => { const t = tracks.get(x.id); return `<li data-stat-play="${esc(t.id)}">${coverHTML(t)}<span class="ttl"><span class="t">${esc(t.title)} — ${esc(t.artist || '')}</span><span class="a">…${esc(x.snip)}…</span></span></li>`; }).join('')}</ol>` : '';
     const groups = artistGroups(), qk = normKey(q);
     const arts = ar.filter(x => normKey(x.name).includes(qk) || qk.includes(normKey(x.name))).slice(0, 6);
     const artHTML = arts.length ? `<div class="sechead"><div><b>Авторы</b><small>Нажми — откроется вся дискография</small></div></div><ul class="rows"><li class="artists">${arts.map(x => {
@@ -316,9 +318,10 @@ function paintWebSearch() {
     const qw = q.split(/s+/).map(normKey).filter(Boolean);
     const fit = s => { const w = (normKey(s.artist) + ' ' + normKey(s.title)); return qw.filter(x => w.includes(x)).length; };
     list.sort((x, y) => fit(y) - fit(x)); list.splice(20);
-    if (!list.length) { $('#extra').innerHTML = artHTML || '<div class="sechead"><div><b>В интернете</b><small>Ничего не нашлось</small></div></div>'; return; }
+    if (!list.length) { $('#extra').innerHTML = (lyHTML + artHTML) || '<div class="sechead"><div><b>В интернете</b><small>Ничего не нашлось</small></div></div>'; return; }
     paintWebList('Найдено в интернете', 'Плюс — в «Хочу скачать», «Найти» — открыть бота в Telegram с этим названием', list);
     if (artHTML) $('#extra').insertAdjacentHTML('afterbegin', artHTML);
+    if (lyHTML) $('#extra').insertAdjacentHTML('afterbegin', lyHTML);
   }, 500);
 }
 let albumMissing = [];
@@ -473,7 +476,159 @@ async function paintArtistTop(box, cat, mine) {
   last ? last.insertAdjacentHTML('beforebegin', relHTML) : box.insertAdjacentHTML('beforeend', relHTML);
 }
 
-const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
+// ---------- импорт плейлиста: Deezer по ссылке, Spotify через локальный сервер, любой список текстом ----------
+const SITE = 'https://traaarik1.github.io/mix-player/';
+function parseLines(text) {
+  return text.split(/\r?\n/).map(s => s.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean).map(s => {
+    const m = s.split(/\s+[-–—]\s+/);
+    return m.length > 1 ? { artist: m[0].trim(), title: m.slice(1).join(' - ').trim() } : { artist: '', title: s };
+  }).filter(x => x.title && x.title.length < 150);
+}
+async function readPlaylist(src) {
+  src = src.trim();
+  const dz = src.match(/deezer\.com\/(?:\w{2}\/)?(playlist|album)\/(\d+)/);
+  if (dz) {
+    const j = await jsonp(`https://api.deezer.com/${dz[1]}/${dz[2]}?x=1`);
+    const more = dz[1] === 'playlist' ? await jsonp(`https://api.deezer.com/playlist/${dz[2]}/tracks?limit=1000`) : null;
+    const list = (more?.data || j?.tracks?.data || []).map(x => ({ artist: x.artist?.name || '', title: x.title, album: x.album?.title || j?.title || '', art: x.album?.cover_xl || j?.cover_xl || null, preview: x.preview || null }));
+    return { name: j?.title || 'Из Deezer', list };
+  }
+  const sp = src.match(/open\.spotify\.com\/(?:intl-\w+\/)?(playlist|album)\/([A-Za-z0-9]+)/);
+  if (sp) {
+    if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) throw new Error('Spotify-ссылки читаются только в Mix на компьютере (через ярлык Mix на рабочем столе). На телефоне вставь список песен текстом.');
+    const r = await fetch('/proxy?u=' + encodeURIComponent(`https://open.spotify.com/embed/${sp[1]}/${sp[2]}`));
+    if (!r.ok) throw new Error('Spotify не отдал плейлист. Обнови ярлык Mix: перезапусти его');
+    const html = await r.text();
+    const pairs = [...html.matchAll(/"title":"((?:[^"\\]|\\.)*)","subtitle":"((?:[^"\\]|\\.)*)"/g)].map(m => ({ title: JSON.parse('"' + m[1] + '"'), artist: JSON.parse('"' + m[2] + '"') }));
+    const [head, ...list] = pairs;
+    return { name: head?.title || 'Из Spotify', list: list.map(x => ({ ...x, artist: x.artist.split(',')[0].trim() })) };
+  }
+  const am = src.match(/music\.apple\.com\/[a-z]{2}\/(?:playlist|album)\/[^?#\s]+/);
+  if (am) {
+    if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) throw new Error('Ссылки Apple Music читаются только в Mix на компьютере (через ярлык Mix). На телефоне вставь список песен текстом.');
+    const r = await fetch('/proxy?u=' + encodeURIComponent('https://' + am[0]));
+    if (!r.ok) throw new Error('Apple Music не отдал плейлист. Перезапусти ярлык Mix');
+    const m = (await r.text()).match(/<script type="application\/json" id="serialized-server-data">([\s\S]*?)<\/script>/);
+    const list = [];
+    const walk = o => { if (!o || typeof o !== 'object') return; if (typeof o.title === 'string' && typeof o.artistName === 'string') { list.push({ artist: o.artistName.split(/,| & /)[0].trim(), title: o.title }); return; } for (const k in o) walk(o[k]); };
+    try { walk(JSON.parse(m[1])); } catch {}
+    return { name: 'Из Apple Music', list };
+  }
+  if (/^https?:\/\//.test(src)) throw new Error('Такую ссылку Mix пока не читает. Работают Deezer, Spotify и Apple Music; из другого сервиса скопируй список песен и вставь текстом');
+  return { name: 'Импорт', list: parseLines(src) };
+}
+function openImport() {
+  const d = modal(`<h2>Импорт плейлиста</h2><p>Вставь ссылку на плейлист <b>Deezer</b> или <b>Spotify</b> или просто список песен, по одной в строке: «Артист - Название». Что у тебя есть, попадёт в новый плейлист, остальное — в «Хочу скачать».</p>
+    <form><textarea class="inp" name="src" rows="6" placeholder="https://open.spotify.com/playlist/...&#10;или&#10;kizaru - Дежавю&#10;Скриптонит - Положение" required></textarea>
+    <div class="acts"><button type="button" class="btn" data-x>Отмена</button><button class="btn primary">Разобрать</button></div></form><div id="impRes"></div>`);
+  $('[data-x]', d).onclick = closeLayer;
+  $('form', d).onsubmit = async e => {
+    e.preventDefault();
+    const box = $('#impRes', d); box.innerHTML = '<p>Читаю…</p>';
+    let pl;
+    try { pl = await readPlaylist(e.target.src.value); } catch (err) { box.innerHTML = `<p style="color:#ff9fb0">${esc(err.message)}</p>`; return; }
+    if (!pl.list.length) { box.innerHTML = '<p>Не нашёл ни одной песни.</p>'; return; }
+    const mine = [...tracks.values()].filter(t => !t.previewOnly);
+    const found = [], missing = [];
+    for (const s of pl.list) { const t = mine.find(x => sameTrack(s, x)); t ? found.push(t.id) : missing.push(s); }
+    box.innerHTML = `<p><b>${esc(pl.name)}</b>: ${pl.list.length} песен. У тебя есть <b>${found.length}</b>, нет <b>${missing.length}</b>.</p>
+      <label class="check"><input type="checkbox" class="sw" id="impWish" checked><span>Недостающие — в «Хочу скачать»</span></label>
+      <div class="acts"><button class="btn primary" id="impGo">Создать плейлист</button></div>`;
+    $('#impGo', d).onclick = () => {
+      const p = { id: 'pl' + Date.now().toString(36), name: pl.name, ids: [...new Set(found)] };
+      lib.playlists.push(p);
+      if ($('#impWish', d).checked) for (const s of missing) addWish(s);
+      saveLib(); closeLayer(); view = p.id; render();
+      toast(`Плейлист «${pl.name}»: ${tracksWord(p.ids.length)}` + (missing.length && $('#impWish', d)?.checked !== false ? `, в «Хочу скачать» — ${missing.length}` : ''));
+    };
+  };
+}
+
+// ---------- поиск по строчке из песни: тексты своих треков хранятся у себя ----------
+let lyIndex = new Map(), lyDirty = 0, lyRunning = false;
+const lyNorm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+async function lyricsHunt() {
+  if (lyRunning || !navigator.onLine) return;
+  lyRunning = true;
+  try {
+    for (const id of order) {
+      const t = tracks.get(id);
+      if (!t || t.previewOnly || lyIndex.has(id) || !t.title || (!t.verified && !t.conf)) continue;
+      if (!navigator.onLine) break;
+      await new Promise(r => setTimeout(r, 600));
+      let text = '';
+      try { const l = await findLyrics({ title: t.title, artist: t.artist, album: t.album, duration: t.duration || t.bounds?.d }); text = l?.plain || (l?.synced || []).map(x => x.text).join('\n'); } catch { continue; }
+      lyIndex.set(id, lyNorm(text));
+      if (++lyDirty >= 20) { lyDirty = 0; db.put('kv', 'lyidx', [...lyIndex]); }
+    }
+  } finally { lyRunning = false; if (lyDirty) { lyDirty = 0; db.put('kv', 'lyidx', [...lyIndex]); } }
+}
+function lyricHits(q) {
+  const n = lyNorm(q); if (n.length < 6 || n.split(' ').length < 2) return [];
+  const out = [];
+  for (const [id, text] of lyIndex) { const i = text && text.indexOf(n); if (i >= 0 && tracks.has(id)) out.push({ id, snip: text.slice(Math.max(0, i - 30), i + n.length + 40) }); if (out.length >= 10) break; }
+  return out;
+}
+
+// ---------- дубликаты: один и тот же трек несколько раз ----------
+function dupGroups() {
+  const m = new Map();
+  for (const id of order) {
+    const t = tracks.get(id); if (!t || t.previewOnly) continue;
+    const k = (artistParts(t.artist)[0]?.key || '') + '|' + normKey(t.title);
+    (m.get(k) || m.set(k, []).get(k)).push(t);
+  }
+  const out = [];
+  for (const list of m.values()) {
+    if (list.length < 2) continue;
+    // разные версии (ремикс, live) обычно длиннее или короче — такие не считаем дублями
+    const base = list[0].duration || list[0].bounds?.d || 0;
+    const same = list.filter(t => { const d = t.duration || t.bounds?.d || 0; return !base || !d || Math.abs(d - base) <= 4; });
+    if (same.length > 1) out.push(same);
+  }
+  return out;
+}
+function dropTrack(id, keepId) {
+  const t = tracks.get(id); if (!t) return;
+  db.del('blobs', id); db.del('covers', id); db.del('tracks', id);
+  if (lib.likes.delete(id) && keepId) lib.likes.add(keepId);
+  for (const p of lib.playlists) p.ids = [...new Set(p.ids.map(q => q === id ? keepId : q).filter(Boolean))];
+  tracks.delete(id);
+  queue = queue.filter(q => q !== id); queueBase = queueBase.filter(q => q !== id); userQueue = userQueue.filter(q => q !== id);
+  if (t.source === 'tg') { tgCfg.skip = [...(tgCfg.skip || []), id]; saveTg(); }
+}
+function renderDups() {
+  const groups = dupGroups(), empty = $('#empty'), rows = $('#rows');
+  $('#viewTitle').firstChild.textContent = 'Дубликаты';
+  $('#viewSub').textContent = groups.length ? `${groups.length} повторов` : '';
+  empty.hidden = !!groups.length;
+  if (!groups.length) empty.innerHTML = '<h2>Дубликатов нет</h2><p>Каждый трек в библиотеке встречается один раз.</p>';
+  rows.innerHTML = groups.length ? `<li class="stats"><p class="morenote">Оставь одну копию, остальные уберутся из Mix. Лайки и плейлисты перейдут на оставленную. Посты в канале не трогаются.</p>
+    <div class="acts"><button class="btn primary" data-act="dupsAll">Оставить по одной во всех (${groups.length})</button></div>
+    ${groups.map((g, gi) => `<div class="sechead"><div><b>${esc(g[0].artist || '')} — ${esc(g[0].title)}</b><small>${g.length} копии</small></div></div><ol class="toplist">${g.map(t => `<li><span class="num"></span>${coverHTML(t)}<span class="ttl"><span class="t">${esc(t.title)}</span><span class="a">${esc(t.fileName || '')} · ${fmt(t.duration || t.bounds?.d || 0)}${t.downloaded ? ' · скачан' : ''}</span></span><button class="btn" data-keep="${esc(t.id)}" data-g="${gi}">Оставить этот</button></li>`).join('')}</ol>`).join('')}</li>` : '';
+  hydrateIn(rows);
+}
+// лучшая копия: скачана, подтверждена, с обложкой
+const bestCopy = g => g.slice().sort((a, b) => (b.downloaded - a.downloaded) || ((b.conf ? 1 : 0) - (a.conf ? 1 : 0)) || ((b.cover ? 1 : 0) - (a.cover ? 1 : 0)))[0];
+
+// ---------- пригласить друга: у каждого свой Telegram, свой канал и свои плейлисты ----------
+async function openInvite() {
+  const d = modal(`<h2>Mix для друга</h2>
+    <p>У каждого свой Mix: вход через свой Telegram, своя музыка из своего канала, свои лайки и плейлисты. Твои данные он не увидит, а ты — его.</p>
+    <div class="pairqr" id="invQr" style="display:flex;justify-content:center;margin:10px 0"></div>
+    <p style="text-align:center"><b>${SITE}</b> <button class="chip" id="invCopy">Скопировать</button></p>
+    <ol><li>Открыть ссылку на телефоне в Safari → «Поделиться» → «На экран Домой».</li>
+    <li>Нажать «Подключить Telegram» и войти своим номером.</li>
+    <li>Ключи api_id и api_hash — бесплатно на my.telegram.org → API development tools (Mix сам покажет, как).</li>
+    <li>Выбрать свой канал с музыкой.</li></ol>
+    <p class="morenote">Свои плейлисты и лайки на компьютере и телефоне у тебя уже общие: они синхронизируются через «Избранное» в твоём Telegram на всех устройствах, где ты вошёл.</p>
+    <div class="acts"><button class="btn primary" data-x>Готово</button></div>`);
+  $('[data-x]', d).onclick = closeLayer;
+  $('#invCopy', d).onclick = async () => { try { await navigator.clipboard.writeText(SITE); toast('Ссылка скопирована'); } catch { toast(SITE); } };
+  try { await loadQr(); const q = window.qrcode(0, 'M'); q.addData(SITE); q.make(); $('#invQr', d).innerHTML = q.createSvgTag({ cellSize: 5, margin: 2 }); } catch {}
+}
+
+const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', dups: 'Дубликаты', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
   const liked = lib.likes.has(t.id);
@@ -495,13 +650,13 @@ function render() {
   $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish';
   $('.fixbar')?.remove();
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
-  $('#sort').hidden = ['artists', 'recent', 'albums', 'news', 'stats'].includes(view) || !!SMART[view] || view.startsWith('album:');
+  $('#sort').hidden = ['artists', 'recent', 'albums', 'news', 'stats', 'dups'].includes(view) || !!SMART[view] || view.startsWith('album:');
   $('#sort').value = settings.sort;
   if (['fix', 'wave', 'wish', 'artists', 'albums'].includes(view)) { clearList(); $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; }
   if (view === 'fix') { renderFix(); renderNav(); return; }
   if (view === 'wave') { renderWave(); renderNav(); return; }
   if (view === 'wish') { renderWish(); renderNav(); return; }
-  if (view === 'news' || view === 'stats') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; view === 'news' ? renderNews() : renderStats(); renderNav(); if (view === 'news') newsHunt(); return; }
+  if (view === 'news' || view === 'stats' || view === 'dups') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; view === 'news' ? renderNews() : view === 'dups' ? renderDups() : renderStats(); renderNav(); if (view === 'news') newsHunt(); return; }
   if (view === 'artists') { $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderArtists(); renderNav(); paintWebSearch(); return; }
   if (view === 'albums') { clearList(); $('#playAll').hidden = true; $('#extra').innerHTML = ''; renderAlbums(); renderNav(); paintWebSearch(); return; }
   const ids = viewIds();
@@ -609,6 +764,9 @@ function openMore() {
     ${row('data-view="wish"', 'wish', 'Хочу скачать', wishes().length)}
     ${row('data-view="fix"', 'wand', 'Проверка названий', fixCount())}
     ${row('data-act="listen"', 'mic', 'Что играет?')}
+    ${row('data-act="import"', 'plus', 'Импорт плейлиста')}
+    ${row('data-view="dups"', 'copy', 'Дубликаты')}
+    ${row('data-act="invite"', 'artist', 'Mix для друга')}
     <div class="morehead">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>
     ${lib.playlists.map(p => row(`data-view="${esc(p.id)}"`, 'list', p.name, p.ids.length)).join('') || '<p class="morenote">Пока нет. Нажми плюс, чтобы создать первый.</p>'}
     <div class="tgcard moretg">${$('#tgcard').innerHTML}</div>`);
@@ -627,6 +785,9 @@ function renderNav() {
     + item('wish', 'wish', 'Хочу скачать', wishes().length || null)
     + item('fix', 'wand', 'Проверка названий', fixCount() || null)
     + `<button data-act="listen"><svg><use href="#i-mic"/></svg>Что играет?</button>`
+    + `<button data-act="import"><svg><use href="#i-plus"/></svg>Импорт плейлиста</button>`
+    + item('dups', 'copy', 'Дубликаты')
+    + `<button data-act="invite"><svg><use href="#i-artist"/></svg>Mix для друга</button>`
     + `<div class="nav-title" style="margin-top:14px">Подборки</div>` + Object.entries(SMART).map(([k, n]) => item(k, 'list', n)).join('')
     + `<div class="nav-title" style="margin-top:14px">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>`
     + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('');
@@ -2322,6 +2483,9 @@ document.addEventListener('click', async e => {
     sug.items = []; loadSuggestions();
   }
   else if (a === 'listen') openListen();
+  else if (a === 'import') openImport();
+  else if (a === 'invite') openInvite();
+  else if (a === 'dupsAll') { for (const g of dupGroups()) { const k = bestCopy(g); for (const t of g) if (t !== k) dropTrack(t.id, k.id); } saveLib(); saveQueue(); rebuildOrder(); render(); toast('Лишние копии убраны'); }
   else if (a === 'lyrics') { if (engine.track) setLyrics(!lyricsOn); }
   else if (a === 'acoust') openAcoust();
   else if (a === 'identAll') {
@@ -2380,11 +2544,15 @@ $('#disc').addEventListener('click', e => {
   else if (s.preview) { waveMode = false; const v = previewTrack(s); queue = queueBase = [v.id]; playId(v.id); }
 });
 $('#rows').addEventListener('click', e => {
+  const k = e.target.closest('[data-keep]');
+  if (k) { const g = dupGroups()[+k.dataset.g]; if (g) { for (const t of g) if (t.id !== k.dataset.keep) dropTrack(t.id, k.dataset.keep); saveLib(); saveQueue(); rebuildOrder(); render(); toast('Оставлена одна копия'); } return; }
   const p = e.target.closest('[data-stat-play]'); if (!p) return;
   const ids = [...$('#rows').querySelectorAll('[data-stat-play]')].map(x => x.dataset.statPlay);
   waveMode = false; queue = queueBase = ids; playId(p.dataset.statPlay);
 });
 $('#extra').addEventListener('click', e => {
+  const sp = e.target.closest('[data-stat-play]');
+  if (sp) { waveMode = false; queue = queueBase = [...$('#extra').querySelectorAll('[data-stat-play]')].map(x => x.dataset.statPlay); playId(sp.dataset.statPlay); return; }
   const b = e.target.closest('[data-miss]'), li = e.target.closest('[data-mi]');
   const sng = li && albumMissing[+li.dataset.mi]; if (!sng) return;
   if (!b) { if (sng.preview) { waveMode = false; const v = previewTrack(sng); queue = queueBase = [v.id]; playId(v.id); } else findInTelegram(sng); return; }
@@ -2552,6 +2720,8 @@ setInterval(frame, 250);
 setInterval(() => soundHunt(), 5 * 60e3);
 setTimeout(async () => { news = await db.get('kv', 'news').catch(() => null) || news; renderNav(); setTimeout(newsHunt, 20000); }, 1500);
 setInterval(() => newsHunt(), 3 * 36e5);
+setTimeout(async () => { const l = await db.get('kv', 'lyidx').catch(() => null); if (l) lyIndex = new Map(l); setTimeout(lyricsHunt, 30000); }, 2000);
+setInterval(() => lyricsHunt(), 30 * 60e3);
 function goBack() {
   const p = navStack.pop(); if (!p) return false;
   if ($('#full').classList.contains('open')) closeFull();

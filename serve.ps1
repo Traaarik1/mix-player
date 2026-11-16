@@ -19,6 +19,20 @@ if (-not $NoOpen) { Start-Process "http://localhost:$Port" }
 while ($listener.IsListening) {
   $ctx = $listener.GetContext()
   $path = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
+  # Импорт плейлиста из Spotify: браузер сам страницу Spotify прочитать не может, сервер Mix пересылает её
+  if ($path -eq 'proxy') {
+    $res = $ctx.Response
+    $u = $ctx.Request.QueryString['u']
+    if ($u -match '^https://open\.spotify\.com/embed/(playlist|album)/[A-Za-z0-9]+$' -or $u -match '^https://music\.apple\.com/[a-z]{2}/(playlist|album)/[^?#]+$') {
+      try {
+        $page = Invoke-WebRequest -Uri $u -UseBasicParsing -UserAgent 'Mozilla/5.0' -TimeoutSec 20
+        $bytes = [Text.Encoding]::UTF8.GetBytes($page.Content)
+        $res.ContentType = 'text/html; charset=utf-8'
+        $res.OutputStream.Write($bytes, 0, $bytes.Length)
+      } catch { $res.StatusCode = 502 }
+    } else { $res.StatusCode = 403 }
+    $res.Close(); continue
+  }
   if ($path -eq '') { $path = 'index.html' }
   $file = [IO.Path]::GetFullPath((Join-Path $root $path))
   $res = $ctx.Response
