@@ -477,7 +477,7 @@ async function paintArtistTop(box, cat, mine) {
 }
 
 // ---------- импорт плейлиста: Deezer по ссылке, Spotify через локальный сервер, любой список текстом ----------
-const SITE = 'https://traaarik1.github.io/mix-player/';
+const SITE = 'https://traaarik1.github.io/mix-player/', GUIDE = SITE + 'guide.html';
 function parseLines(text) {
   return text.split(/\r?\n/).map(s => s.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean).map(s => {
     const m = s.split(/\s+[-–—]\s+/);
@@ -616,7 +616,7 @@ async function openInvite() {
   const d = modal(`<h2>Mix для друга</h2>
     <p>У каждого свой Mix: вход через свой Telegram, своя музыка из своего канала, свои лайки и плейлисты. Твои данные он не увидит, а ты — его.</p>
     <div class="pairqr" id="invQr" style="display:flex;justify-content:center;margin:10px 0"></div>
-    <p style="text-align:center"><b>${SITE}</b> <button class="chip" id="invCopy">Скопировать</button></p>
+    <p style="text-align:center"><a href="${GUIDE}" target="_blank" rel="noopener"><b>Инструкция для друга</b></a> <button class="chip" id="invCopy">Скопировать</button></p>
     <ol><li>Открыть ссылку на телефоне в Safari → «Поделиться» → «На экран Домой».</li>
     <li>Нажать «Подключить Telegram» и войти своим номером.</li>
     <li>Ключи api_id и api_hash — бесплатно на my.telegram.org → API development tools (Mix сам покажет, как).</li>
@@ -624,8 +624,8 @@ async function openInvite() {
     <p class="morenote">Свои плейлисты и лайки на компьютере и телефоне у тебя уже общие: они синхронизируются через «Избранное» в твоём Telegram на всех устройствах, где ты вошёл.</p>
     <div class="acts"><button class="btn primary" data-x>Готово</button></div>`);
   $('[data-x]', d).onclick = closeLayer;
-  $('#invCopy', d).onclick = async () => { try { await navigator.clipboard.writeText(SITE); toast('Ссылка скопирована'); } catch { toast(SITE); } };
-  try { await loadQr(); const q = window.qrcode(0, 'M'); q.addData(SITE); q.make(); $('#invQr', d).innerHTML = q.createSvgTag({ cellSize: 5, margin: 2 }); } catch {}
+  $('#invCopy', d).onclick = async () => { try { await navigator.clipboard.writeText(GUIDE); toast('Ссылка скопирована'); } catch { toast(GUIDE); } };
+  try { await loadQr(); const q = window.qrcode(0, 'M'); q.addData(GUIDE); q.make(); $('#invQr', d).innerHTML = q.createSvgTag({ cellSize: 5, margin: 2 }); } catch {}
 }
 
 const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', dups: 'Дубликаты', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
