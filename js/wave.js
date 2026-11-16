@@ -18,6 +18,9 @@ export const WAVE = {
   FLOW_GENRE_SAME: 1.6, FLOW_GENRE_OTHER: .75, FLOW_ERA_NEAR: 1.15, FLOW_ERA_FAR: .85, FLOW_TEMPO_NEAR: 1.25, FLOW_TEMPO_FAR: .85,
   FLOW_LOUD_NEAR: 1.1, FLOW_LOUD_FAR: .85, FLOW_HABIT: .6, FLOW_MIN: .4, HABIT_GAP_MIN: 30,
   W_JITTER: .15, KNOWN_NOVELTY: .3, ARTIST_DROP: -.5, MAX_SHARE_PER_SEED: .4, COLLAB_SIM: .7,
+  // настроение сессии, время суток, забытые любимые
+  SESSION_MIN: 60, SESSION_SKIP: .35, SESSION_KEEP: 1.25, SESSION_GENRE_SKIP: .6, SESSION_EXPLORE: .1,
+  HOUR_BOOST: .35, REDISCOVER_DAYS: 30, REDISCOVER: 1.35,
 };
 
 const DAY = 864e5, HOUR = 36e5;
@@ -201,7 +204,23 @@ export function buildTaste({ listens = [], likes = [], dismissals = [], library 
   for (const [k, n] of Object.entries(counts)) artists[k].weight += prior * Math.log2(1 + n);
   for (const a of Object.values(artists)) a.affinity = affinity(a.weight);
 
-  return { artists, tracks, banned, solo, trans, listenCount: listens.length, cold: listens.length < W.COLD_LISTENS, now };
+  // Время суток: кого слушаешь в какие часы (утром одно, ночью другое)
+  const hours = {};
+  for (const e of listens) {
+    if (!e.at || listenSignal(e) === W.SKIP_SIGNAL) continue;
+    const k = creditsOf(byId.get(e.id)?.artist ?? e.artist, solo)[0]?.key; if (!k) continue;
+    (hours[k] ??= new Array(24).fill(0))[new Date(e.at).getHours()] += decay(e.at, now, W.HALF_LIFE_DAYS * 2);
+  }
+  // Настроение сессии: что за последний час пропущено, а что дослушано
+  const session = { skipStreak: 0, skipped: {}, kept: {}, skippedGenres: {} };
+  const recentL = ordered.filter(e => now - e.at < W.SESSION_MIN * 60000);
+  for (const e of recentL) {
+    const t = byId.get(e.id), k = creditsOf(t?.artist ?? e.artist, solo)[0]?.key, sig = listenSignal(e, t?.duration || t?.bounds?.d || e.duration);
+    if (sig === W.SKIP_SIGNAL) { session.skipStreak++; if (k) session.skipped[k] = (session.skipped[k] || 0) + 1; if (t?.genre) session.skippedGenres[t.genre] = (session.skippedGenres[t.genre] || 0) + 1; }
+    else { session.skipStreak = 0; if (k && sig >= W.COMPLETE_FRACTION) session.kept[k] = 1; }
+  }
+
+  return { artists, tracks, banned, solo, trans, hours, session, listenCount: listens.length, cold: listens.length < W.COLD_LISTENS, now };
 }
 
 // Насколько трек b подходит сразу после a. 1 — нейтрально; неизвестные данные ничего не меняют.
@@ -294,9 +313,28 @@ export function nextWave(library, taste, { count = 10, history = [], after = nul
     const hrs = r.s?.lastAt ? Math.max(0, now - r.s.lastAt) / HOUR : Infinity;
     const cool = r.s?.lastSkipAt && now - r.s.lastSkipAt < DAY ? .15 : 1; // пропустил за последние сутки — пока не надо
     const fresh = cool * (hrs === Infinity ? 1 + W.UNPLAYED_BONUS : 1 - Math.exp(-hrs / W.FRESH_TAU_HOURS));
-    return { w: base * base * fresh * flowScore(prev, r.t, taste.trans, taste.solo), fresh, aff };
+    return { w: base * base * fresh * flowScore(prev, r.t, taste.trans, taste.solo) * moodOf(r) * hourOf(r) * rediscover(r, hrs), fresh, aff };
   };
-  const explore = taste.cold ? W.EXPLORE_COLD : W.EXPLORE;
+  // Настроение: только что пропущенное — реже, дослушанное — чуть чаще
+  const ses = taste.session || { skipStreak: 0, skipped: {}, kept: {}, skippedGenres: {} };
+  const moodOf = r => {
+    let k = 1;
+    for (const key of r.keys) { if (ses.skipped[key]) k *= Math.pow(W.SESSION_SKIP, Math.min(2, ses.skipped[key])); if (ses.kept[key]) k *= W.SESSION_KEEP; }
+    if (r.t.genre && ses.skippedGenres[r.t.genre] >= 2) k *= W.SESSION_GENRE_SKIP;
+    return k;
+  };
+  // Время суток: артисту, которого ты слушаешь в эти часы, чуть больше шансов
+  const hourNow = new Date(now).getHours();
+  const hourOf = r => {
+    const h = taste.hours?.[r.keys[0]]; if (!h) return 1;
+    const total = h.reduce((s, x) => s + x, 0); if (total < 3) return 1;
+    let near = 0; for (let d = -2; d <= 2; d++) near += h[(hourNow + d + 24) % 24];
+    return 1 + W.HOUR_BOOST * Math.tanh((near / total) / (5 / 24) - 1); // выше обычного в эти часы — плюс, ниже — минус
+  };
+  // Забытые любимые: часто слушал, но давно не включал
+  const rediscover = (r, hrs) => r.s && r.s.plays >= 3 && r.s.weight > 0 && hrs !== Infinity && hrs > W.REDISCOVER_DAYS * 24 ? W.REDISCOVER : 1;
+  // Пропускаешь подряд — значит, сейчас не то: пробуем разное смелее
+  const explore = Math.min(.6, (taste.cold ? W.EXPLORE_COLD : W.EXPLORE) + W.SESSION_EXPLORE * Math.max(0, ses.skipStreak - 1));
 
   while (out.length < count) {
     const free = rows.filter(r => !picked.has(r.t.id));
