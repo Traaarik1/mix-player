@@ -69,6 +69,11 @@ export async function peer(ref) {
   if (typeof ref === 'string' && /^[A-Za-z]\w{3,}$/.test(ref)) return client.getEntity(ref);
   return (await chats()).find(c => c.id === String(ref))?.entity || null;
 }
+// Переслать посты из одного канала в другой; вернёт новые номера сообщений в том же порядке
+export async function forward(from, ids, to) {
+  const res = await client.forwardMessages(to, { messages: ids, fromPeer: from });
+  return (res || []).map(m => m?.id ?? null);
+}
 export async function message(entity, msgId) {
   const [m] = await client.getMessages(entity, { ids: [msgId] });
   if (!m?.media?.document) return null;

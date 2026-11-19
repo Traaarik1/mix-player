@@ -2312,9 +2312,11 @@ function importShared(raw) {
   let d; try { d = JSON.parse(unb64u(raw)); } catch { toast('Ссылка на плейлист повреждена'); return; }
   if (!d?.m?.length) return;
   const m = modal(`<h2>Плейлист «${esc(d.n)}»</h2><p>${tracksWord(d.m.length)} из канала ${d.u ? '@' + esc(d.u) : 'друга'}. Добавить в твой Mix? Полные треки будут играть из канала друга${tgCfg?.session ? '' : ' — для этого подключи свой Telegram'}.</p>
+    ${tgCfg?.chatId ? '<label class="check"><input type="checkbox" class="sw" id="plCopy" checked><span>Сохранить треки в мой канал<small>Mix перешлёт их из канала друга к тебе: будут на всех твоих устройствах и не пропадут, даже если друг удалит канал</small></span></label>' : ''}
     <div class="acts"><button class="btn" data-x>Не сейчас</button><button class="btn primary" id="plAdd">Добавить</button></div>`);
   $('[data-x]', m).onclick = closeLayer;
   $('#plAdd', m).onclick = async () => {
+    const copy = !!$('#plCopy', m)?.checked;
     const mine = [...tracks.values()], ids = [];
     for (let i = 0; i < d.m.length; i++) {
       const [artist, title] = d.t?.[i] || ['', 'Трек ' + (i + 1)];
@@ -2327,7 +2329,29 @@ function importShared(raw) {
     const p = { id: 'pl' + Date.now().toString(36), name: d.n, ids };
     lib.playlists.push(p); saveLib(); rebuildOrder(); closeLayer(); view = p.id; render();
     toast(`Плейлист «${d.n}» добавлен`);
+    if (copy) copyShared(d).catch(err => toast(err.message || 'Не получилось переслать треки'));
   };
+}
+// Пересылаем треки из канала друга в свой канал и превращаем их в обычные свои треки
+async function copyShared(d) {
+  const tg = await ensureTg();
+  const from = await tg.peer(d.u || d.c).catch(() => null);
+  if (!from) throw new Error('Канал друга закрытый: попроси добавить тебя в канал или сделать его публичным');
+  const to = await resolveChat(tg);
+  const todo = d.m.filter(id => tracks.get(`tg:${d.c}:m${id}`)?.ext); // то, чего у тебя ещё нет
+  let done = 0;
+  for (let i = 0; i < todo.length; i += 50) {
+    const part = todo.slice(i, i + 50);
+    toast(`Сохраняю в твой канал: ${done} из ${todo.length}`);
+    const got = await tg.forward(from, part, to);
+    for (let j = 0; j < part.length; j++) {
+      const old = tracks.get(`tg:${d.c}:m${part[j]}`), nid = got[j];
+      if (!old || !nid) continue;
+      const nt = { ...old, id: `tg:${tgCfg.chatId}:m${nid}`, msgId: nid, from: 'friend' }; delete nt.ext;
+      await moveTrack(old, nt); done++;
+    }
+  }
+  toast(done ? `Сохранено в твой канал: ${tracksWord(done)}` : 'Ничего не переслалось');
 }
 const inCurrentChat = t => t.source === 'tg' && !!tgCfg?.chatId && t.id.startsWith(`tg:${tgCfg.chatId}:`);
 let chatEntity = null;
