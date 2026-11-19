@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import { readTags, parseFileName } from './id3.js';
-import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog, artistTop, artistRelated, jsonp } from './covers.js';
+import { searchItunes, searchDeezer, searchArtists, fetchArt, albumTracks, artistCatalog, artistTop, artistRelated, jsonp, deezerSimilarTracks } from './covers.js';
 import { Engine, EQ_BANDS, EQ_PRESETS } from './engine.js';
 import { findLyrics } from './lyrics.js';
 import { identify, cleanName, cleanTag, sameName, findOriginal, scoreCandidate, IDENT_VER } from './identify.js';
@@ -347,7 +347,7 @@ function paintWebSearch() {
   webT = setTimeout(async () => {
     webQ = q;
     $('#extra').innerHTML = '<div class="sechead"><div><b>В интернете</b><small>Ищу…</small></div></div>';
-    const [it, dz, ar] = await Promise.all([searchItunes(q, 15, 'RU').catch(() => []), searchDeezer(q, 15).catch(() => []), searchArtists(q).catch(() => [])]);
+    const [it, dz, ar] = await Promise.all([searchItunes(q, 25, 'RU').catch(() => []), searchDeezer(q, 40).catch(() => []), searchArtists(q).catch(() => [])]);
     if (webQ !== q || query !== q) return;
     const ly = lyricHits(q);
     const lyHTML = ly.length ? `<div class="sechead"><div><b>Найдено по тексту песни</b><small>Среди твоих треков</small></div></div><ol class="toplist">${ly.map(x => { const t = tracks.get(x.id); return `<li data-stat-play="${esc(t.id)}">${coverHTML(t)}<span class="ttl"><span class="t">${esc(t.title)} — ${esc(t.artist || '')}</span><span class="a">…${esc(x.snip)}…</span></span></li>`; }).join('')}</ol>` : '';
@@ -363,7 +363,7 @@ function paintWebSearch() {
     // выше то, где нашлись все слова запроса (Мияги = Miyagi: сравниваем в транслите)
     const qw = q.split(/s+/).map(normKey).filter(Boolean);
     const fit = s => { const w = (normKey(s.artist) + ' ' + normKey(s.title)); return qw.filter(x => w.includes(x)).length; };
-    list.sort((x, y) => fit(y) - fit(x)); list.splice(20);
+    list.sort((x, y) => fit(y) - fit(x)); list.splice(40);
     if (!list.length) { $('#extra').innerHTML = (lyHTML + artHTML) || '<div class="sechead"><div><b>В интернете</b><small>Ничего не нашлось</small></div></div>'; return; }
     paintWebList('Найдено в интернете', 'Плюс — в «Хочу скачать», «Найти» — открыть бота в Telegram с этим названием', list);
     if (artHTML) $('#extra').insertAdjacentHTML('afterbegin', artHTML);
@@ -773,6 +773,7 @@ function render() {
   if (!view.startsWith('artist:') && !view.startsWith('webartist:')) $('#disc').innerHTML = '';
   $('#extra').innerHTML = '';
   paintWebSearch();
+  { const pl = lib.playlists.find(p => p.id === view); if (pl && pl.ids.length && tgCfg?.chatId) $('#extra').insertAdjacentHTML('afterbegin', '<button class="btn showall" data-act="sharePl">Поделиться плейлистом с музыкой</button>'); }
   if (view.startsWith('webartist:')) { paintArtistCatalog(); $('#empty').hidden = true; $('#playAll').hidden = true; }
   if (view.startsWith('artist:')) { paintArtistCatalog(); if (cut) $('#extra').innerHTML = `<button class="btn showall" data-act="artistAll">Показать все треки (${ids.length})</button>`; }
   if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)) || webAlbum(view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
@@ -1267,6 +1268,12 @@ async function loadSuggestions() {
     const items = await fetchSuggestions(currentTaste(), [...tracks.values()], {
       cache: SUG_CACHE, seen: waveSeen, onProgress: it => { sug.items = it; renderIfWave(); },
     });
+    // база шире: похожие артисты из Deezer для трёх любимых
+    const extra = [];
+    for (const f of favArtists(3)) extra.push(...await deezerSimilarTracks(f.name).catch(() => []));
+    const mine = [...tracks.values()], seen = new Set(items.map(x => normKey(x.artist + ' ' + x.title)));
+    for (const x of extra) { const k = normKey(x.artist + ' ' + x.title); if (seen.has(k) || mine.some(t => sameTrack(x, t))) continue; seen.add(k); items.push(x); }
+    for (let i = items.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; if (i >= 6) [items[i], items[j < 6 ? i : j]] = [items[j < 6 ? i : j], items[i]]; } // первые 6 лучших оставляем, остальное перемешиваем
     sug.items = items; sug.at = Date.now();
     if (waveMode) { injectPreviews(); engine.refreshNext(); paintNext(); }
   } finally { sug.loading = false; sugFetching = false; renderIfWave(); }
@@ -2274,6 +2281,54 @@ function ensureTg() {
   tgReady.catch(() => { tgReady = null; }).finally(() => { tgConnecting = false; });
   return tgReady;
 }
+// Трек из канала друга: { peer: @имя или номер канала }
+async function friendItem(t) {
+  const tg = await ensureTg();
+  const ent = await tg.peer(t.ext.peer || t.ext.chat).catch(() => null);
+  if (!ent) throw new Error('Канал друга закрытый: попроси его добавить тебя в канал или сделать канал публичным');
+  const it = await tg.message(ent, t.msgId); if (!it) throw new Error('Сообщение удалено из канала');
+  return it;
+}
+const b64u = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = s => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
+async function sharePlaylist(p) {
+  const own = p.ids.map(id => getT(id)).filter(t => t && t.source === 'tg' && inCurrentChat(t));
+  if (!own.length) { toast('В плейлисте нет треков из твоего канала'); return; }
+  let uname = null;
+  try { const ent = await resolveChat(await ensureTg()); uname = ent?.username || null; } catch {}
+  const data = { n: p.name, u: uname, c: tgCfg.chatId, m: own.map(t => t.msgId), t: own.map(t => [t.artist || '', t.title]) };
+  const url = SITE + '?pl=' + b64u(JSON.stringify(data));
+  const d = modal(`<h2>Поделиться «${esc(p.name)}»</h2>
+    <p>Друг откроет ссылку в своём Mix и будет слушать полные треки прямо из твоего канала — без 30-секундных отрывков. ${tracksWord(own.length)}.</p>
+    ${uname ? '' : '<p class="morenote">Твой канал закрытый: друг услышит треки, только если подписан на него. Чтобы слушали все, у кого есть ссылка: настройки канала → «Тип канала» → «Публичный».</p>'}
+    <div class="acts"><button class="btn" data-x>Закрыть</button><button class="btn primary" id="plShare">Отправить ссылку</button></div>`);
+  $('[data-x]', d).onclick = closeLayer;
+  $('#plShare', d).onclick = async () => {
+    try { if (navigator.share) { await navigator.share({ title: p.name, url }); return; } } catch { return; }
+    try { await navigator.clipboard.writeText(url); toast('Ссылка скопирована'); } catch { toast(url); }
+  };
+}
+function importShared(raw) {
+  let d; try { d = JSON.parse(unb64u(raw)); } catch { toast('Ссылка на плейлист повреждена'); return; }
+  if (!d?.m?.length) return;
+  const m = modal(`<h2>Плейлист «${esc(d.n)}»</h2><p>${tracksWord(d.m.length)} из канала ${d.u ? '@' + esc(d.u) : 'друга'}. Добавить в твой Mix? Полные треки будут играть из канала друга${tgCfg?.session ? '' : ' — для этого подключи свой Telegram'}.</p>
+    <div class="acts"><button class="btn" data-x>Не сейчас</button><button class="btn primary" id="plAdd">Добавить</button></div>`);
+  $('[data-x]', m).onclick = closeLayer;
+  $('#plAdd', m).onclick = async () => {
+    const mine = [...tracks.values()], ids = [];
+    for (let i = 0; i < d.m.length; i++) {
+      const [artist, title] = d.t?.[i] || ['', 'Трек ' + (i + 1)];
+      const have = mine.find(t => !t.previewOnly && sameTrack({ artist, title }, t));
+      if (have) { ids.push(have.id); continue; }
+      const id = `tg:${d.c}:m${d.m[i]}`;
+      if (!tracks.has(id)) { const nt = { id, source: 'tg', msgId: d.m[i], ext: { peer: d.u, chat: d.c }, from: 'friend', title, artist, album: '', duration: 0, downloaded: false, verified: true, conf: true, ident: { status: 'kept' }, addedAt: Date.now() - i }; tracks.set(id, nt); await saveTrack(nt); }
+      ids.push(id);
+    }
+    const p = { id: 'pl' + Date.now().toString(36), name: d.n, ids };
+    lib.playlists.push(p); saveLib(); rebuildOrder(); closeLayer(); view = p.id; render();
+    toast(`Плейлист «${d.n}» добавлен`);
+  };
+}
 const inCurrentChat = t => t.source === 'tg' && !!tgCfg?.chatId && t.id.startsWith(`tg:${tgCfg.chatId}:`);
 let chatEntity = null;
 async function resolveChat(tg) {
@@ -2293,9 +2348,10 @@ function tgByMsg() {
 async function downloadTrack(t) {
   if (downloads.has(t.id)) return downloads.get(t.id);
   const p = (async () => {
-    if (!inCurrentChat(t)) throw new Error('Трек из другого канала');
+    if (!inCurrentChat(t) && !t.ext) throw new Error('Трек из другого канала');
     const tg = await ensureTg();
     let it = tgItems.get(t.id);
+    if (!it && t.ext) { it = await friendItem(t); tgItems.set(t.id, it); }
     if (!it) { it = await tg.message(await resolveChat(tg), t.msgId); if (!it) throw new Error('Сообщение удалено из канала'); tgItems.set(t.id, it); }
     t.dlp = 0; updateRow(t.id);
     let last = 0;
@@ -2594,6 +2650,7 @@ document.addEventListener('click', async e => {
   else if (a === 'listen') openListen();
   else if (a === 'import') openImport();
   else if (a === 'setMix') openMix();
+  else if (a === 'sharePl') { const pl = lib.playlists.find(p => p.id === view); if (pl) sharePlaylist(pl); }
   else if (a === 'openStats') window.open(dashboard(), '_blank', 'noopener');
   else if (a === 'setEq') openEq();
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
@@ -2857,6 +2914,7 @@ async function boot() {
     if (!settings.refId) { settings.refId = Math.random().toString(36).slice(2, 10); saveSettings(); }
     { const ref = new URLSearchParams(location.search).get('ref'); if (ref && /^[a-z0-9]{4,16}$/.test(ref) && !lsGet('mixRef')) lsSet('mixRef', ref); }
     if (new URLSearchParams(location.search).has('owner')) { settings.owner = true; saveSettings(); }
+    { const pl = new URLSearchParams(location.search).get('pl'); if (pl) setTimeout(() => { importShared(pl); history.replaceState(null, '', location.pathname); }, 1500); }
     setLang(settings.lang);
     const l = await db.get('kv', 'library');
     if (l) { lib.likes = new Set(l.likes); lib.playlists = l.playlists || []; lib.history = l.history || []; lib.listens = l.listens || []; waveFx = l.wave || {}; }

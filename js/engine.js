@@ -90,8 +90,9 @@ export const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.pl
 // Декодированный трек занимает ≈23 МБ в минуту (48 кГц, стерео, float32), а iOS без предупреждения
 // убивает вкладку при нехватке памяти. На телефонах держим меньше, а очень длинное декодируем с меньшей частотой.
 const SMALL = isIOS || /Android/.test(navigator.userAgent) || navigator.deviceMemory <= 4;
-const MEM = SMALL ? { total: 500e6, one: 400e6 } : { total: 2e9, one: 4e9 };
-const KEEP = 4;            // сколько треков держать декодированными, если хватает памяти
+// iOS выгружает вкладку уже около 1 ГБ всего (вместе с картинками и интерфейсом), поэтому на телефоне — максимум 2 трека в памяти
+const MEM = SMALL ? { total: 240e6, one: 200e6 } : { total: 1.5e9, one: 4e9 };
+const KEEP = SMALL ? 2 : 4;            // сколько треков держать декодированными, если хватает памяти
 const MAX_SKIP = 8;        // сколько недоступных треков подряд можно пропустить
 const DECODE_TIMEOUT = 120e3;
 const RESUME_WINDOW = 10 * 60e3; // после прерывания (звонок) доигрываем сами, если прошло меньше 10 минут

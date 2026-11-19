@@ -93,6 +93,18 @@ export async function artistRelated(dzId, limit = 12) {
   const j = await jsonp(`https://api.deezer.com/artist/${dzId}/related?limit=${limit}`);
   return (j?.data || []).map(x => ({ name: x.name, pic: x.picture_medium || null }));
 }
+// Похожие песни через Deezer: похожие артисты → их популярное (у всех есть 30-секундный фрагмент)
+export async function deezerSimilarTracks(name, { related = 5, per = 3 } = {}) {
+  const s = await jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=3`);
+  const a = (s?.data || []).find(x => nk(x.name) === nk(name)); if (!a) return [];
+  const rel = await jsonp(`https://api.deezer.com/artist/${a.id}/related?limit=${related}`);
+  const out = [];
+  for (const r of rel?.data || []) {
+    const top = await jsonp(`https://api.deezer.com/artist/${r.id}/top?limit=${per}`);
+    for (const x of top?.data || []) if (x.preview) out.push({ title: x.title, artist: x.artist?.name || r.name, album: x.album?.title || '', art: x.album?.cover_xl || null, preview: x.preview, previewUrl: x.preview, because: 'похоже на ' + a.name, seed: a.name, duration: x.duration || 0 });
+  }
+  return out;
+}
 async function deezerCatalog(name) {
   const s = await jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=5`);
   const a = (s?.data || []).find(x => nk(x.name) === nk(name));
