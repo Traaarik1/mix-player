@@ -275,9 +275,10 @@ export class Engine extends EventTarget {
     bass.type = 'lowshelf'; bass.frequency.value = BASS_HZ; bass.gain.value = 0;
     norm.gain.value = this.norm ? normGain(track.loud) : 1;
     src.buffer = buf; src.connect(bass).connect(tone).connect(norm).connect(gain).connect(this.bus);
+    src.playbackRate.value = this.baseRate || 1;
     const b = track.bounds || { s: 0, e: buf.duration };
     this.live ??= new Set();
-    const d = { track, buf, src, gain, bass, norm, tone, startCtx: 0, offset: 0, fadeEnd: 0, ended: false,
+    const d = { track, buf, src, gain, bass, norm, tone, rate: this.baseRate || 1, startCtx: 0, offset: 0, fadeEnd: 0, ended: false,
       end: this.trim ? Math.min(b.e, buf.duration) : buf.duration, head: this.trim ? b.s : 0 };
     src.onended = () => {
       try { gain.disconnect(); src.disconnect(); bass.disconnect(); norm.disconnect(); tone.disconnect(); } catch {}
@@ -384,7 +385,7 @@ export class Engine extends EventTarget {
     if (this.cur !== cur || this.nxt) return;
     if (!buf) { if (cur.ended) this.finish(); return; }
     const ctx = this.ctx, d = this.deck(next, buf), now = ctx.currentTime;
-    const curEnd = cur.startCtx + cur.end - cur.offset; // когда в расписании кончится текущий
+    const curEnd = cur.startCtx + (cur.end - cur.offset) / (cur.rate || 1); // когда в расписании кончится текущий (с учётом скорости)
     let cf = Math.max(0, Math.min(this.cf, (cur.end - cur.head) / 3, (d.end - d.head) / 3));
     if (cf > 0.05) try { const k = t => this.norm ? normGain(t.loud) : 1; // громкость уже после выравнивания
       cf = smartCf(cf, loudness(cur.buf, cur.end - cf, cur.end) * k(cur.track), loudness(buf, d.head, d.head + cf) * k(next), cur.track.bpm, next.bpm); } catch {}
@@ -542,9 +543,15 @@ export class Engine extends EventTarget {
     this.setRate(rate);
     return true;
   }
+  // Speed up / slowed: скорость для всех треков, тон меняется вместе со скоростью — как в оригинальных версиях
+  setSpeed(r) {
+    this.baseRate = r;
+    for (const d of this.live || []) try { d.rate = r; if (d === this.cur) this.setRate(r); else d.src.playbackRate.value = r; } catch {}
+    this.cancelNext?.(); this.scheduleNext();
+  }
   holdEnd() {
     if (!this.cur) return;
-    this.setRate(1);
+    this.setRate(this.baseRate || 1);
     this.scheduleNext();
   }
 

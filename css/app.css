@@ -1072,3 +1072,10 @@ body.bghidden .backdrop, body.bghidden .fullbg { display: none !important; }
   .backdrop { display: block !important; background: radial-gradient(90% 55% at 15% 10%, color-mix(in srgb, var(--c1) 34%, transparent), transparent 70%), radial-gradient(90% 55% at 90% 85%, color-mix(in srgb, var(--c2) 28%, transparent), transparent 70%); }
   body.bghidden .backdrop { display: none !important; }
 }
+
+/* очередь: перетаскивание */
+.qdrag { cursor: grab; padding: 6px 10px; color: var(--mist); font-size: 20px; touch-action: none; user-select: none; }
+.qrow.dragging { opacity: .6; background: rgb(255 255 255 / .06); }
+/* режим «экономия»: без живого фона и анимаций */
+body.lite .backdrop, body.lite .fullbg .orbs, body.lite .fullbg i { display: none !important; }
+body.lite *, body.lite *::before, body.lite *::after { animation: none !important; transition: none !important; }

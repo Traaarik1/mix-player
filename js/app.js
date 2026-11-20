@@ -504,7 +504,7 @@ function renderStats() {
   const chip = (k, n) => `<button class="chip${statsPeriod === k ? ' on' : ''}" data-act="stats:${k}">${n}</button>`;
   const lib2 = artistGroups();
   rows.innerHTML = `<li class="stats">
-    <div class="presets">${chip('month', 'Месяц')}${chip('year', 'Год')}${chip('all', 'Всё время')}</div>
+    <div class="presets">${chip('month', 'Месяц')}${chip('year', 'Год')}${chip('all', 'Всё время')}<button class="chip" data-act="yearCard">Итоги года — картинка</button></div>
     <div class="statnums"><div><b>${Math.round(sec / 60).toLocaleString('ru')}</b><small>минут музыки</small></div><div><b>${ls.length}</b><small>прослушиваний</small></div><div><b>${trs.size}</b><small>разных треков</small></div><div><b>${arts.size}</b><small>артистов</small></div></div>
     ${ta.length ? `<div class="sechead"><div><b>Топ артистов</b></div></div><ol class="toplist">${ta.map((a, i) => `<li${lib2.some(g => g.key === a.key) ? ` data-view="artist:${esc(a.key)}"` : ''}><span class="num">${i + 1}</span>${a.t ? coverHTML(a.t) : '<span class="cov"></span>'}<span class="ttl"><span class="t">${esc(a.name)}</span><span class="a">${Math.round(a.sec / 60)} мин · ${a.n} раз</span></span></li>`).join('')}</ol>` : ''}
     ${tt.length ? `<div class="sechead"><div><b>Топ треков</b></div></div><ol class="toplist">${tt.map((x, i) => `<li data-stat-play="${esc(x.t.id)}"><span class="num">${i + 1}</span>${coverHTML(x.t)}<span class="ttl"><span class="t">${esc(x.t.title)}</span><span class="a">${esc(x.t.artist || '')} · ${x.n} раз</span></span></li>`).join('')}</ol>` : ''}
@@ -721,11 +721,17 @@ function renderSettings() {
     ${row('data-act="setMix"', 'wave', 'Переход между треками', 'Плавный переход, срез тишины')}
     ${row('data-act="setEq"', 'eq', 'Эквалайзер', 'Частоты под твои наушники')}
     ${sw('setNorm', settings.norm !== false, 'Ровная громкость', 'Громкие треки чуть тише, тихие — громче, чтобы не крутить звук от песни к песне')}
+    <div class="setrow"><span>Скорость<small>Speed up / slowed — тон меняется вместе со скоростью</small></span></div>
+    <div class="presets">${[[.85, 'Slowed'], [1, 'Обычная'], [1.15, 'Speed up'], [1.3, 'Быстрее']].map(([r, n]) => `<button class="chip${(settings.speed || 1) === r ? ' on' : ''}" data-act="speed:${r}">${n}</button>`).join('')}</div>
+    ${sw('setLite', !!settings.lite, 'Режим «экономия»', 'Без живого фона и анимаций: меньше памяти и заряда, для слабых телефонов')}
     ${sw('setTrim', !!settings.trim, 'Умный микс', 'Срезать тишину в начале и конце треков, чтобы на стыке не было паузы')}
     <div class="sechead"><div><b>Распознавание</b></div></div>
     ${row('data-act="acoust"', 'wand', 'Ключ AcoustID', 'Ключ AcoustID для распознавания по звуку')}
     ${row('data-act="identAll"', 'wand', 'Найти все треки', 'Заново распознать всё, что не подтверждено по звуку или тобой')}
     ${tgCfg?.chatId ? sw('writeChan', settings.writeChannel, 'Исправлять и в канале', 'Треки распознаются по звуку и по названию файла') : ''}
+    <div class="sechead"><div><b>Синхронизация</b><small>Лайки, плейлисты и история общие на всех устройствах, где ты вошёл в тот же Telegram</small></div></div>
+    <div class="setrow statline"><span>${!tgCfg?.session ? 'Не работает: на этом устройстве не подключён Telegram' : !cloud ? 'Запускается…' : ({ idle: 'Работает', syncing: 'Синхронизирую…', retry: 'Нет связи, повторю', offline: 'Нет связи', auth: 'Нужно войти в Telegram заново', error: 'Ошибка' })[cloudStatus?.state] || 'Запускается…'}<small>${cloudStatus?.at ? 'Последняя: ' + new Date(cloudStatus.at).toLocaleString('ru') : ''}${cloudStatus?.error ? ' · ' + esc(String(cloudStatus.error).slice(0, 80)) : ''}</small></span></div>
+    ${tgCfg?.session ? row('data-act="syncNow"', 'repeat', 'Синхронизировать сейчас', 'Если на компьютере и телефоне разные лайки или плейлисты') : ''}
     <div class="sechead"><div><b>Telegram</b></div></div>
     <div class="tgcard moretg">${$('#tgcard').innerHTML}</div>
     ${row('data-act="musicBot"', 'tg', 'Музыкальный бот', settings.musicBot ? '@' + settings.musicBot : 'Кнопка «Найти» откроет этого бота с названием трека')}
@@ -740,6 +746,105 @@ function renderSettings() {
     <div class="store">${$('#store').innerHTML}</div>
   </li>`;
 }
+// ---------- скачать для офлайна: плейлист, альбом, «Любимое» целиком ----------
+let offlineRun = false;
+async function downloadAll(ids) {
+  if (offlineRun) return;
+  const todo = ids.map(id => getT(id)).filter(t => t && t.source === 'tg' && !t.downloaded);
+  if (!todo.length) { toast('Всё уже скачано — играет без интернета'); return; }
+  offlineRun = true; let done = 0;
+  try {
+    for (const t of todo) {
+      if (!navigator.onLine) { toast('Нет интернета, докачаю позже'); break; }
+      toast(`Скачиваю для офлайна: ${done + 1} из ${todo.length}`);
+      try { await downloadTrack(t); done++; } catch (e) { console.warn('offline', t.title, e); }
+    }
+  } finally { offlineRun = false; }
+  toast(`Скачано для офлайна: ${tracksWord(done)}`); render();
+}
+
+// ---------- продолжить с того же места ----------
+function saveResume() {
+  const t = engine.track; if (!t || t.source === 'preview') return;
+  db.put('kv', 'resume', { id: t.id, pos: Math.round(engine.position), queue: queue.slice(0, 400), base: queueBase.slice(0, 400), wave: waveMode, at: Date.now() });
+}
+async function restoreResume() {
+  const r = await db.get('kv', 'resume').catch(() => null);
+  if (!r || engine.track || Date.now() - r.at > 14 * 864e5) return;
+  const t = getT(r.id); if (!t) return;
+  queue = (r.queue || []).filter(id => getT(id)); queueBase = (r.base || []).filter(id => getT(id)); waveMode = !!r.wave;
+  if (!queue.includes(r.id)) queue.unshift(r.id);
+  try { await engine.play(t, { offset: r.pos || 0, keepPaused: true }); } catch {}
+}
+
+// ---------- карточки: «Сейчас слушаю» и «Итоги года» ----------
+async function loadImg(src) { return new Promise(res => { if (!src) return res(null); const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; }); }
+function cardBase() {
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1920;
+  const g = c.getContext('2d'), css = getComputedStyle(document.documentElement);
+  const c1 = css.getPropertyValue('--c1').trim() || '#7a5cff', c2 = css.getPropertyValue('--c2').trim() || '#ff8fb8';
+  const bg = g.createLinearGradient(0, 0, 1080, 1920); bg.addColorStop(0, c1); bg.addColorStop(.55, c2); bg.addColorStop(1, '#120c20');
+  g.fillStyle = bg; g.fillRect(0, 0, 1080, 1920);
+  g.fillStyle = 'rgba(10,6,20,.35)'; g.fillRect(0, 0, 1080, 1920);
+  g.fillStyle = '#fff'; g.font = '800 44px system-ui, sans-serif'; g.fillText('Mix', 90, 1830);
+  return { c, g };
+}
+function wrapText(g, text, x, y, max, lh, lines = 2) {
+  const words = String(text).split(' '); let line = '', n = 0;
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (g.measureText(test).width > max && line) { g.fillText(n === lines - 1 ? line + '…' : line, x, y); y += lh; line = w; if (++n >= lines) return y; }
+    else line = test;
+  }
+  if (line) { g.fillText(line, x, y); y += lh; }
+  return y;
+}
+async function shareCanvas(c, name) {
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  const file = new File([blob], name + '.png', { type: 'image/png' });
+  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch { return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Картинка сохранена');
+}
+async function shareNowCard() {
+  const t = engine.track; if (!t) { toast('Сначала включи трек'); return; }
+  const { c, g } = cardBase();
+  const src = t.cover ? await coverUrl(t.id).catch(() => null) : t.art;
+  const img = await loadImg(src);
+  g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 60; g.beginPath(); g.roundRect(140, 300, 800, 800, 48); g.fillStyle = '#222'; g.fill(); g.restore();
+  if (img) { g.save(); g.beginPath(); g.roundRect(140, 300, 800, 800, 48); g.clip(); g.drawImage(img, 140, 300, 800, 800); g.restore(); }
+  g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '600 40px system-ui, sans-serif'; g.fillText('Сейчас слушаю', 140, 230);
+  g.fillStyle = '#fff'; g.font = '800 72px system-ui, sans-serif';
+  const y = wrapText(g, t.title, 140, 1220, 800, 84);
+  g.fillStyle = 'rgba(255,255,255,.8)'; g.font = '600 50px system-ui, sans-serif'; wrapText(g, t.artist || '', 140, y + 10, 800, 60, 1);
+  await shareCanvas(c, 'Сейчас слушаю');
+}
+async function shareYearCard() {
+  const from = Date.now() - 365 * 864e5, ls = lib.listens.filter(l => l.at >= from);
+  if (!ls.length) { toast('Пока нечего считать'); return; }
+  const idx = creditIndex(), arts = new Map(), trs = new Map(); let sec = 0;
+  for (const l of ls) {
+    sec += l.played || 0; const t = tracks.get(l.id), p = (t && idx.get(t.id)?.[0]) || { key: l.artist, name: l.artist || '—' };
+    arts.set(p.key, { name: p.name, sec: (arts.get(p.key)?.sec || 0) + (l.played || 0), t: t || arts.get(p.key)?.t });
+    if (t) trs.set(t.id, { t, n: (trs.get(t.id)?.n || 0) + 1 });
+  }
+  const ta = [...arts.values()].sort((a, b) => b.sec - a.sec), tt = [...trs.values()].sort((a, b) => b.n - a.n).slice(0, 5);
+  const { c, g } = cardBase();
+  g.fillStyle = '#fff'; g.font = '800 84px system-ui, sans-serif'; g.fillText('Мой год в Mix', 90, 220);
+  g.font = '800 200px system-ui, sans-serif'; g.fillText(Math.round(sec / 60).toLocaleString('ru'), 90, 470);
+  g.fillStyle = 'rgba(255,255,255,.8)'; g.font = '600 50px system-ui, sans-serif'; g.fillText('минут музыки', 90, 540);
+  if (ta[0]) {
+    const img = await loadImg(ta[0].t ? (ta[0].t.cover ? await coverUrl(ta[0].t.id).catch(() => null) : ta[0].t.art) : null);
+    if (img) { g.save(); g.beginPath(); g.arc(250, 790, 160, 0, Math.PI * 2); g.clip(); g.drawImage(img, 90, 630, 320, 320); g.restore(); }
+    g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '600 40px system-ui, sans-serif'; g.fillText('Главный артист', 460, 740);
+    g.fillStyle = '#fff'; g.font = '800 64px system-ui, sans-serif'; wrapText(g, ta[0].name, 460, 820, 560, 72, 2);
+  }
+  g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '600 44px system-ui, sans-serif'; g.fillText('Топ треков', 90, 1080);
+  let y = 1170;
+  tt.forEach((x, i) => { g.fillStyle = '#fff'; g.font = '800 48px system-ui, sans-serif'; g.fillText(`${i + 1}.`, 90, y); g.font = '700 46px system-ui, sans-serif'; wrapText(g, `${x.t.title} — ${x.t.artist || ''}`, 160, y, 830, 54, 1); y += 110; });
+  await shareCanvas(c, 'Мой год в Mix');
+}
+
 const viewName = () => (smartName(view) || (view.startsWith('collab:') ? (settings.collabs || []).find(c => c.id === view.slice(7))?.title : null)) || ({ ...SMART, news: 'Новинки', stats: 'Итоги', dups: 'Дубликаты', settings: 'Настройки', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
@@ -787,6 +892,8 @@ function render() {
   $('#extra').innerHTML = '';
   paintWebSearch();
   { const pl = lib.playlists.find(p => p.id === view); if (pl && pl.ids.length && tgCfg?.chatId) $('#extra').insertAdjacentHTML('afterbegin', '<button class="btn showall" data-act="sharePl">Поделиться плейлистом с музыкой</button>'); }
+  { const left = ids.filter(id => { const t = getT(id); return t && t.source === 'tg' && !t.downloaded; }).length;
+    if (left && (view === 'liked' || view.startsWith('pl') || view.startsWith('album:') || view.startsWith('collab:') || smartName(view))) $('#extra').insertAdjacentHTML('afterbegin', `<button class="btn showall" data-act="offline">Скачать для офлайна (${left})</button>`); }
   if (view.startsWith('collab:') && navigator.onLine) { const c = (settings.collabs || []).find(x => x.id === view.slice(7)); if (c && Date.now() - (c.scanned || 0) > 60e3) { c.scanned = Date.now(); scanCollab(c).catch(() => {}); } }
   if (view.startsWith('webartist:')) { paintArtistCatalog(); $('#empty').hidden = true; $('#playAll').hidden = true; }
   if (view.startsWith('artist:')) { paintArtistCatalog(); if (cut) $('#extra').innerHTML = `<button class="btn showall" data-act="artistAll">Показать все треки (${ids.length})</button>`; }
@@ -983,6 +1090,7 @@ const queueRow = (id, kind, n) => {
   const t = getT(id);
   return `<li class="qrow" data-q="${esc(id)}" data-kind="${kind}">${coverHTML(t)}<span class="ttl"><span class="t">${esc(t.title)}</span><span class="a">${esc(t.artist || 'Неизвестный артист')}</span></span>
     ${kind === 'user' && n > 0 ? '<button class="ib" data-qa="up" title="Выше"><svg><use href="#i-up"/></svg></button>' : ''}
+    ${kind !== 'now' ? '<span class="qdrag" data-qa="drag" title="Перетащи, чтобы поменять порядок">≡</span>' : ''}
     <button class="ib" data-qa="del" title="Убрать из очереди"><svg><use href="#i-x"/></svg></button></li>`;
 };
 function queueHTML() {
@@ -1001,8 +1109,31 @@ function openQueue() {
   const el = popup('<div class="qbody"></div>');
   el.classList.add('queuepop');
   paintQueue();
+  // перетаскивание за «≡»: меняем порядок в своей очереди или в списке дальше
+  el.addEventListener('pointerdown', e => {
+    const h = e.target.closest('[data-qa=drag]'); if (!h) return;
+    e.preventDefault();
+    const row = h.closest('.qrow'), kind = row.dataset.kind, id = row.dataset.q;
+    row.classList.add('dragging');
+    const move = ev => {
+      const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.qrow');
+      if (!over || over === row || over.dataset.kind !== kind) return;
+      const r = over.getBoundingClientRect();
+      over.parentElement.insertBefore(row, ev.clientY < r.top + r.height / 2 ? over : over.nextSibling);
+    };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up);
+      row.classList.remove('dragging');
+      const order2 = [...row.parentElement.querySelectorAll('.qrow')].map(x => x.dataset.q);
+      if (kind === 'user') userQueue = order2;
+      else { const i = queue.indexOf(curId !== fromUser && queue.includes(curId) ? curId : queueAnchor); const shown = new Set(order2); queue = [...queue.slice(0, i + 1), ...order2, ...queue.slice(i + 1).filter(q => !shown.has(q))]; }
+      saveQueue(); engine.refreshNext(); paintNext(); paintQueue();
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up);
+  });
   el.addEventListener('click', e => {
     const a = e.target.closest('[data-qa]')?.dataset.qa, row = e.target.closest('.qrow'), id = row?.dataset.q;
+    if (a === 'drag') return;
     if (a === 'clear') { userQueue = []; }
     else if (a === 'del') {
       if (row.dataset.kind === 'user') userQueue = userQueue.filter(x => x !== id);
@@ -1415,7 +1546,7 @@ let cloudStatus = null;
 async function initCloud() {
   if (cloud || !tgCfg?.session) return;
   const [{ createSync }, tg] = await Promise.all([import('./sync.js'), tgLib()]);
-  cloud ??= createSync({ tg, getLocal, applyMerged, debounceMs: 30000, maxWaitMs: 180000, store: { get: () => db.get('kv', 'sync'), set: v => db.put('kv', 'sync', v) }, onStatus: s => { cloudStatus = s; updateUsage(); } });
+  cloud ??= createSync({ tg, getLocal, applyMerged, debounceMs: 30000, maxWaitMs: 180000, store: { get: () => db.get('kv', 'sync'), set: v => db.put('kv', 'sync', v) }, onStatus: s => { if (s.state === 'idle') s.at = Date.now(); else if (cloudStatus?.at) s.at = cloudStatus.at; cloudStatus = s; updateUsage(); } });
   cloud.push();
 }
 
@@ -1612,6 +1743,7 @@ function openMenu(id, x, y) {
     <button data-m="qadd">В очередь</button>
     <button data-m="toPl">Добавить в плейлист</button>
     <button data-m="radio">Радио по этому треку</button>
+    <button data-m="card">Поделиться «Сейчас слушаю»</button>
     <button data-m="rename">Изменить название</button>
     ${inPl ? '<button data-m="fromPl">Убрать из плейлиста</button>' : ''}
     <hr>
@@ -1630,6 +1762,7 @@ function openMenu(id, x, y) {
     } else if (a === 'toPl') pickPlaylist(id);
     else if (a === 'rename') openFind(t);
     else if (a === 'radio') startRadio(id);
+    else if (a === 'card') { if (engine.track?.id !== id) await playId(id); shareNowCard(); }
     else if (a === 'fromPl') { inPl.ids = inPl.ids.filter(q => q !== id); saveLib(); render(); }
     else if (a === 'orig') {
       // Mix ошибся: возвращаем как было и больше этот трек сам не трогаем
@@ -2740,6 +2873,11 @@ document.addEventListener('click', async e => {
   else if (a === 'listen') openListen();
   else if (a === 'import') openImport();
   else if (a === 'setMix') openMix();
+  else if (a === 'offline') downloadAll(viewIds());
+  else if (a === 'nowCard') shareNowCard();
+  else if (a === 'yearCard') shareYearCard();
+  else if (a?.startsWith('speed:')) { settings.speed = +a.slice(6); engine.setSpeed(settings.speed); saveSettings(); toast(settings.speed === 1 ? 'Обычная скорость' : settings.speed > 1 ? 'Speed up' : 'Slowed'); if (view === 'settings') render(); }
+  else if (a === 'syncNow') { cloud ? cloud.push().then(r => { toast(r?.ok === false ? 'Синхронизация не удалась: ' + (r.error || 'нет связи') : 'Синхронизировано'); if (view === 'settings') render(); }) : (initCloud().then(() => cloud?.push()).catch(() => toast('Сначала подключи Telegram'))); }
   else if (a === 'collab') openCollab();
   else if (a === 'sharePl') { const pl = lib.playlists.find(p => p.id === view); if (pl) sharePlaylist(pl); }
   else if (a === 'openStats') window.open(dashboard(), '_blank', 'noopener');
@@ -2823,6 +2961,7 @@ $('#extra').addEventListener('click', e => {
 });
 $('#main').addEventListener('change', e => {
   if (e.target.id === 'writeChan') { settings.writeChannel = e.target.checked; saveSettings(); }
+  if (e.target.id === 'setLite') { settings.lite = e.target.checked; document.body.classList.toggle('lite', settings.lite); saveSettings(); }
   if (e.target.id === 'setNorm') { settings.norm = e.target.checked; engine.setNorm(settings.norm); saveSettings(); }
   if (e.target.id === 'setTrim') { settings.trim = e.target.checked; engine.setTrim(settings.trim); saveSettings(); engine.refreshNext(); }
   if (e.target.id === 'waveSim') {
@@ -2983,6 +3122,11 @@ window.__mixReady = true;
 setInterval(frame, 250);
 setInterval(() => soundHunt(), 5 * 60e3);
 setTimeout(countUsage, 5000); setInterval(countUsage, 60e3);
+setTimeout(() => { if (tgCfg?.session) initCloud().then(() => cloud?.pull?.()).catch(e => console.warn('sync', e)); }, 4000);
+setTimeout(restoreResume, 1200);
+setInterval(() => { if (engine.track && !engine.paused) saveResume(); }, 5000);
+addEventListener('pagehide', saveResume);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveResume(); });
 setTimeout(async () => { news = await db.get('kv', 'news').catch(() => null) || news; renderNav(); setTimeout(newsHunt, 20000); }, 1500);
 setInterval(() => newsHunt(), 3 * 36e5);
 setTimeout(async () => { const l = await db.get('kv', 'lyidx').catch(() => null); if (l) lyIndex = new Map(l); setTimeout(lyricsHunt, 30000); }, 2000);
@@ -3002,6 +3146,8 @@ async function boot() {
   try {
     Object.assign(settings, await db.get('kv', 'settings') || {});
     if (!settings.lang) { settings.lang = defaultLang(); saveSettings(); }
+    document.body.classList.toggle('lite', !!settings.lite);
+    if (settings.speed && settings.speed !== 1) engine.baseRate = settings.speed;
     if (!settings.refId) { settings.refId = Math.random().toString(36).slice(2, 10); saveSettings(); }
     { const ref = new URLSearchParams(location.search).get('ref'); if (ref && /^[a-z0-9]{4,16}$/.test(ref) && !lsGet('mixRef')) lsSet('mixRef', ref); }
     if (new URLSearchParams(location.search).has('owner')) { settings.owner = true; saveSettings(); }

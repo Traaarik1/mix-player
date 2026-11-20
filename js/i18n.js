@@ -153,7 +153,7 @@ const EN = {
   'выкл': 'off', 'скачан': 'downloaded', 'совпадение': 'match', 'у тебя': 'yours', 'есть': 'have', 'из': 'of',
   // новые разделы
   'Настройки': 'Settings', 'Язык': 'Language', 'Воспроизведение': 'Playback', 'Распознавание': 'Recognition', 'Друзья': 'Friends', 'Память': 'Storage',
-  'Mix для друга': 'Mix for a friend', 'Спокойное': 'Calm', 'Энергичное': 'Energetic', 'Совместный плейлист': 'Shared playlist', 'совместный': 'shared', 'Ссылка-приглашение': 'Invite link', 'Открыть инструкцию': 'Open guide', 'Музыкальный бот': 'Music bot',
+  'Mix для друга': 'Mix for a friend', 'Спокойное': 'Calm', 'Синхронизация': 'Sync', 'Синхронизировать сейчас': 'Sync now', 'Скорость': 'Speed', 'Обычная': 'Normal', 'Быстрее': 'Faster', 'Режим «экономия»': 'Battery saver', 'Работает': 'Working', 'Итоги года — картинка': 'Year in Mix — image', 'Поделиться «Сейчас слушаю»': 'Share “Now playing”', 'Энергичное': 'Energetic', 'Совместный плейлист': 'Shared playlist', 'совместный': 'shared', 'Ссылка-приглашение': 'Invite link', 'Открыть инструкцию': 'Open guide', 'Музыкальный бот': 'Music bot',
   'Распознавать заново': 'Recognize again', 'Ключ AcoustID для распознавания по звуку': 'AcoustID key for recognition by sound',
   'Плавный переход, срез тишины': 'Crossfade, silence trimming', 'Частоты под твои наушники': 'Frequencies for your headphones',
   'Кнопка «Найти» откроет этого бота с названием трека': 'The “Find” button opens this bot with the track title',

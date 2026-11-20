@@ -1,6 +1,31 @@
 [
   {
     "added": "2026-11-20",
+    "ru": "<b>Картинки «Сейчас слушаю» и «Итоги года»</b> — для сторис и чатов.",
+    "en": "<b>“Now playing” and “Year in Mix” cards</b> — for stories and chats."
+  },
+  {
+    "added": "2026-11-20",
+    "ru": "<b>Перетаскивание треков в очереди</b> за «≡».",
+    "en": "<b>Drag to reorder</b> the queue by “≡”."
+  },
+  {
+    "added": "2026-11-20",
+    "ru": "<b>Speed up / slowed</b> и <b>режим «экономия»</b> для слабых телефонов — в настройках.",
+    "en": "<b>Speed up / slowed</b> and a <b>battery saver mode</b> for older phones — in Settings."
+  },
+  {
+    "added": "2026-11-20",
+    "ru": "<b>Продолжение с того же места</b>: открыл Mix — играет тот же трек с той же секунды.",
+    "en": "<b>Resume where you left off</b>: open Mix and continue the same track from the same second."
+  },
+  {
+    "added": "2026-11-20",
+    "ru": "<b>Скачать для офлайна</b> плейлист, альбом или «Любимое» одной кнопкой.",
+    "en": "<b>Download for offline</b> a playlist, album or Liked in one tap."
+  },
+  {
+    "added": "2026-11-20",
     "ru": "<b>Подборки по настроению и жанрам</b>: «Спокойное», «Энергичное» и твои любимые жанры.",
     "en": "<b>Mood and genre mixes</b>: “Calm”, “Energetic” and your top genres."
   },
