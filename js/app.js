@@ -189,7 +189,8 @@ function viewIds() {
   else if (view === 'artists' || view === 'albums') ids = order;
   else if (view.startsWith('album:')) { const k = view.slice(6); ids = order.filter(id => albumKey(tracks.get(id)) === k).sort((x, y) => (tracks.get(x).trackNo || 99) - (tracks.get(y).trackNo || 99)); return ids; }
   else if (view.startsWith('webartist:')) ids = [];
-  else if (SMART[view]) ids = smartIds(view);
+  else if (smartName(view)) ids = smartIds(view);
+  else if (view.startsWith('collab:')) ids = order.filter(id => tracks.get(id)?.collab === view.slice(7));
   else if (view === 'news' || view === 'stats' || view === 'dups' || view === 'settings') ids = [];
   else ids = (lib.playlists.find(p => p.id === view)?.ids || []).filter(id => tracks.has(id));
   if (query) {
@@ -411,7 +412,19 @@ const SMART = {
   'smart:forgot': 'Давно не слушал',
   'smart:new': 'Новое в канале',
 };
+// Настроение — по темпу и громкости, жанры — самые частые в библиотеке
+const MOODS = { 'mood:calm': 'Спокойное', 'mood:energy': 'Энергичное' };
+function topGenres(n = 4) {
+  const c = {};
+  for (const t of tracks.values()) if (t.genre && !t.previewOnly) c[t.genre] = (c[t.genre] || 0) + 1;
+  return Object.entries(c).filter(([, k]) => k >= 5).sort((a, b) => b[1] - a[1]).slice(0, n).map(([g]) => g);
+}
+const smartEntries = () => [...Object.entries(SMART), ...Object.entries(MOODS), ...topGenres().map(g => ['genre:' + g, g])];
+const smartName = v => SMART[v] || MOODS[v] || (v.startsWith('genre:') ? v.slice(6) : null);
 function smartIds(kind) {
+  if (kind === 'mood:calm') return order.filter(id => { const t = tracks.get(id); return t.bpm && (t.bpm < 100 || (t.rms != null && t.rms < -16)) && !(t.bpm > 125); });
+  if (kind === 'mood:energy') return order.filter(id => { const t = tracks.get(id); return t.bpm && t.bpm >= 118 && (t.rms == null || t.rms > -14); });
+  if (kind.startsWith('genre:')) { const g = kind.slice(6); return order.filter(id => tracks.get(id).genre === g); }
   const now = Date.now(), DAY = 864e5, count = (from = 0) => {
     const m = new Map();
     for (const l of lib.listens) if (l.at >= from && tracks.has(l.id) && l.played >= 30) m.set(l.id, (m.get(l.id) || 0) + 1);
@@ -727,7 +740,7 @@ function renderSettings() {
     <div class="store">${$('#store').innerHTML}</div>
   </li>`;
 }
-const viewName = () => ({ ...SMART, news: 'Новинки', stats: 'Итоги', dups: 'Дубликаты', settings: 'Настройки', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
+const viewName = () => (smartName(view) || (view.startsWith('collab:') ? (settings.collabs || []).find(c => c.id === view.slice(7))?.title : null)) || ({ ...SMART, news: 'Новинки', stats: 'Итоги', dups: 'Дубликаты', settings: 'Настройки', all: 'Вся музыка', liked: 'Любимое', recent: 'Недавние', fix: 'Проверка названий', wave: 'Волна', wish: 'Хочу скачать', albums: 'Альбомы' })[view] || (view.startsWith('webartist:') ? decodeURIComponent(view.slice(10)) : view.startsWith('album:') ? (albumGroups().find(g => g.key === view.slice(6)) || webAlbum(view.slice(6)))?.name : view.startsWith('artist:') ? artistGroups().find(g => g.key === view.slice(7))?.name : lib.playlists.find(p => p.id === view)?.name) || 'Плейлист';
 
 function rowHTML(t, n) {
   const liked = lib.likes.has(t.id);
@@ -749,7 +762,7 @@ function render() {
   $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish' || view === 'settings';
   $('.fixbar')?.remove();
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
-  $('#sort').hidden = ['artists', 'recent', 'albums', 'news', 'stats', 'dups', 'settings'].includes(view) || !!SMART[view] || view.startsWith('album:');
+  $('#sort').hidden = ['artists', 'recent', 'albums', 'news', 'stats', 'dups', 'settings'].includes(view) || !!smartName(view) || view.startsWith('collab:') || view.startsWith('album:');
   $('#sort').value = settings.sort;
   if (['fix', 'wave', 'wish', 'artists', 'albums'].includes(view)) { clearList(); $('#extra').innerHTML = ''; $('#disc').innerHTML = ''; }
   if (view === 'fix') { renderFix(); renderNav(); return; }
@@ -774,6 +787,7 @@ function render() {
   $('#extra').innerHTML = '';
   paintWebSearch();
   { const pl = lib.playlists.find(p => p.id === view); if (pl && pl.ids.length && tgCfg?.chatId) $('#extra').insertAdjacentHTML('afterbegin', '<button class="btn showall" data-act="sharePl">Поделиться плейлистом с музыкой</button>'); }
+  if (view.startsWith('collab:') && navigator.onLine) { const c = (settings.collabs || []).find(x => x.id === view.slice(7)); if (c && Date.now() - (c.scanned || 0) > 60e3) { c.scanned = Date.now(); scanCollab(c).catch(() => {}); } }
   if (view.startsWith('webartist:')) { paintArtistCatalog(); $('#empty').hidden = true; $('#playAll').hidden = true; }
   if (view.startsWith('artist:')) { paintArtistCatalog(); if (cut) $('#extra').innerHTML = `<button class="btn showall" data-act="artistAll">Показать все треки (${ids.length})</button>`; }
   if (view.startsWith('album:')) { const g = albumGroups().find(x => x.key === view.slice(6)) || webAlbum(view.slice(6)); if (g) { if (g.total > ids.length) { listSub = `есть ${ids.length} из ${g.total}`; paintSub(); } paintAlbumMissing(g); } }
@@ -823,7 +837,8 @@ function emptyHTML() {
   if (query) return `<h2>Ничего не нашлось</h2><p>По запросу «${esc(query)}» треков нет. Попробуй часть названия или имя артиста.</p>`;
   if (view === 'liked') return `<h2>Здесь будет любимое</h2><p>Нажми на сердечко у трека, и он появится в этом списке.</p>`;
   if (view.startsWith('artist:')) return '<h2>Треков этого автора больше нет</h2>';
-  if (SMART[view]) return '<h2>Пока пусто</h2><p>Подборка соберётся сама, когда ты послушаешь больше музыки.</p>';
+  if (view.startsWith('collab:')) return '<h2>Плейлист пока пустой</h2><p>Добавляйте треки: «⋯» у трека → «Добавить в плейлист» → этот совместный плейлист. Или просто пересылайте треки в эту группу в Telegram.</p>';
+  if (smartName(view)) return '<h2>Пока пусто</h2><p>Подборка соберётся сама, когда ты послушаешь больше музыки.</p>';
   if (view.startsWith('album:')) return '<h2>Из этого альбома у тебя пока ничего нет</h2><p>Ниже весь трек-лист: плюс — в «Хочу скачать», «Найти» — открыть бота.</p>';
   if (view === 'recent') return `<h2>Ты ещё ничего не слушал</h2><p>Включи любой трек, и история появится здесь.</p>`;
   if (view !== 'all') return `<h2>Плейлист пока пустой</h2><p>Нажми «⋯» у любого трека и выбери «Добавить в плейлист».</p>
@@ -860,7 +875,7 @@ function openMore() {
     ${row('data-view="recent"', 'clock', 'Недавние')}
     ${row('data-view="news"', 'wave', 'Новинки', newsUnseen())}
     ${row('data-view="stats"', 'clock', 'Итоги')}
-    ${Object.entries(SMART).map(([k, n]) => row(`data-view="${k}"`, 'list', n)).join('')}
+    ${smartEntries().map(([k, n]) => row(`data-view="${k}"`, 'list', n)).join('')}
     ${row('data-view="wish"', 'wish', 'Хочу скачать', wishes().length)}
     ${row('data-view="fix"', 'wand', 'Проверка названий', fixCount())}
     ${row('data-act="listen"', 'mic', 'Что играет?')}
@@ -890,9 +905,11 @@ function renderNav() {
     + item('dups', 'copy', 'Дубликаты')
     + `<button data-act="invite"><svg><use href="#i-artist"/></svg>Mix для друга</button>`
     + item('settings', 'eq', 'Настройки')
-    + `<div class="nav-title" style="margin-top:14px">Подборки</div>` + Object.entries(SMART).map(([k, n]) => item(k, 'list', n)).join('')
+    + `<div class="nav-title" style="margin-top:14px">Подборки</div>` + smartEntries().map(([k, n]) => item(k, 'list', n)).join('')
     + `<div class="nav-title" style="margin-top:14px">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>`
-    + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('');
+    + (settings.collabs || []).map(c => item('collab:' + c.id, 'artist', '👥 ' + c.title)).join('')
+    + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('')
+    + `<button data-act="collab"><svg><use href="#i-plus"/></svg>Совместный плейлист</button>`;
 }
 
 // ---------- очередь и плеер ----------
@@ -1660,10 +1677,54 @@ async function newPlaylist(withId) {
   lib.playlists.push(p); saveLib(); renderNav();
   return p;
 }
+// Совместный плейлист = группа (или канал) в Telegram, где вы оба. Треки в ней — это и есть плейлист.
+async function scanCollab(c) {
+  const tg = await ensureTg(), ent = await tg.peer(c.id);
+  if (!ent) throw new Error('Группа не найдена: возможно, ты из неё вышел');
+  let n = 0;
+  for await (const it of tg.audioMessages(ent)) {
+    const id = `tg:${c.id}:m${it.msgId}`;
+    tgItems.set(id, it);
+    if (tracks.has(id)) continue;
+    const p = parseFileName(it.fileName || 'Без названия');
+    const t = { id, source: 'tg', msgId: it.msgId, ext: { chat: c.id }, collab: c.id, from: 'collab', fileName: it.fileName, title: cleanTag(it.title) || cleanTag(p.title) || p.title, artist: cleanTag(it.artist) || cleanTag(p.artist), album: '', duration: it.duration, size: it.size, mime: it.mime, downloaded: false, addedAt: it.date * 1000 };
+    tracks.set(id, t); await saveTrack(t); n++;
+  }
+  if (n) { rebuildOrder(); if (view === 'collab:' + c.id) render(); }
+  return n;
+}
+async function openCollab() {
+  if (!tgCfg?.session) { toast('Сначала подключи Telegram'); return; }
+  const d = modal(`<h2>Совместный плейлист</h2><p>Это группа в Telegram, где состоите ты и друг. Всё, что любой из вас перешлёт туда, появится в плейлисте у обоих. Создай группу в Telegram, добавь друга и выбери её здесь. Друг в своём Mix делает то же самое.</p><ul class="chats" id="colList"><li style="color:var(--mist)">Загружаю список чатов…</li></ul>`);
+  try {
+    const tg = await ensureTg(), list = (await tg.chats()).filter(c => !c.entity?.self && c.id !== tgCfg.chatId);
+    $('#colList', d).innerHTML = list.map(c => `<li><button data-c="${esc(c.id)}"><span class="ava" style="--ch:${hash(c.title)}">${esc((c.title || '?')[0])}</span><span>${esc(c.title)}</span></button></li>`).join('') || '<li>Нет групп. Создай группу в Telegram и добавь туда друга.</li>';
+    d.onclick = async e => {
+      const b = e.target.closest('[data-c]'); if (!b) return;
+      const c = list.find(x => x.id === b.dataset.c), col = { id: c.id, title: c.title };
+      settings.collabs = [...(settings.collabs || []).filter(x => x.id !== c.id), col]; saveSettings();
+      closeLayer(); view = 'collab:' + c.id; renderNav(); render();
+      toast('Загружаю треки группы…');
+      scanCollab(col).then(n => toast(n ? `В плейлисте: ${tracksWord(n)}` : 'Пока пусто — перешлите туда треки')).catch(err => toast(err.message));
+    };
+  } catch { $('#colList', d).innerHTML = '<li>Не удалось получить список чатов. Проверь интернет и попробуй ещё раз</li>'; }
+}
+async function addToCollab(c, id) {
+  const t = getT(id); if (!t || t.source !== 'tg') { toast('В совместный плейлист можно добавить только трек из Telegram'); return; }
+  try {
+    const tg = await ensureTg();
+    const from = t.ext ? await tg.peer(t.ext.peer || t.ext.chat) : await resolveChat(tg);
+    await tg.forward(from, [t.msgId], await tg.peer(c.id));
+    toast(`Добавлено в «${c.title}»`); scanCollab(c).catch(() => {});
+  } catch { toast('Не получилось добавить: проверь интернет'); }
+}
 function pickPlaylist(id) {
-  const d = modal(`<h2>Добавить в плейлист</h2><ul class="chats">${lib.playlists.map(p => `<li><button data-p="${esc(p.id)}"><span class="ava" style="--ch:${hash(p.name)}">${esc(p.name[0].toUpperCase())}</span><span>${esc(p.name)}<small>${tracksWord(p.ids.length)}</small></span></button></li>`).join('')}
+  const cols = settings.collabs || [];
+  const d = modal(`<h2>Добавить в плейлист</h2><ul class="chats">${cols.map(c => `<li><button data-col="${esc(c.id)}"><span class="ava" style="--ch:${hash(c.title)}">👥</span><span>${esc(c.title)}<small>совместный</small></span></button></li>`).join('')}${lib.playlists.map(p => `<li><button data-p="${esc(p.id)}"><span class="ava" style="--ch:${hash(p.name)}">${esc(p.name[0].toUpperCase())}</span><span>${esc(p.name)}<small>${tracksWord(p.ids.length)}</small></span></button></li>`).join('')}
     <li><button data-p="new"><span class="ava" style="--ch:40">+</span><span>Новый плейлист</span></button></li></ul>`);
   d.onclick = async e => {
+    const cb = e.target.closest('[data-col]');
+    if (cb) { closeLayer(); addToCollab(cols.find(c => c.id === cb.dataset.col), id); return; }
     const b = e.target.closest('[data-p]'); if (!b) return;
     if (b.dataset.p === 'new') { const p = await newPlaylist(id); if (p) toast(`Добавлено в «${p.name}»`); return; }
     const p = lib.playlists.find(x => x.id === b.dataset.p);
@@ -2678,6 +2739,7 @@ document.addEventListener('click', async e => {
   else if (a === 'listen') openListen();
   else if (a === 'import') openImport();
   else if (a === 'setMix') openMix();
+  else if (a === 'collab') openCollab();
   else if (a === 'sharePl') { const pl = lib.playlists.find(p => p.id === view); if (pl) sharePlaylist(pl); }
   else if (a === 'openStats') window.open(dashboard(), '_blank', 'noopener');
   else if (a === 'setEq') openEq();
