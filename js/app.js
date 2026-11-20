@@ -960,7 +960,7 @@ function addToQueue(id, first = false) {
 }
 function queueUpcoming() {
   const i = Math.max(0, queue.indexOf(curId !== fromUser && queue.includes(curId) ? curId : queueAnchor));
-  return queue.slice(i + 1, i + 31).filter(id => getT(id) && !userQueue.includes(id));
+  return queue.slice(i + 1, i + 101).filter(id => getT(id) && !userQueue.includes(id));
 }
 const queueRow = (id, kind, n) => {
   const t = getT(id);
@@ -1077,7 +1077,7 @@ const waveLibrary = () => { const all = [...tracks.values()]; return navigator.o
 // Радио: начинаем с выбранного трека, дальше Волна подбирает похожие по звучанию, темпу и жанру
 function startRadio(id) {
   const t = getT(id); if (!t) return;
-  const picks = nextWave(waveLibrary().filter(x => x.id !== id), currentTaste(), { count: 12, history: recentIds(), after: t });
+  const picks = nextWave(waveLibrary().filter(x => x.id !== id), currentTaste(), { count: 40, history: recentIds(), after: t });
   waveMode = true;
   queue = queueBase = [id, ...picks.map(x => x.id)];
   injectPreviews();
@@ -1087,7 +1087,7 @@ function startRadio(id) {
 function startWave() {
   const library = waveLibrary();
   if (!library.length) { toast(tracks.size ? 'Без интернета волне нечего играть: треки ещё не скачаны' : 'Сначала добавь музыку'); return; }
-  const picks = nextWave(library, currentTaste(), { count: 12, history: recentIds(), after: engine.track });
+  const picks = nextWave(library, currentTaste(), { count: 40, history: recentIds(), after: engine.track });
   if (!picks.length) { toast('Волне нечего играть: все треки отмечены как «не моё»'); return; }
   waveMode = true;
   queue = queueBase = picks.map(t => t.id);
