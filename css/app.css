@@ -1065,3 +1065,10 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
   body:has(.full.open) .backdrop { display: none !important; }
 }
 body.bghidden .backdrop, body.bghidden .fullbg { display: none !important; }
+
+/* телефон: никаких анимированных шаров — статичный градиент в цветах обложки (вылеты при открытом приложении) */
+@media (pointer: coarse), (max-width: 900px) {
+  .backdrop .orbs { display: none !important; }
+  .backdrop { display: block !important; background: radial-gradient(90% 55% at 15% 10%, color-mix(in srgb, var(--c1) 34%, transparent), transparent 70%), radial-gradient(90% 55% at 90% 85%, color-mix(in srgb, var(--c2) 28%, transparent), transparent 70%); }
+  body.bghidden .backdrop { display: none !important; }
+}
