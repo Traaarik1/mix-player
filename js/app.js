@@ -1036,6 +1036,10 @@ engine.addEventListener('track', () => {
   if (lyricsOn) loadLyrics();
 });
 engine.addEventListener('state', paintState);
+// Страховка: если следующий трек не запустился сам (не скачался, не раскодировался), пробуем дальше по очереди
+engine.addEventListener('ended', () => { if (curId && neighbour(curId, 1)) setTimeout(() => next(), 300); });
+// Mix в фоне или экран погашен — не рисуем живой фон: iOS тогда реже выгружает плеер
+document.addEventListener('visibilitychange', () => document.body.classList.toggle('bghidden', document.hidden));
 engine.addEventListener('state', () => { if (engine.paused && !document.hidden) setTimeout(soundHunt, 3000); });
 engine.addEventListener('ended', paintState);
 

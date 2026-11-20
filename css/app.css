@@ -1057,3 +1057,11 @@ input[type=range] { background: linear-gradient(90deg, var(--c1), var(--c2)) 0 /
 .settings .setrow > svg { width: 22px; height: 22px; flex: none; color: var(--accent); }
 
 .settings .statline { cursor: default; }
+
+/* телефон: в полноэкранном плеере статичный градиент вместо анимированных шаров (экономия видеопамяти) */
+@media (pointer: coarse), (max-width: 900px) {
+  .fullbg .orbs { display: none !important; }
+  .full { background: radial-gradient(120% 70% at 25% 0%, color-mix(in srgb, var(--c1) 38%, #0e0a18), transparent 70%), radial-gradient(110% 70% at 90% 100%, color-mix(in srgb, var(--c2) 30%, #0e0a18), transparent 70%), #0e0a18 !important; }
+  body:has(.full.open) .backdrop { display: none !important; }
+}
+body.bghidden .backdrop, body.bghidden .fullbg { display: none !important; }
