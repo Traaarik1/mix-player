@@ -1896,8 +1896,7 @@ async function identHunt() {
       const t = todo[0];
       try {
         // на телефоне распознавание по звуку ждёт паузы: раскодировать трек во время игры — риск, что iOS выгрузит плеер
-        if (t.downloaded && settings.acoustKey && matchMedia('(pointer: coarse)').matches) while (!engine.paused || document.hidden) await new Promise(r => setTimeout(r, 5000));
-        const blob = t.downloaded ? await db.get('blobs', t.id) : null;
+        const blob = t.downloaded && heavyOk() ? await db.get('blobs', t.id) : null; // на телефоне — только по названию
         const used = auddCalls();
         let cand = await identify(t, blob, settings.acoustKey, { audd: auddFor });
         if (cand && t.soundBad && sameName(cand, t.soundBad) && cand.source !== 'sound') cand = null; // по звуку уже выяснили, что это не она
@@ -1952,8 +1951,10 @@ let soundRunning = false;
 const soundSkip = new Set();
 const soundState = { done: 0, renamed: 0, bad: 0 };
 const needsSound = t => t && t.downloaded && !t.previewOnly && t.source !== 'preview' && t.sound?.v !== SOUND_V && !['ok', 'audd'].includes(t.sound?.st) && t.ident?.status !== 'kept' && !t.conf;
+// Телефон: распознавание по звуку не запускаем — раскодирование целых треков переполняет память iPhone. Это делает компьютер, названия приходят через синхронизацию
+const heavyOk = () => !matchMedia('(pointer: coarse)').matches;
 async function soundHunt() {
-  if (soundRunning || identRunning || !navigator.onLine) return;
+  if (soundRunning || identRunning || !navigator.onLine || !heavyOk()) return;
   soundRunning = true; soundSkip.clear();
   try {
     const { rawPrint } = await import('./audiokey.js');
