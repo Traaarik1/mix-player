@@ -1080,3 +1080,20 @@ body.bghidden .backdrop, body.bghidden .fullbg { display: none !important; }
 body.lite .backdrop, body.lite .fullbg .orbs, body.lite .fullbg i { display: none !important; }
 body.lite *, body.lite *::before, body.lite *::after { animation: none !important; transition: none !important; }
 .speeds .chip.on { background: var(--accent); color: var(--night); }
+
+/* волна-прогресс как у голосовых */
+.wbars { position: absolute; inset: 0; display: none; pointer-events: none; }
+.track.wv .wbars { display: block; }
+.track.wv::before, .track.wv .fill { opacity: 0 !important; }
+.wb { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; }
+.wb i { flex: 0 0 3px; min-height: 3px; border-radius: 2px; background: rgb(255 255 255 / .28); }
+.wb.on i { background: linear-gradient(var(--c1), var(--c2)); }
+.wb.on { clip-path: inset(0 100% 0 0); }
+.track.wv { height: 28px; }
+.full .track.wv { height: 40px; }
+.track.wv .knob { top: 50%; margin-top: -6px; }
+@media (max-width: 900px) {
+  .bar .track.wv .wbars { display: none; }
+  .bar .track.wv::before, .bar .track.wv .fill { opacity: 1 !important; }
+  .bar .track.wv { height: 3px; }
+}

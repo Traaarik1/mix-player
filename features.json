@@ -1,5 +1,10 @@
 [
   {
+    "added": "2026-11-23",
+    "ru": "<b>Волна вместо полоски</b> — прогресс трека как у голосовых в Telegram, видно громкие и тихие места.",
+    "en": "<b>Waveform progress bar</b> — like Telegram voice messages, shows loud and quiet parts."
+  },
+  {
     "added": "2026-11-20",
     "ru": "<b>Картинки «Сейчас слушаю» и «Итоги года»</b> — для сторис и чатов.",
     "en": "<b>“Now playing” and “Year in Mix” cards</b> — for stories and chats."

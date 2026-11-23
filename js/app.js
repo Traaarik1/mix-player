@@ -1183,6 +1183,8 @@ engine.addEventListener('track', () => {
   if (lyricsOn) loadLyrics();
 });
 engine.addEventListener('state', paintState);
+engine.addEventListener('track', () => paintWaveBars());
+engine.addEventListener('state', () => paintWaveBars());
 // Страховка: если следующий трек не запустился сам (не скачался, не раскодировался), пробуем дальше по очереди
 engine.addEventListener('ended', () => { if (curId && neighbour(curId, 1)) setTimeout(() => next(), 300); });
 // Mix в фоне или экран погашен — не рисуем живой фон: iOS тогда реже выгружает плеер
@@ -1640,6 +1642,15 @@ function paintNext() {
 let dragging = null, lastPos = '', lastDur = '', lastPct = -1, lastChip = '';
 const posEls = $$('[data-pos]'), durEls = $$('[data-dur]');
 const seekEls = $$('[data-seek]').map(tr => [tr.querySelector('.fill'), tr.querySelector('.knob')]);
+// волна как у голосовых в Telegram
+const waveEls = $$('[data-seek]').map(tr => { const w = document.createElement('div'); w.className = 'wbars'; w.innerHTML = '<div class="wb"></div><div class="wb on"></div>'; tr.prepend(w); return w; });
+let waveFor = null;
+function paintWaveBars() {
+  const p = engine.track?.peaks || '';
+  if (p === waveFor) return; waveFor = p;
+  const html = [...p].map(c => `<i style="height:${c * 11}%"></i>`).join('');
+  for (const w of waveEls) { w.parentElement.classList.toggle('wv', !!p); for (const b of w.children) b.innerHTML = html; }
+}
 function paintProgress() {
   const pos = dragging ? dragging.pos : engine.position, dur = engine.duration;
   const a = fmt(pos), b = fmt(dur), pct = dur ? Math.round(pos / dur * 1000) / 10 : 0;
@@ -1648,6 +1659,7 @@ function paintProgress() {
   if (pct !== lastPct) {
     lastPct = pct;
     for (const [fill, knob] of seekEls) { fill.style.transform = `scaleX(${pct / 100})`; knob.style.left = pct + '%'; }
+    for (const w of waveEls) w.lastChild.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
   }
   return pos;
 }
