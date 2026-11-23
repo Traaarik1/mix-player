@@ -1096,3 +1096,4 @@ body.lite *, body.lite *::before, body.lite *::after { animation: none !importan
 .bar .track.wv::before, .bar .track.wv .fill { opacity: 1 !important; }
 .bar .track.wv { height: 16px; }
 @media (max-width: 900px) { .bar .track.wv { height: 3px; } }
+.full .track.wv .knob { display: none !important; }
