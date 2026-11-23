@@ -44,6 +44,10 @@
   .news li { margin: 8px 0; }
   .news .date { color: var(--mist); font-size: 13px; margin-right: 6px; font-variant-numeric: tabular-nums; }
   kbd { background: var(--velvet-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font: 600 .9em system-ui; }
+  .ptabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 4px; }
+  .ptabs button { border: 1px solid var(--line); background: var(--velvet); color: var(--paper); padding: 9px 16px; border-radius: 999px; font: 700 15px system-ui; cursor: pointer; }
+  .ptabs button.on { color: #1a1226; background: linear-gradient(135deg, var(--lilac), var(--pink) 55%, var(--amber)); border-color: transparent; }
+  .ppane[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -79,39 +83,43 @@
     <li><a href="#faq">FAQ</a></li>
   </ol>
 
-  <h2 id="install"><span class="n">1</span>Install Mix</h2>
-  <h3>iPhone</h3>
-  <ol>
-    <li>Open the <a href="./">Mix link</a> in <b>Safari</b> (Safari specifically, not inside Telegram or Chrome).</li>
-    <li>Tap “Share” (square with an up arrow) → <b>“Add to Home Screen”</b> → “Add”.</li>
-    <li>Open Mix from the Home Screen icon — that way it works like a normal app and keeps playing with the screen off.</li>
-  </ol>
-  <h3>Android</h3>
-  <ol><li>Open the link in Chrome → “⋮” menu → <b>“Install app”</b> (or “Add to Home screen”).</li></ol>
-  <h3>Computer</h3>
-  <ol><li>Just open the link in a browser (Chrome, Edge, Firefox). In Chrome and Edge there’s an “Install” button in the address bar — Mix will open in its own window.</li></ol>
-  <p>To switch the language: Mix → Settings → Language → English.</p>
-
-  <h3 id="shortcut">Desktop shortcut (Windows)</h3>
-  <ol>
-    <li><b>Chrome or Edge</b> (best option): open Mix → the <b>“Install”</b> icon on the right of the address bar (a monitor with an arrow) → “Install”. If there’s no icon: ⋮ menu → “Cast, save and share” → <b>“Install page as app”</b> (in Edge: ⋯ → “Apps” → “Install this site as an app”). A Mix shortcut appears on the desktop and in the Start menu, and Mix opens in its own window.</li>
-    <li><b>Pin to the taskbar:</b> open Mix from the shortcut → right-click its taskbar icon → “Pin to taskbar”.</li>
-    <li><b>Firefox</b> can’t install sites as apps. Make a shortcut manually: right-click an empty spot on the desktop → “New” → “Shortcut” → paste <code>https://traaarik1.github.io/mix-player/</code> → “Next” → name it <code>Mix</code> → “Finish”.</li>
-  </ol>
-  <div class="card tip"><b>Important</b>Open Mix from one place only — one shortcut or one tab. If Mix is open in two windows at once, Telegram may reset the login.</div>
-  <h3>Phone shortcut</h3>
-  <ul>
-    <li><b>iPhone:</b> Safari → “Share” (square with an arrow) → <b>“Add to Home Screen”</b> → “Add”. Always open Mix from that icon.</li>
-    <li><b>Android:</b> Chrome → ⋮ menu → <b>“Install app”</b> or “Add to Home screen”.</li>
-  </ul>
-  <h3 id="mac">MacBook / Mac</h3>
-  <ol>
-    <li><b>As a separate app.</b> In <b>Safari</b> (macOS Sonoma and later): open Mix → File menu → <b>“Add to Dock”</b>. In <b>Chrome</b>: the “Install” icon on the right of the address bar (or ⋮ menu → “Cast, save and share” → “Install”). Mix appears in the Dock and Launchpad and opens in its own window.</li>
-    <li><b>Launch at login:</b> System Settings → General → Login Items → “+” → choose Mix in Applications (for Chrome — in “Chrome Apps”).</li>
-    <li><b>Control without the window.</b> While Mix plays, it shows up in <b>Control Center</b> (top-right icon → “Now Playing”): pause, seek, next track. The <kbd>F7</kbd> <kbd>F8</kbd> <kbd>F9</kbd> keys and AirPods buttons work too.</li>
-    <li><b>Mini player on top of windows</b> — the closest thing to a widget. In Mix tap the mini player button at the bottom right (next to the queue). A small window with the cover and buttons stays on top of all apps. Works in Chrome and Edge; not available in Safari.</li>
-  </ol>
-  <div class="card tip"><b>What about a real desktop widget?</b>macOS only allows widgets for regular App Store apps, not websites. So instead: the mini player on top of windows and “Now Playing” in Control Center.</div>
+  <h2 id="install"><span class="n">1</span>Install Mix and add a shortcut</h2>
+  <div class="ptabs" id="ptabs"><button data-p="iphone" class="on">iPhone</button><button data-p="android">Android</button><button data-p="mac">Mac</button><button data-p="pc">PC (Windows)</button></div>
+  <div class="ppane" data-p="iphone" id="iphone">
+    <ol>
+      <li>Open the <a href="./">Mix link</a> in <b>Safari</b> specifically (not inside Telegram or Chrome).</li>
+      <li>Tap “Share” — the square with an up arrow at the bottom.</li>
+      <li>Scroll down → <b>“Add to Home Screen”</b> → “Add”. The Mix icon appears on your Home Screen.</li>
+      <li><b>Always open Mix from that icon</b>, not from Safari: then it works like an app, plays with the screen off and responds to the lock screen and headphones.</li>
+    </ol>
+    <div class="card tip"><b>Tip</b>If Mix acts strangely, swipe it away in the app switcher and open it from the icon again.</div>
+  </div>
+  <div class="ppane" data-p="android" id="android" hidden>
+    <ol>
+      <li>Open the <a href="./">Mix link</a> in <b>Chrome</b>.</li>
+      <li><b>⋮</b> menu at the top right → <b>“Install app”</b> (or “Add to Home screen”) → “Install”.</li>
+      <li>The Mix icon appears on the home screen and in the app list. Open Mix from it.</li>
+    </ol>
+    <div class="card tip"><b>Tip</b>So music doesn’t stop with the screen off: phone Settings → Apps → Chrome (or Mix) → Battery → “Unrestricted”.</div>
+  </div>
+  <div class="ppane" data-p="mac" id="mac" hidden>
+    <ol>
+      <li><b>Safari</b> (macOS Sonoma and later): open Mix → File menu → <b>“Add to Dock”</b>. <b>Chrome</b>: the “Install” icon on the right of the address bar (or ⋮ → “Cast, save and share” → “Install”). Mix appears in the Dock and Launchpad and opens in its own window.</li>
+      <li><b>Launch at login:</b> System Settings → General → Login Items → “+” → choose Mix in Applications (for Chrome — “Chrome Apps”).</li>
+      <li><b>Control without the window:</b> Control Center → “Now Playing”, <kbd>F7</kbd> <kbd>F8</kbd> <kbd>F9</kbd> keys and AirPods buttons.</li>
+      <li><b>Mini player on top of windows</b> (instead of a widget): the mini player button at the bottom right in Mix. Works in Chrome and Edge.</li>
+    </ol>
+    <div class="card tip"><b>What about a desktop widget?</b>macOS only allows widgets for regular App Store apps, not websites. So: the mini player on top and “Now Playing” in Control Center.</div>
+  </div>
+  <div class="ppane" data-p="pc" id="shortcut" hidden>
+    <ol>
+      <li><b>Chrome or Edge</b> (best option): open Mix → the <b>“Install”</b> icon on the right of the address bar (a monitor with an arrow) → “Install”. If there’s no icon: ⋮ → “Cast, save and share” → <b>“Install page as app”</b> (in Edge: ⋯ → “Apps” → “Install this site as an app”). A shortcut appears on the desktop and in the Start menu.</li>
+      <li><b>Pin to the taskbar:</b> open Mix from the shortcut → right-click its taskbar icon → “Pin”.</li>
+      <li><b>Firefox</b> can’t install sites as apps — make a shortcut manually: right-click the desktop → “New” → “Shortcut” → address <code>https://traaarik1.github.io/mix-player/</code> → name <code>Mix</code> → “Finish”.</li>
+      <li>Media keys on the keyboard and headphones control Mix even when minimized. Mini player on top of windows — the button at the bottom right (Chrome, Edge).</li>
+    </ol>
+    <div class="card tip"><b>Important</b>Open Mix from one place only — one shortcut or one tab. If Mix is open in two windows at once, Telegram may reset the login.</div>
+  </div>
 
   <h2 id="channel"><span class="n">2</span>Create a music channel</h2>
   <ol>

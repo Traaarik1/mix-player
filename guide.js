@@ -9,6 +9,20 @@
     document.querySelectorAll('a[href="./"]').forEach(function (a) { a.href = './?ref=' + ref; });
   }
 
+  // вкладки платформ: открываем ту, с которой зашли
+  var tabs = document.getElementById('ptabs');
+  if (tabs) {
+    var show = function (p) {
+      tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.p === p); });
+      document.querySelectorAll('.ppane').forEach(function (d) { d.hidden = d.dataset.p !== p; });
+    };
+    tabs.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) show(b.dataset.p); });
+    var ua = navigator.userAgent, h = location.hash.slice(1);
+    var map = { iphone: 'iphone', android: 'android', mac: 'mac', shortcut: 'pc', pc: 'pc' };
+    addEventListener('hashchange', function () { var p = map[location.hash.slice(1)]; if (p) show(p); });
+    show(map[h] || (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iphone' : /Android/.test(ua) ? 'android' : /Mac/.test(ua) ? 'mac' : 'pc'));
+  }
+
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var fresh = function (d) { return Date.now() - new Date(d).getTime() < 7 * 864e5; };
 
