@@ -732,6 +732,7 @@ function renderSettings() {
     ${tgCfg?.session ? row('data-act="syncNow"', 'repeat', 'Синхронизировать сейчас', 'Если на компьютере и телефоне разные лайки или плейлисты') : ''}
     <div class="sechead"><div><b>Telegram</b></div></div>
     <div class="tgcard moretg">${$('#tgcard').innerHTML}</div>
+    ${tgCfg?.chatId ? row('data-act="relogin"', 'repeat', 'Войти в Telegram заново', 'Если пишет «Нет связи с Telegram», а интернет есть') : ''}
     ${row('data-act="musicBot"', 'tg', 'Музыкальный бот', settings.musicBot ? '@' + settings.musicBot : 'Кнопка «Найти» откроет этого бота с названием трека')}
     <div class="sechead"><div><b>Друзья</b></div></div>
     ${row('data-act="invite"', 'artist', 'Mix для друга', 'Отправь другу — там всё по шагам')}
@@ -2657,7 +2658,10 @@ async function startSync() {
     }
     tgCfg.lastSync = Date.now(); saveTg();
   } catch (e) {
-    sync.error = e.message === 'auth' ? 'Нужно войти в Telegram заново' : e.message?.startsWith('Канал') ? e.message : 'Нет связи с Telegram';
+    const why = String(e.errorMessage || e.message || '');
+    // ключ отклонён самим Telegram (две вкладки, завершённый сеанс) — это не «нет связи», а нужен новый вход
+    if (/AUTH_KEY|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED/.test(why)) e = new Error('auth');
+    sync.error = e.message === 'auth' ? 'Нужно войти в Telegram заново' : e.message?.startsWith('Канал') ? e.message : 'Нет связи с Telegram' + (why && why !== 'auth' ? ': ' + why.slice(0, 80) : '');
     if (e.message === 'busy') sync.error = 'Mix открыт в другой вкладке или окне — Telegram работает там. Закрой лишнюю вкладку';
     if (e.message === 'auth') { tgCfg.session = ''; saveTg(); }
     console.warn(e);
@@ -2924,6 +2928,7 @@ document.addEventListener('click', async e => {
   else if (a === 'artistAll') { artistAll = true; render(); }
   else if (a?.startsWith('stats:')) { statsPeriod = a.slice(6); render(); }
   else if (a === 'tg') openTg();
+  else if (a === 'relogin') { if (confirm('Войти в Telegram заново? Канал, музыка, лайки и плейлисты останутся.')) { try { (await tgLib()).logout?.(); } catch {} tgReady = null; tgCfg.session = ''; saveTg(); renderTgCard(); openTg(); } }
   else if (a === 'tgSync') startSync();
   else if (a === 'tgStop') { sync.stop = true; }
   else if (a === 'chanGo') { settings.chanVerified = true; saveSettings(); chanQueue(); }
