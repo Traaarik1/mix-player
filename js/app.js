@@ -721,8 +721,6 @@ function renderSettings() {
     ${row('data-act="setMix"', 'wave', 'Переход между треками', 'Плавный переход, срез тишины')}
     ${row('data-act="setEq"', 'eq', 'Эквалайзер', 'Частоты под твои наушники')}
     ${sw('setNorm', settings.norm !== false, 'Ровная громкость', 'Громкие треки чуть тише, тихие — громче, чтобы не крутить звук от песни к песне')}
-    <div class="setrow"><span>Скорость<small>Speed up / slowed — тон меняется вместе со скоростью</small></span></div>
-    <div class="presets">${[[.85, 'Slowed'], [1, 'Обычная'], [1.15, 'Speed up'], [1.3, 'Быстрее']].map(([r, n]) => `<button class="chip${(settings.speed || 1) === r ? ' on' : ''}" data-act="speed:${r}">${n}</button>`).join('')}</div>
     ${sw('setLite', !!settings.lite, 'Режим «экономия»', 'Без живого фона и анимаций: меньше памяти и заряда, для слабых телефонов')}
     ${sw('setTrim', !!settings.trim, 'Умный микс', 'Срезать тишину в начале и конце треков, чтобы на стыке не было паузы')}
     <div class="sechead"><div><b>Распознавание</b></div></div>
@@ -1698,7 +1696,9 @@ function openMix() {
     <svg class="mixviz" viewBox="0 0 320 50" preserveAspectRatio="none"><path id="cOut" stroke="var(--accent)"/><path id="cIn" stroke="var(--amber)"/></svg>
     <div class="field"><span>Длина перехода</span><input type="range" id="cf" min="0" max="12" step="1"><output id="cfOut"></output></div>
     <label class="check"><input type="checkbox" class="sw" id="trim"><span>Умный микс<small>Срезать тишину в начале и конце треков, чтобы на стыке не было паузы</small></span></label>
-    <label class="check"><input type="checkbox" class="sw" id="norm"><span>Ровная громкость<small>Громкие треки чуть тише, тихие — громче, чтобы не крутить звук от песни к песне</small></span></label>`);
+    <label class="check"><input type="checkbox" class="sw" id="norm"><span>Ровная громкость<small>Громкие треки чуть тише, тихие — громче, чтобы не крутить звук от песни к песне</small></span></label>
+    <div class="field"><span>Скорость</span></div>
+    <div class="presets speeds">${[[.85, 'Slowed'], [1, 'Обычная'], [1.15, 'Speed up'], [1.3, 'Быстрее']].map(([r, n]) => `<button class="chip${(settings.speed || 1) === r ? ' on' : ''}" data-act="speed:${r}">${n}</button>`).join('')}</div>`);
   const sync = () => {
     $('#cf', el).value = settings.cf; $('#cf', el).style.setProperty('--p', settings.cf / 12 * 100 + '%');
     $('#cfOut', el).textContent = settings.cf ? settings.cf + ' с' : 'выкл';
@@ -2468,10 +2468,21 @@ const sync = { running: false, stop: false, done: 0, total: 0, scanned: 0, error
 const tgLib = async () => tgMod ??= await import('./tg.js');
 
 let tgConnecting = false;
+// Только одна вкладка Mix держит связь с Telegram: две вкладки с одним ключом Telegram считает взломом и отключает вход
+let tgLock = null;
+function holdTgLock() {
+  if (tgLock) return tgLock;
+  tgLock = new Promise(res => {
+    if (!navigator.locks) return res(true);
+    navigator.locks.request('mix-telegram', { ifAvailable: true }, lock => { res(!!lock); return lock ? new Promise(() => {}) : undefined; });
+  }).then(ok => { if (!ok) tgLock = null; return ok; });
+  return tgLock;
+}
 function ensureTg() {
   if (tgReady) return tgReady;
   tgConnecting = true;
   tgReady = (async () => {
+    if (!await holdTgLock()) throw new Error('busy');
     const tg = await tgLib();
     await tg.connect(tgCfg);
     if (!await tg.authorized()) throw new Error('auth');
@@ -2647,6 +2658,7 @@ async function startSync() {
     tgCfg.lastSync = Date.now(); saveTg();
   } catch (e) {
     sync.error = e.message === 'auth' ? 'Нужно войти в Telegram заново' : e.message?.startsWith('Канал') ? e.message : 'Нет связи с Telegram';
+    if (e.message === 'busy') sync.error = 'Mix открыт в другой вкладке или окне — Telegram работает там. Закрой лишнюю вкладку';
     if (e.message === 'auth') { tgCfg.session = ''; saveTg(); }
     console.warn(e);
   } finally {
@@ -2876,7 +2888,7 @@ document.addEventListener('click', async e => {
   else if (a === 'offline') downloadAll(viewIds());
   else if (a === 'nowCard') shareNowCard();
   else if (a === 'yearCard') shareYearCard();
-  else if (a?.startsWith('speed:')) { settings.speed = +a.slice(6); engine.setSpeed(settings.speed); saveSettings(); toast(settings.speed === 1 ? 'Обычная скорость' : settings.speed > 1 ? 'Speed up' : 'Slowed'); if (view === 'settings') render(); }
+  else if (a?.startsWith('speed:')) { settings.speed = +a.slice(6); engine.setSpeed(settings.speed); saveSettings(); toast(settings.speed === 1 ? 'Обычная скорость' : settings.speed > 1 ? 'Speed up' : 'Slowed'); layer.querySelectorAll('[data-act^="speed:"]').forEach(b => b.classList.toggle('on', +b.dataset.act.slice(6) === settings.speed)); paintMixChip?.(); }
   else if (a === 'syncNow') { cloud ? cloud.push().then(r => { toast(r?.ok === false ? 'Синхронизация не удалась: ' + (r.error || 'нет связи') : 'Синхронизировано'); if (view === 'settings') render(); }) : (initCloud().then(() => cloud?.push()).catch(() => toast('Сначала подключи Telegram'))); }
   else if (a === 'collab') openCollab();
   else if (a === 'sharePl') { const pl = lib.playlists.find(p => p.id === view); if (pl) sharePlaylist(pl); }

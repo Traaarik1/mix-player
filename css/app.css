@@ -1079,3 +1079,4 @@ body.bghidden .backdrop, body.bghidden .fullbg { display: none !important; }
 /* режим «экономия»: без живого фона и анимаций */
 body.lite .backdrop, body.lite .fullbg .orbs, body.lite .fullbg i { display: none !important; }
 body.lite *, body.lite *::before, body.lite *::after { animation: none !important; transition: none !important; }
+.speeds .chip.on { background: var(--accent); color: var(--night); }
