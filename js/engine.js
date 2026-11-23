@@ -130,12 +130,13 @@ function estSeconds(track, blob) {
   return blob.size * 8 / (/flac|wav|alac/i.test((blob.type || '') + (track.fileName || '')) ? 800e3 : 192e3);
 }
 
-// волна для полосы прогресса: 48 столбиков, громкость 1..9 строкой
-function peaksOf(buf, n = 48) {
+// волна для полосы прогресса: WAVE_N столбиков, громкость 1..9 строкой
+const WAVE_N = 90;
+function peaksOf(buf, n = WAVE_N) {
   const d = buf.getChannelData(0), step = Math.floor(d.length / n), out = [];
   for (let i = 0; i < n; i++) { let s = 0, k = 0; const a = i * step; for (let j = a; j < a + step; j += 64) { s += d[j] * d[j]; k++; } out.push(Math.sqrt(s / (k || 1))); }
-  const mx = Math.max(...out) || 1;
-  return out.map(v => Math.max(1, Math.round(v / mx * 9))).join('');
+  const s = [...out].sort((a, b) => a - b), lo = s[Math.floor(n * .05)], hi = s[Math.floor(n * .97)] || 1;
+  return out.map(v => Math.max(1, Math.min(9, Math.round(1 + Math.pow(Math.max(0, v - lo) / ((hi - lo) || 1), 1.4) * 8)))).join('');
 }
 
 export class Engine extends EventTarget {
@@ -256,8 +257,8 @@ export class Engine extends EventTarget {
     this.decodeQ = run.catch(noop);
     const buf = await run;
     this.sizes.set(track.id, buf.length * buf.numberOfChannels * 4);
-    if (!track.bounds || track.bpm === undefined || !track.loud || !track.peaks) {
-      if (!track.peaks) try { track.peaks = peaksOf(buf); } catch {}
+    if (!track.bounds || track.bpm === undefined || !track.loud || track.peaks?.length !== WAVE_N) {
+      if (track.peaks?.length !== WAVE_N) try { track.peaks = peaksOf(buf); } catch {}
       track.bounds ||= silenceBounds(buf);
       if (!track.loud) try { track.loud = loudnessOf(buf); } catch {}
       if (track.bpm === undefined) { const a = analyzeAudio(buf.getChannelData(0), buf.sampleRate); track.bpm = a.bpm; track.rms = a.rms; }

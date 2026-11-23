@@ -1648,7 +1648,7 @@ let waveFor = null;
 function paintWaveBars() {
   const p = engine.track?.peaks || '';
   if (p === waveFor) return; waveFor = p;
-  const html = [...p].map(c => `<i style="height:${c * 11}%"></i>`).join('');
+  const html = [...p].map(c => `<i style="height:${8 + c * 10.2}%"></i>`).join('');
   for (const w of waveEls) { w.parentElement.classList.toggle('wv', !!p); for (const b of w.children) b.innerHTML = html; }
 }
 function paintProgress() {

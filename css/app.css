@@ -1086,14 +1086,13 @@ body.lite *, body.lite *::before, body.lite *::after { animation: none !importan
 .track.wv .wbars { display: block; }
 .track.wv::before, .track.wv .fill { opacity: 0 !important; }
 .wb { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; }
-.wb i { flex: 0 0 3px; min-height: 3px; border-radius: 2px; background: rgb(255 255 255 / .28); }
-.wb.on i { background: linear-gradient(var(--c1), var(--c2)); }
+.wb i { flex: 0 1 3px; min-width: 2px; border-radius: 2px; background: rgb(255 255 255 / .42); }
+.wb.on i { background: linear-gradient(#fff, var(--c1) 35%, var(--c2)); box-shadow: 0 0 6px color-mix(in srgb, var(--c1) 55%, transparent); }
 .wb.on { clip-path: inset(0 100% 0 0); }
-.track.wv { height: 28px; }
-.full .track.wv { height: 40px; }
+.track.wv { height: 34px; }
+.full .track.wv { height: 52px; }
 .track.wv .knob { top: 50%; margin-top: -6px; }
-@media (max-width: 900px) {
-  .bar .track.wv .wbars { display: none; }
-  .bar .track.wv::before, .bar .track.wv .fill { opacity: 1 !important; }
-  .bar .track.wv { height: 3px; }
-}
+.bar .track.wv .wbars { display: none; }
+.bar .track.wv::before, .bar .track.wv .fill { opacity: 1 !important; }
+.bar .track.wv { height: 16px; }
+@media (max-width: 900px) { .bar .track.wv { height: 3px; } }
