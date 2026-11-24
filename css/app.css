@@ -1340,3 +1340,11 @@ button:active:not(:disabled) { transform: scale(.96); }
 
 /* без шва между меню и основной частью */
 @media (min-width: 901px) { .rail { background: transparent !important; border-right: 0 !important; box-shadow: none !important; } }
+/* без шва: меню не размывает фон отдельно, цветная шапка тянется на всю ширину */
+.rail { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.main::before { display: none !important; }
+.app { position: relative; }
+.app::before { content: ""; position: absolute; inset: 0 0 auto; height: 340px; pointer-events: none; transition: background 1.2s; background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 38%, transparent), transparent); }
+@media (max-width: 900px) { .app::before { display: none; } }
+.rail { scrollbar-color: transparent transparent; } .rail:hover { scrollbar-color: rgb(255 255 255 / .15) transparent; }
+.rail::-webkit-scrollbar-thumb { background: transparent; } .rail:hover::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .15); }
