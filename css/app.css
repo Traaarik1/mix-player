@@ -1389,3 +1389,4 @@ body.hasglass .fullbg .orbs { display: none; }
 .fxgrid { display: none !important; }
 /* большой плеер с лавой: обложка-фон приглушена, чтобы лава читалась */
 body.hasglass .full .fullbg i.on { opacity: .35; }
+@media (min-width: 901px) { .fullbg i { filter: blur(36px) saturate(1.4) !important; } }

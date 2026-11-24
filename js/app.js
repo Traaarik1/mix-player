@@ -3419,7 +3419,7 @@ void main(){
     // на паузе всё замирает; струя при запуске доливается в любом случае
     const still = engine.paused && pour <= 0 && !balls.some(b => b.fly);
     if (still && (idle++ % 30)) return; // на паузе всё стоит; перерисовываем редко, чтобы картинка не пропадала
-    const SP = .45; // вальяжно: лава-лампа двигается медленно
+    const SP = .62; // вальяжно: лава-лампа двигается медленно
     if (!still) {
     if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); const soft = c => { const l = c[0] * .3 + c[1] * .59 + c[2] * .11; return c.map(v => Math.min(.85, (v * .55 + l * .45) * .8)); }; // приглушаем: без кислотных цветов
       tc1 = soft(rgb(cs.getPropertyValue('--c1').trim())); tc2 = soft(rgb(cs.getPropertyValue('--c2').trim())); }
