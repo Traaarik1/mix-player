@@ -1604,7 +1604,7 @@ async function loadAudio(t) {
 
 // ---------- отрисовка плеера ----------
 let bdUrl = '', bdFlip = 0;
-// смена трека: старые шары разлетаются в стороны и гаснут, новые (уже нового цвета) выплывают с противоположного края
+// смена трека: старые шары разлетаются в стороны и гаснут, новые (уже нового цвета) вырастают в случайных местах
 let orbT = 0;
 function orbSwap(apply) {
   const os = $$('.orbs span'), rnd = m => ((Math.random() * 2 - 1) * m).toFixed(1);
@@ -1614,9 +1614,9 @@ function orbSwap(apply) {
   os.forEach((o, i) => { o.style.transition = 'translate .7s cubic-bezier(.5,0,.8,.4), opacity .6s'; o.style.translate = `${(Math.cos(dirs[i]) * 70).toFixed(1)}vmax ${(Math.sin(dirs[i]) * 70).toFixed(1)}vmax`; o.style.opacity = 0; });
   orbT = setTimeout(() => {
     apply();
-    os.forEach((o, i) => { o.style.transition = 'none'; o.style.translate = `${(-Math.cos(dirs[i]) * 70).toFixed(1)}vmax ${(-Math.sin(dirs[i]) * 70).toFixed(1)}vmax`; });
+    os.forEach(o => { o.style.transition = 'none'; o.style.translate = `${rnd(30)}vmax ${rnd(25)}vmax`; o.style.scale = '.3'; });
     void os[0].offsetWidth;
-    os.forEach((o, i) => { o.style.transition = `translate 1.6s cubic-bezier(.2,.8,.2,1) ${i * 70}ms, opacity 1.2s ${i * 70}ms`; o.style.translate = `${rnd(16)}vmax ${rnd(12)}vmax`; o.style.opacity = ''; });
+    os.forEach((o, i) => { o.style.transition = `translate 2s cubic-bezier(.2,.8,.2,1) ${i * 90}ms, scale 1.6s cubic-bezier(.2,.8,.2,1) ${i * 90}ms, opacity 1.2s ${i * 90}ms`; o.style.translate = `${rnd(16)}vmax ${rnd(12)}vmax`; o.style.scale = ''; o.style.opacity = ''; });
   }, 650);
 }
 async function paintBackdrop(t) {
