@@ -1159,3 +1159,14 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
   .bar { border-radius: 18px 18px 0 0; background: color-mix(in srgb, var(--night, #140f1e) 78%, var(--c1, #b79cff) 10%); box-shadow: 0 -8px 30px rgb(0 0 0 / .35); }
   .bar .cov, .bar img { border-radius: 10px; }
 }
+
+/* общий лоск: поиск, полки, кнопки */
+.search { border: 1px solid rgb(255 255 255 / .08); transition: border-color .2s, background-color .2s; }
+.search:focus { border-color: color-mix(in srgb, var(--c1, #b79cff) 60%, transparent); background: rgb(255 255 255 / .09); outline: none; }
+.tile img, .tile .cov { transition: transform .25s ease, box-shadow .25s ease; }
+.tile:hover img, .tile:hover .cov { transform: translateY(-3px); box-shadow: 0 14px 30px rgb(0 0 0 / .4); }
+.row .cov, .row img { border-radius: 8px; }
+.main::-webkit-scrollbar { width: 8px; }
+.main::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .12); border-radius: 8px; }
+.main::-webkit-scrollbar-track { background: transparent; }
+::selection { background: color-mix(in srgb, var(--c1, #b79cff) 45%, transparent); }
