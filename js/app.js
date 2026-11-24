@@ -133,7 +133,7 @@ async function paletteOf(blob) {
   }
   const top = bins.filter(x => x.w > .5).sort((a, b) => b.w - a.w).slice(0, 3).map(x => [x.r / x.w, x.g / x.w, x.b / x.w].map(Math.round));
   // почти нет цвета (чёрная, белая, серая обложка) — фон тоже делаем чёрно-серым
-  if (col < 40) { const m = []; m.mono = lum / 1024; return m; }
+  if (col < 160) { const m = []; m.mono = lum / 1024; return m; }
   return top;
 }
 const palCache = new Map();
@@ -3387,7 +3387,7 @@ void main(){
   float halo=smoothstep(.35,.95,f)*.18;
   float core=smoothstep(1.,3.5,f);
   float k=q.y/res.y;
-  vec3 col=mix(c2,c1*1.15,.4+.6*core);
+  vec3 col=c1*(.8+.35*core);
   col=mix(col,min(c1*1.25+vec3(.06,.05,.02),vec3(1.)),core*.4*k); // снизу и в середине светится, как воск над лампой
   col*=.82+.18*smoothstep(.9,1.6,f); // край чуть темнее — объём
   float a=max(inside*.85,halo*1.4);

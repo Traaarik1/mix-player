@@ -1416,3 +1416,9 @@ body.hasglass .full .fullbg i.on { opacity: .35; }
 /* обложку не удалось ужать (чужой сервер запретил) — размываем фильтром */
 .backdrop i.raw, .fullbg i.raw { filter: blur(40px) saturate(1.4) !important; }
 .backdrop i, .fullbg i { background-size: cover !important; background-repeat: no-repeat !important; background-position: center !important; }
+/* тема «Лава-лампа»: фон — второй цвет обложки, тёмный и спокойный; шары — первый цвет */
+body.hasglass .backdrop i, body.hasglass .fullbg i { display: none !important; }
+body.hasglass .backdrop, body.hasglass .full .fullbg { background:
+  radial-gradient(90% 70% at 70% 30%, color-mix(in srgb, var(--c2) 30%, #0d0a12), transparent 70%),
+  linear-gradient(180deg, color-mix(in srgb, var(--c2) 22%, #0b0910), color-mix(in srgb, var(--c2) 12%, #07060a)) !important; }
+body.hasglass .fullbg::after { background: none !important; }
