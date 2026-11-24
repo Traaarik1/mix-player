@@ -1282,3 +1282,11 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
     linear-gradient(180deg, color-mix(in srgb, var(--c1) 45%, #0b0812), color-mix(in srgb, var(--c2) 35%, #0b0812) 60%, color-mix(in srgb, var(--c3) 40%, #0b0812)) !important; }
   .full #stack { filter: drop-shadow(0 0 50px color-mix(in srgb, var(--c1) 80%, transparent)) drop-shadow(0 0 120px color-mix(in srgb, var(--c2) 50%, transparent)); }
 }
+/* телефон: ещё ярче цвета обложки в фоне плеера */
+@media (max-width: 900px) {
+  .full { background:
+    radial-gradient(70% 42% at 50% 32%, var(--c1), transparent 72%),
+    radial-gradient(140% 80% at 50% 32%, color-mix(in srgb, var(--c2) 85%, transparent), transparent 85%),
+    linear-gradient(180deg, color-mix(in srgb, var(--c1) 75%, #000), color-mix(in srgb, var(--c2) 70%, #000) 55%, color-mix(in srgb, var(--c3) 70%, #000)) !important; }
+  .full .fullbg::after { background: linear-gradient(180deg, transparent, rgb(0 0 0 / .25)) !important; }
+}
