@@ -387,10 +387,10 @@ async function paintArtistCatalog() {
   if (!g || !navigator.onLine) return;
   const v = view; catFor = v;
   const box = $('#disc');
-  const cache = await db.get('kv', 'cat2:' + g.key);
+  const cache = await db.get('kv', 'cat3:' + g.key);
   if (!cache) box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Ищу альбомы…</small></div></div>';
-  const cat = cache && Date.now() - cache.at < 7 * 864e5 ? cache.cat : await artistCatalog(g.name).catch(() => null);
-  if (cat && !cache?.cat) db.put('kv', 'cat2:' + g.key, { at: Date.now(), cat });
+  const cat = cache && Date.now() - cache.at < 7 * 864e5 ? cache.cat : await artistCatalog(g.name, knownFor(g.name)).catch(() => null);
+  if (cat && !cache?.cat) db.put('kv', 'cat3:' + g.key, { at: Date.now(), cat });
   if (view !== v || catFor !== v) return;
   if (!cat?.albums.length) { box.innerHTML = '<div class="sechead"><div><b>Дискография</b><small>Не нашлась в каталоге или он сейчас недоступен — открой артиста чуть позже</small></div></div>'; return; }
   const idx = creditIndex(), gk = g.web ? normKey(g.name) : g.key, mine = order.map(id => tracks.get(id)).filter(t => idx.get(t.id)?.some(p => p.key === gk));
@@ -448,6 +448,8 @@ function smartIds(kind) {
 
 // ---------- новинки любимых артистов ----------
 let news = { at: 0, items: [] };
+// названия твоих песен и альбомов этого артиста — по ним отличаем его от однофамильцев
+const knownFor = name => { const k = normKey(name); return [...tracks.values()].filter(t => normKey(t.artist || '').includes(k)).flatMap(t => [t.title, t.album]).filter(Boolean).slice(0, 300); };
 function favArtists(limit = 25) {
   const idx = creditIndex(), n = new Map();
   for (const id of order) for (const p of idx.get(id) || []) { const g = n.get(p.key) || n.set(p.key, { name: p.name, n: 0 }).get(p.key); g.n++; }
@@ -462,13 +464,13 @@ async function newsHunt(force = false) {
   try {
     const since = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10), items = [];
     for (const a of favArtists()) {
-      const cat = await artistCatalog(a.name).catch(() => null);
-      if (cat) db.put('kv', 'cat2:' + normKey(a.name), { at: Date.now(), cat });
+      const cat = await artistCatalog(a.name, knownFor(a.name)).catch(() => null);
+      if (cat) db.put('kv', 'cat3:' + normKey(a.name), { at: Date.now(), cat });
       for (const al of cat?.albums || []) if (al.date && al.date >= since) items.push({ ...al, who: cat.name });
     }
     const seen = new Set();
     news = { at: Date.now(), items: items.filter(x => { const k = normKey(x.who + ' ' + x.name); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60) };
-    db.put('kv', 'news', news);
+    db.put('kv', 'news3', news);
     renderNav(); if (view === 'news') render();
   } finally { newsRunning = false; }
 }
@@ -3212,7 +3214,7 @@ setTimeout(restoreResume, 1200);
 setInterval(() => { if (engine.track && !engine.paused) saveResume(); }, 5000);
 addEventListener('pagehide', saveResume);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveResume(); });
-setTimeout(async () => { news = await db.get('kv', 'news').catch(() => null) || news; renderNav(); setTimeout(newsHunt, 20000); }, 1500);
+setTimeout(async () => { news = await db.get('kv', 'news3').catch(() => null) || news; renderNav(); setTimeout(newsHunt, 20000); }, 1500);
 setInterval(() => newsHunt(), 3 * 36e5);
 setTimeout(async () => { const l = await db.get('kv', 'lyidx').catch(() => null); if (l) lyIndex = new Map(l); setTimeout(lyricsHunt, 30000); }, 2000);
 setInterval(() => lyricsHunt(), 30 * 60e3);

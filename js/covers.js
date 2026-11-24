@@ -105,30 +105,56 @@ export async function deezerSimilarTracks(name, { related = 5, per = 3 } = {}) {
   }
   return out;
 }
-async function deezerCatalog(name) {
-  const s = await jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=5`);
-  const a = (s?.data || []).find(x => nk(x.name) === nk(name));
-  if (!a) return null;
+const clean = s => nk(String(s || '').replace(/s*[([].*?[)]]/g, '').replace(/s+(feat|ft).?s.*$/i, ''));
+const knownSet = known => new Set(known.map(clean).filter(x => x.length > 1));
+const score = (titles, ks) => titles.reduce((n, t) => n + (ks.has(clean(t)) ? 1 : 0), 0);
+async function deezerCatalog(name, known = []) {
+  const s = await jsonp(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=10`);
+  const cands = (s?.data || []).filter(x => nk(x.name) === nk(name)).slice(0, 4);
+  if (!cands.length) return null;
+  const ks = knownSet(known);
+  let a = cands[0];
+  if (ks.size) {
+    let best = 0; a = null;
+    for (const x of cands) {
+      const [top, al] = await Promise.all([jsonp(`https://api.deezer.com/artist/${x.id}/top?limit=100`), jsonp(`https://api.deezer.com/artist/${x.id}/albums?limit=100`)]);
+      const n = score([...(top?.data || []).map(t => t.title), ...(al?.data || []).map(t => t.title)], ks);
+      if (n > best) { best = n; a = x; }
+    }
+    if (!a) return null; // ни у одного нет твоих песен — это не тот артист
+  }
   const j = await jsonp(`https://api.deezer.com/artist/${a.id}/albums?limit=200`);
   return { name: a.name, dzId: a.id, pic: a.picture_xl || a.picture_big || null, albums: (j?.data || []).map(x => ({ date: x.release_date || '',
     id: 'dz' + x.id, name: x.title, single: x.record_type === 'single', ep: x.record_type === 'ep', total: x.nb_tracks || 0,
     year: (x.release_date || '').slice(0, 4), art: x.cover_xl || x.cover_big || null, artist: a.name,
   })) };
 }
-export async function artistCatalog(name) {
-  const [it, dz] = await Promise.all([itunesCatalog(name).catch(() => null), deezerCatalog(name).catch(() => null)]);
+export async function artistCatalog(name, known = []) {
+  const [it, dz] = await Promise.all([itunesCatalog(name, known).catch(() => null), deezerCatalog(name, known).catch(() => null)]);
   if (!it && !dz) return null;
   const seen = new Set(), albums = [];
   for (const x of [...(it?.albums || []), ...(dz?.albums || [])]) { const k = nk(x.name); if (seen.has(k)) continue; seen.add(k); albums.push(x); }
   return { name: it?.name || dz.name, pic: dz?.pic || null, dzId: dz?.dzId || null, albums: albums.sort((x, y) => (y.year || '').localeCompare(x.year || '')) };
 }
-async function itunesCatalog(name) {
+async function itunesCatalog(name, known = []) {
+  const ks = knownSet(known);
   for (const country of ['RU', 'US']) {
     await throttle();
     const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&entity=musicArtist&limit=5&country=${country}`).catch(() => null);
     if (!r?.ok) continue;
     const { results = [] } = await r.json();
-    const a = results.find(x => nk(x.artistName) === nk(name)) || null;
+    const cands = results.filter(x => nk(x.artistName) === nk(name));
+    let a = cands[0] || null;
+    if (a && ks.size) {
+      let best = 0; a = null;
+      for (const x of cands.slice(0, 3)) {
+        await throttle();
+        const r3 = await fetch(`https://itunes.apple.com/lookup?id=${x.artistId}&entity=song&limit=200&country=${country}`).catch(() => null);
+        const songs = r3?.ok ? (await r3.json()).results || [] : [];
+        const n = score(songs.flatMap(t => [t.trackName, t.collectionName]).filter(Boolean), ks);
+        if (n > best) { best = n; a = x; }
+      }
+    }
     if (!a) continue;
     await throttle();
     const r2 = await fetch(`https://itunes.apple.com/lookup?id=${a.artistId}&entity=album&limit=60&country=${country}`).catch(() => null);

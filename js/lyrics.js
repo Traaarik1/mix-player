@@ -47,5 +47,10 @@ export async function findLyrics({ title, artist, album, duration }) {
     const pick = shape(near.find(x => x.syncedLyrics) || near.find(x => x.plainLyrics));
     if (pick) return pick;
   }
+  // запасной бесплатный источник: lyrics.ovh (только текст, без таймингов)
+  if (artist) try {
+    const o = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(bare)}`, { signal: AbortSignal.timeout(8000) });
+    if (o.ok) { const j = await o.json(); const txt = (j.lyrics || '').replace(/^Paroles de la chanson.*\n/, '').trim(); if (txt.length > 40) return shape({ plainLyrics: txt }); }
+  } catch {}
   return { none: true };
 }
