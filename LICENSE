@@ -1,0 +1,17 @@
+Copyright (c) 2026 Traaarik1. All rights reserved.
+
+Mix is free to use through its official website.
+
+The source code, design, graphics and texts of Mix are proprietary.
+Without prior written permission of the author you may not copy, modify,
+redistribute, republish, host elsewhere, sell or create derivative works
+from any part of this repository.
+
+Viewing the code in this repository or in your browser does not grant
+any license to it.
+
+Third-party components in the vendor/ folder remain under their own
+licenses (teleproto — MIT, buffer — MIT, base64-js — MIT, ieee754 — BSD-3-Clause,
+chromaprint — LGPL-2.1, qrcode-generator — MIT).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.

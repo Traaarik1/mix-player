@@ -1,11 +1,12 @@
 // Telegram: вход своим аккаунтом и загрузка музыки из канала.
 // Библиотека teleproto (поддерживаемый форк GramJS), версия зафиксирована.
-const LIB = 'https://esm.sh/teleproto@1.232.1?bundle&alias=crypto:crypto-browserify';
+// копия лежит в vendor/esm (скачана с esm.sh), чтобы чужой CDN не мог подменить код, у которого есть доступ к сессии
+const LIB = '../vendor/esm/teleproto@1.232.1_bundle_alias_crypto_crypto-browserify.mjs';
 let mod, client;
 
 async function lib() {
   if (mod) return mod;
-  const { Buffer } = await import('https://esm.sh/buffer@6.0.3');
+  const { Buffer } = await import('../vendor/esm/buffer@6.0.3.mjs');
   globalThis.Buffer ??= Buffer;
   globalThis.process ??= { env: {}, versions: {}, browser: true };
   mod = await import(LIB);

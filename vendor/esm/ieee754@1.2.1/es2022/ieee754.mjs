@@ -1,0 +1,8 @@
+/* esm.sh - ieee754@1.2.1 */
+var B=Object.create;var v=Object.defineProperty;var k=Object.getOwnPropertyDescriptor;var q=Object.getOwnPropertyNames;var y=Object.getPrototypeOf,z=Object.prototype.hasOwnProperty;var A=(t,r)=>()=>(r||t((r={exports:{}}).exports,r),r.exports);var C=(t,r,p,w)=>{if(r&&typeof r=="object"||typeof r=="function")for(let i of q(r))!z.call(t,i)&&i!==p&&v(t,i,{get:()=>r[i],enumerable:!(w=k(r,i))||w.enumerable});return t};var D=(t,r,p)=>(p=t!=null?B(y(t)):{},C(r||!t||!t.__esModule?v(p,"default",{value:t,enumerable:!0}):p,t));var I=A(n=>{n.read=function(t,r,p,w,i){var M,a,s=i*8-w-1,N=(1<<s)-1,c=N>>1,o=-7,h=p?i-1:0,d=p?-1:1,f=t[r+h];for(h+=d,M=f&(1<<-o)-1,f>>=-o,o+=s;o>0;M=M*256+t[r+h],h+=d,o-=8);for(a=M&(1<<-o)-1,M>>=-o,o+=w;o>0;a=a*256+t[r+h],h+=d,o-=8);if(M===0)M=1-c;else{if(M===N)return a?NaN:(f?-1:1)*(1/0);a=a+Math.pow(2,w),M=M-c}return(f?-1:1)*a*Math.pow(2,M-w)};n.write=function(t,r,p,w,i,M){var a,s,N,c=M*8-i-1,o=(1<<c)-1,h=o>>1,d=i===23?Math.pow(2,-24)-Math.pow(2,-77):0,f=w?0:M-1,j=w?1:-1,g=r<0||r===0&&1/r<0?1:0;for(r=Math.abs(r),isNaN(r)||r===1/0?(s=isNaN(r)?1:0,a=o):(a=Math.floor(Math.log(r)/Math.LN2),r*(N=Math.pow(2,-a))<1&&(a--,N*=2),a+h>=1?r+=d/N:r+=d*Math.pow(2,1-h),r*N>=2&&(a++,N/=2),a+h>=o?(s=0,a=o):a+h>=1?(s=(r*N-1)*Math.pow(2,i),a=a+h):(s=r*Math.pow(2,h-1)*Math.pow(2,i),a=0));i>=8;t[p+f]=s&255,f+=j,s/=256,i-=8);for(a=a<<i|s,c+=i;c>0;t[p+f]=a&255,f+=j,a/=256,c-=8);t[p+f-j]|=g*128}});var x=D(I()),{read:H,write:J}=x,K=x.default??x;export{K as default,H as read,J as write};
+/*! Bundled license information:
+
+ieee754/index.js:
+  (*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> *)
+*/
+//# sourceMappingURL=ieee754.mjs.map
