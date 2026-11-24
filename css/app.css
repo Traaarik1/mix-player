@@ -1222,3 +1222,11 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
 @keyframes coverSpin { 0% { transform: perspective(900px) rotateY(-14deg) rotateX(6deg); } 25% { transform: perspective(900px) rotateY(0deg) rotateX(-6deg); } 50% { transform: perspective(900px) rotateY(14deg) rotateX(4deg); } 75% { transform: perspective(900px) rotateY(0deg) rotateX(8deg); } 100% { transform: perspective(900px) rotateY(-14deg) rotateX(6deg); } }
 @media (hover: none) { .full.open #stack { animation: coverSpin 12s ease-in-out infinite !important; } body:not(.playing) .full.open #stack { animation-play-state: paused !important; } }
 @media (hover: none) and (prefers-reduced-motion: reduce) { .full.open #stack { animation: none !important; } }
+/* телефон: сильнее покачивание и фон в цвет обложки (без размытия — дёшево по памяти) */
+@keyframes coverSpin2 { 0%, 100% { transform: perspective(700px) rotateY(-24deg) rotateX(10deg) scale(.97); } 25% { transform: perspective(700px) rotateY(4deg) rotateX(-10deg) scale(1); } 50% { transform: perspective(700px) rotateY(24deg) rotateX(6deg) scale(.97); } 75% { transform: perspective(700px) rotateY(-4deg) rotateX(12deg) scale(1); } }
+@media (max-width: 900px) {
+  @media (hover: none) { .full.open #stack { animation: coverSpin2 8s ease-in-out infinite !important; } }
+  .full { background: radial-gradient(120% 70% at 20% 0%, color-mix(in srgb, var(--c1) 70%, transparent), transparent 65%),
+    radial-gradient(110% 70% at 90% 100%, color-mix(in srgb, var(--c2) 55%, transparent), transparent 65%),
+    linear-gradient(180deg, color-mix(in srgb, var(--c3) 30%, #0f0b16), #0f0b16) !important; }
+}
