@@ -1348,3 +1348,5 @@ body:not(.playing) .rays { animation-play-state: paused; }
 @keyframes raysSpin { to { rotate: 360deg; } }
 @media (max-width: 900px) { .rays { filter: none; } .full.open .rays { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .rays { animation: none; } }
+/* без шва между меню и основной частью */
+@media (min-width: 901px) { .rail { background: transparent !important; border-right: 0 !important; box-shadow: none !important; } }
