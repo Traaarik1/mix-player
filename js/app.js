@@ -99,6 +99,7 @@ async function toneOf(blob) {
   const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, 28, 28);
   const px = g.getImageData(0, 0, 28, 28).data;
   let x = 0, y = 0, w = 0, sat = 0;
+  let col = 0, lum = 0;
   for (let i = 0; i < px.length; i += 4) {
     const r = px[i] / 255, gg = px[i + 1] / 255, b = px[i + 2] / 255;
     const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), l = (mx + mn) / 2, d = mx - mn;
@@ -122,14 +123,17 @@ async function paletteOf(blob) {
   for (let i = 0; i < px.length; i += 4) {
     const r = px[i] / 255, gg = px[i + 1] / 255, b = px[i + 2] / 255;
     const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), l = (mx + mn) / 2, d = mx - mn;
+    lum += l;
     if (d < .12 || l < .12 || l > .9) continue; // серое, чёрное и белое на шары не годится
     const s = d / (1 - Math.abs(2 * l - 1));
     let h = mx === r ? ((gg - b) / d) % 6 : mx === gg ? (b - r) / d + 2 : (r - gg) / d + 4;
     h = (h * 60 + 360) % 360;
     const bin = bins[Math.floor(h / 30)], wt = s * s;
-    bin.r += px[i] * wt; bin.g += px[i + 1] * wt; bin.b += px[i + 2] * wt; bin.w += wt;
+    col++; bin.r += px[i] * wt; bin.g += px[i + 1] * wt; bin.b += px[i + 2] * wt; bin.w += wt;
   }
   const top = bins.filter(x => x.w > .5).sort((a, b) => b.w - a.w).slice(0, 3).map(x => [x.r / x.w, x.g / x.w, x.b / x.w].map(Math.round));
+  // почти нет цвета (чёрная, белая, серая обложка) — фон тоже делаем чёрно-серым
+  if (col < 40) { const m = []; m.mono = lum / 1024; return m; }
   return top;
 }
 const palCache = new Map();
@@ -145,6 +149,7 @@ function setPalette(pal, tone) {
     const l = (mx + mn) / 2, ss = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
     return `hsl(${hh} ${Math.round(Math.max(.5, Math.min(.8, ss)) * 100)}% ${Math.round(Math.min(.52, Math.max(.42, l)) * 100)}%)`;
   };
+  if (pal.mono != null) { const L = pal.mono > .6 ? [62, 48, 36] : [26, 18, 34]; for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), `hsl(250 6% ${L[i]}%)`); return; }
   for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), pal[i] ? vivid(pal[i]) : fill[i]);
 }
 // Цвет обложки меняется плавно (1,2 с): анимируем сами, без CSS @property — его Safari на iPhone ломал
