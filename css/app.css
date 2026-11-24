@@ -1422,3 +1422,47 @@ body.hasglass .backdrop, body.hasglass .full .fullbg { background:
   radial-gradient(90% 70% at 70% 30%, color-mix(in srgb, var(--c2) 30%, #0d0a12), transparent 70%),
   linear-gradient(180deg, color-mix(in srgb, var(--c2) 22%, #0b0910), color-mix(in srgb, var(--c2) 12%, #07060a)) !important; }
 body.hasglass .fullbg::after { background: none !important; }
+
+/* ===== Свой стиль Mix: «тонкая грань» =====
+   Кнопки — тихие плашки со скруглением 12px и волосяной гранью; при наведении грань загорается цветом обложки сбоку,
+   как подсветка торца стекла. Главная кнопка — плотная, тёмная в цвет обложки, без кислотных градиентов.
+   Текст — мягкий светлый (не чисто белый) с лёгкой тенью: читается на любом фоне и не режет глаз. */
+:root { --paper: #E9E4EE; --ink-soft: rgb(233 228 238 / .62); }
+body { color: var(--paper); }
+.main, .rail, .bar, .full { text-shadow: 0 1px 2px rgb(0 0 0 / .28); }
+.btn, .chip, .ib, .pp, button { text-shadow: none; }
+
+.btn { border-radius: 12px !important; padding: 10px 16px; font-weight: 600; letter-spacing: .1px; color: var(--paper);
+  background: rgb(255 255 255 / .045) !important; border: 1px solid rgb(255 255 255 / .1) !important; box-shadow: none !important;
+  position: relative; overflow: hidden; }
+.btn::before { content: ""; position: absolute; left: 0; top: 18%; bottom: 18%; width: 2px; border-radius: 2px; background: var(--c1);
+  opacity: 0; transform: scaleY(.3); transition: opacity .25s, transform .3s cubic-bezier(.2, .8, .2, 1); }
+.btn:hover { background: rgb(255 255 255 / .075) !important; border-color: color-mix(in srgb, var(--c1) 35%, rgb(255 255 255 / .12)) !important; }
+.btn:hover::before { opacity: 1; transform: scaleY(1); }
+.btn.primary { color: #fff; background: color-mix(in srgb, var(--c1) 34%, #14101a) !important;
+  border-color: color-mix(in srgb, var(--c1) 55%, transparent) !important; box-shadow: inset 0 1px 0 rgb(255 255 255 / .08) !important; filter: none !important; }
+.btn.primary:hover { background: color-mix(in srgb, var(--c1) 46%, #14101a) !important; }
+.btn.primary::before { background: #fff; }
+.btn svg { opacity: .85; }
+
+.chip { border-radius: 10px; background: rgb(255 255 255 / .045); border: 1px solid rgb(255 255 255 / .09); color: var(--ink-soft); transition: all .2s; }
+.chip:hover { color: var(--paper); border-color: rgb(255 255 255 / .18); }
+.chip.on { background: color-mix(in srgb, var(--c1) 30%, #14101a); color: #fff; border-color: color-mix(in srgb, var(--c1) 60%, transparent); }
+
+/* плеер: минимализм — тонкие значки, play как матовая шайба */
+.ib { border-radius: 12px; color: var(--ink-soft); }
+.ib:hover { background: rgb(255 255 255 / .06); color: var(--paper); }
+.ib.on { background: transparent; color: color-mix(in srgb, var(--c1) 65%, #fff); }
+.pp { border-radius: 50%; color: #16111c; background: #ECE7F0 !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .35), 0 0 0 1px rgb(255 255 255 / .5) inset !important; }
+.pp:hover { transform: scale(1.04); box-shadow: 0 8px 24px rgb(0 0 0 / .4), 0 0 0 4px color-mix(in srgb, var(--c1) 35%, transparent) !important; }
+
+/* поля ввода и селект — в том же стиле */
+input[type=search], .search input, select { border-radius: 12px !important; background: rgb(255 255 255 / .045) !important; border: 1px solid rgb(255 255 255 / .1) !important; color: var(--paper); }
+input[type=search]:focus, .search input:focus, select:focus { border-color: color-mix(in srgb, var(--c1) 55%, transparent) !important; outline: none; }
+
+/* текст песни: контрастный, но не слепящий */
+.lyrics p { color: rgb(233 228 238 / .3); text-shadow: 0 2px 8px rgb(0 0 0 / .35); }
+.lyrics p.past { color: rgb(233 228 238 / .45); }
+.lyrics p.now { color: #F3EFF6 !important; text-shadow: 0 2px 10px rgb(0 0 0 / .45) !important; }
+.head h1, .head h1 * { text-shadow: none !important; }
