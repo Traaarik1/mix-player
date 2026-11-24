@@ -1604,6 +1604,21 @@ async function loadAudio(t) {
 
 // ---------- отрисовка плеера ----------
 let bdUrl = '', bdFlip = 0;
+// смена трека: старые шары разлетаются в стороны и гаснут, новые (уже нового цвета) выплывают с противоположного края
+let orbT = 0;
+function orbSwap(apply) {
+  const os = $$('.orbs span'), rnd = m => ((Math.random() * 2 - 1) * m).toFixed(1);
+  if (!os.length || matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(); return; }
+  clearTimeout(orbT);
+  const dirs = os.map(() => Math.random() * Math.PI * 2);
+  os.forEach((o, i) => { o.style.transition = 'translate .7s cubic-bezier(.5,0,.8,.4), opacity .6s'; o.style.translate = `${(Math.cos(dirs[i]) * 70).toFixed(1)}vmax ${(Math.sin(dirs[i]) * 70).toFixed(1)}vmax`; o.style.opacity = 0; });
+  orbT = setTimeout(() => {
+    apply();
+    os.forEach((o, i) => { o.style.transition = 'none'; o.style.translate = `${(-Math.cos(dirs[i]) * 70).toFixed(1)}vmax ${(-Math.sin(dirs[i]) * 70).toFixed(1)}vmax`; });
+    void os[0].offsetWidth;
+    os.forEach((o, i) => { o.style.transition = `translate 1.6s cubic-bezier(.2,.8,.2,1) ${i * 70}ms, opacity 1.2s ${i * 70}ms`; o.style.translate = `${rnd(16)}vmax ${rnd(12)}vmax`; o.style.opacity = ''; });
+  }, 650);
+}
 async function paintBackdrop(t) {
   const url = !t ? '' : t.cover ? await coverUrl(t.id).catch(() => '') : (t.art || '');
   if (url === bdUrl) return;
@@ -1611,12 +1626,11 @@ async function paintBackdrop(t) {
   if (t) {
     let pal = palCache.get(url);
     if (!pal && url) { pal = await fetch(url).then(r => r.blob()).then(paletteOf).catch(() => []); palCache.set(url, pal); }
-    if (engine.track?.id === t.id) setPalette(pal || [], toneFor(t));
+    if (engine.track?.id === t.id) orbSwap(() => setPalette(pal || [], toneFor(t)));
   }
   bdUrl = url; bdFlip ^= 1;
   // при смене трека шары плавно разъезжаются на новые места
   const rnd = m => ((Math.random() * 2 - 1) * m).toFixed(1);
-  for (const o of $$('.orbs span')) o.style.translate = `${rnd(16)}vmax ${rnd(12)}vmax`;
   for (const box of $$('#backdrop, #fullbg')) {
     const [x, y] = box.children, on = bdFlip ? y : x, off = bdFlip ? x : y;
     if (url) on.style.backgroundImage = `url("${url}")`;
@@ -3304,3 +3318,12 @@ boot();
 
 // смена трека: короткая анимация названия и обложки
 engine.addEventListener('track', () => { const f = $('#full'); f.classList.remove('newtrk'); void f.offsetWidth; f.classList.add('newtrk'); });
+
+// Свет от обложки: мягкие лучи медленно вращаются вокруг неё
+{
+  const full = $('#full'), rays = document.createElement('div'); rays.className = 'rays'; rays.setAttribute('aria-hidden', 'true');
+  full.prepend(rays);
+  const place = () => { const r = $('#stack').getBoundingClientRect(), f = full.getBoundingClientRect(); if (!r.width) return; rays.style.left = r.left - f.left + r.width / 2 + 'px'; rays.style.top = r.top - f.top + r.height / 2 + 'px'; rays.style.setProperty('--rs', r.width + 'px'); };
+  new ResizeObserver(place).observe($('#stack')); addEventListener('resize', place);
+  new MutationObserver(() => setTimeout(place, 50)).observe(full, { attributes: true, attributeFilter: ['class'] });
+}
