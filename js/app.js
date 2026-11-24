@@ -3345,82 +3345,106 @@ engine.addEventListener('track', () => { const f = $('#full'); f.classList.remov
   }
 }
 
-// Лава-лампа на фоне: сбоку экрана вливается струя больших капель, они сливаются, а потом живут как в лава-лампе —
-// снизу греется и всплывает пузырями, наверху остывает и стекает, сливаясь то в жижу, то в шары (метаболы).
-// Только на компьютере; при смене трека наливается заново.
-if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+// Лава-лампа на фоне (как настоящая): внизу и вверху лужи воска; из нижней лужи на «шее» вытягивается капля,
+// отрывается гладким шаром, всплывает, сливается с верхней лужей; остывшие капли тонут обратно.
+// При запуске один раз из правого верхнего угла выливается струя больших капель и расплёскивается.
+// Рисуется на видеокарте (WebGL, метаболы) — гладкие края и почти без нагрузки. Только на компьютере.
+if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) (() => {
   const cv = document.createElement('canvas'); cv.id = 'glass'; cv.setAttribute('aria-hidden', 'true');
+  const gl = cv.getContext('webgl', { premultipliedAlpha: false, antialias: false, alpha: true });
+  if (!gl) return;
   $('#fx').prepend(cv);
-  const g = cv.getContext('2d'), F = 4; // поле считаем в 5 раз мельче экрана — дёшево, а при растяжении края мягкие
-  const fc = document.createElement('canvas'), fg = fc.getContext('2d');
-  let W, H, cx, top, cy, rx, ry, img, field, ps = [], pour = 0, c1 = [255, 60, 60], c2 = [200, 30, 70], colT = 0;
-  const size = () => {
-    W = fc.width = Math.ceil(innerWidth / F); H = fc.height = Math.ceil(innerHeight / F);
-    cv.width = innerWidth; cv.height = innerHeight;
-    cx = W * .58; rx = Math.min(W * .2, H * .32); ry = H * .3; cy = H * .5; top = H * .14;
-    img = fg.createImageData(W, H); field = new Float32Array(W * H);
-  };
+  const MAX = 128, Q = .6; // считаем в 0,6 разрешения экрана — шейдер всё равно даёт мягкие края
+  const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+  const fs = `precision mediump float;
+uniform vec2 res;uniform vec3 balls[${MAX}];uniform int n;uniform float pb,pt,t,sl,im,ix;uniform vec3 c1,c2;
+void main(){
+  vec2 q=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y);
+  float f=0.;
+  for(int i=0;i<${MAX};i++){ if(i>=n)break; vec2 d=q-balls[i].xy; f+=balls[i].z*balls[i].z/(dot(d,d)+1.); }
+  float wb=pb*(1.+(.08+sl*.35)*sin(q.x*.006+t*(.4+sl*3.))+(.05+sl*.2)*sin(q.x*.013-t*(.3+sl*2.)))+pb*im*.9*exp(-pow((q.x-ix)/(res.x*.08),2.));
+  float wt=pt*(1.+.1*sin(q.x*.008-t*.35));
+  float db=max(res.y-q.y,1.), dt=max(q.y,1.);
+  f+=wb*wb/(db*db)+wt*wt/(dt*dt);
+  float inside=smoothstep(.92,1.08,f);
+  float halo=smoothstep(.35,.95,f)*.18;
+  float core=smoothstep(1.,3.5,f);
+  float k=q.y/res.y;
+  vec3 col=mix(c2,c1*1.15,.4+.6*core);
+  col=mix(col,min(c1*1.45+vec3(.15,.12,.05),vec3(1.)),core*.55*k); // снизу и в середине светится, как воск над лампой
+  col*=.82+.18*smoothstep(.9,1.6,f); // край чуть темнее — объём
+  float a=max(inside*.85,halo*1.4);
+  gl_FragColor=vec4(mix(c1,col,inside),a);
+}`;
+  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) { cv.remove(); return; }
+  gl.useProgram(pr);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = k => gl.getUniformLocation(pr, k), uRes = U('res'), uBalls = U('balls'), uN = U('n'), uPb = U('pb'), uPt = U('pt'), uT = U('t'), uC1 = U('c1'), uC2 = U('c2'), uSl = U('sl'), uIm = U('im'), uIx = U('ix');
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  let W, H;
+  const size = () => { W = Math.round(innerWidth * Q); H = Math.round(innerHeight * Q); cv.width = W; cv.height = H; gl.viewport(0, 0, W, H); };
   size(); addEventListener('resize', size);
-  const half = y => y < top ? -1 : y <= cy ? rx * (.94 + .06 * (y - top) / (cy - top)) : y >= cy + ry ? 0 : rx * Math.sqrt(1 - ((y - cy) / ry) ** 2);
-  const N = 34;
-  let grp = [];
-  const refill = () => { ps = []; pour = N; grp = [0, 1, 2, 3, 4].map(i => ({ heat: i / 5, hr: .0015 + Math.random() * .002, x: 0, y: 0, n: 0 })); };
-  refill(); // льётся один раз — при запуске
-  const rgb = c => { fg.fillStyle = '#000'; fg.fillStyle = c; const h = fg.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(Number) : [255, 60, 60]; };
-  let last = performance.now(), t = 0;
+  const tmp = document.createElement('canvas').getContext('2d');
+  const rgb = c => { tmp.fillStyle = '#000'; tmp.fillStyle = c; const h = tmp.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(v => v / 255) : [1, .3, .3]; };
+  let c1 = [1, .3, .3], c2 = [.8, .15, .3], colT = 0;
+  // лужи: растут, когда в них падает струя
+  let pb = 0, pbT = 0, pt = 0, ptT = 0;
+  const balls = [];
+  // струя при запуске
+  let pour = 640, pourT = 0, fr = 0, lava = 0, slosh = 0, imp = 0, impX = 0;
+  const R = () => Math.min(W, H);
   const step = now => {
     requestAnimationFrame(step);
-    const dt = Math.min(2, (now - last) / 16.7); last = now; t += dt;
     if (document.hidden || document.body.classList.contains('calm') || $('#full').classList.contains('open')) return;
-    if (now - colT > 1000) { colT = now; const cs = getComputedStyle(document.documentElement); c1 = rgb(cs.getPropertyValue('--c1').trim()); c2 = rgb(cs.getPropertyValue('--c2').trim()); }
-    // льём: капли падают тонкой струйкой сверху
-    if (pour > 0 && Math.random() < .55 * dt) { pour--; ps.push({ fly: 1, g: (N - pour) % 5, x: W + 6, y: -6 + (Math.random() - .5) * 4, vx: -(2.6 + Math.random() * .8), vy: .6 + Math.random() * .4, r: 6 + Math.random() * 4, heat: 0, hr: .002 + Math.random() * .006, ph: Math.random() * 6 }); }
-    // каждая группа капель — свой шар лава-лампы: общая температура и центр
-    for (const q of grp) { q.x = q.y = q.n = 0; }
-    for (const p of ps) { const q = grp[p.g]; q.x += p.x; q.y += p.y; q.n++; }
-    for (const q of grp) if (q.n) { q.x /= q.n; q.y /= q.n; const dp = q.y / H; q.heat += ((dp > .72 ? 1 : dp < .28 ? 0 : q.heat) - q.heat) * (dp > .72 || dp < .28 ? q.hr * 2.2 : 0) * dt; }
-    for (const p of ps) {
-      const depth = p.y / H;
-      if (p.fly) { p.vy += .09 * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.y > H - p.r) { p.fly = 0; p.y = H - p.r; p.vx = (Math.random() - .5) * 9; p.vy = -1.5 - Math.random() * 3.5; } continue; } // струя; у дна — всплеск во все стороны
-      // лава-лампа на весь экран: внизу греется и всплывает, наверху остывает и опускается
-      const G = grp[p.g]; p.heat = G.heat;
-      p.vy += (.035 - p.heat * .07) * dt;
-      if (G.n > 1) { p.vx += (G.x - p.x) * .0018 * dt; p.vy += (G.y - p.y) * .0018 * dt; } // капли своей группы стягиваются в шар
-      p.ph += .008 * dt; p.vx += Math.sin(p.ph + p.y * .03) * .006 * dt;
-      p.vx *= .965; p.vy *= .965;
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      if (p.x < p.r) { p.x = p.r; p.vx = Math.abs(p.vx) * .3; } if (p.x > W - p.r) { p.x = W - p.r; p.vx = -Math.abs(p.vx) * .3; }
-      if (p.y > H - p.r * .6) { p.y = H - p.r * .6; p.vy = -Math.abs(p.vy) * .2; } if (p.y < p.r * .6) { p.y = p.r * .6; p.vy = Math.abs(p.vy) * .2; }
-    }
-    // жидкость: близкие капли отталкиваются (не схлопываются), чуть дальше — тянутся друг к другу (сливаются в капли и шары)
-    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
-      const p = ps[i], q = ps[j], dx = q.x - p.x, dy = q.y - p.y, d2 = dx * dx + dy * dy, R = (p.r + q.r) * 1.6;
-      if (d2 > R * R || d2 < .0001) continue;
-      const d = Math.sqrt(d2), rest = (p.r + q.r) * .75, f = (d < rest ? (d - rest) * .07 : p.g === q.g ? (d - rest) * .002 : 0) * dt / d;
-      p.vx += dx * f; p.vy += dy * f; q.vx -= dx * f; q.vy -= dy * f;
-      // соседи делятся теплом — всплывают вместе, пузырём
-    }
-    // поле метаболов
-    field.fill(0);
-    for (const p of ps) {
-      const R = p.r * 2.6, x0 = Math.max(0, p.x - R | 0), x1 = Math.min(W - 1, p.x + R | 0), y0 = Math.max(0, p.y - R | 0), y1 = Math.min(H - 1, p.y + R | 0), rr = p.r * p.r;
-      for (let y = y0; y <= y1; y++) { const dy = y - p.y, row = y * W; for (let x = x0; x <= x1; x++) { const dx = x - p.x, d2 = dx * dx + dy * dy; if (d2 < R * R) field[row + x] += rr / (d2 + .5) * (1 - d2 / (R * R)); } }
-    }
-    const px = img.data;
-    for (let y = 0; y < H; y++) {
-      const k = y / H, r0 = c1[0] + (c2[0] - c1[0]) * k, g0 = c1[1] + (c2[1] - c1[1]) * k, b0 = c1[2] + (c2[2] - c1[2]) * k, row = y * W;
-      for (let x = 0; x < W; x++) {
-        const f = field[row + x], i = (row + x) * 4;
-        if (f < .45) { px[i + 3] = 0; continue; }
-        const a = Math.min(1, (f - .45) * 1.6), l = Math.min(1.45, .85 + (f - 1) * .2); // гуще — светлее, как воск в лампе
-        px[i] = Math.min(255, r0 * l); px[i + 1] = Math.min(255, g0 * l); px[i + 2] = Math.min(255, b0 * l); px[i + 3] = a * 140;
+    const dt = 1;
+    if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); c1 = rgb(cs.getPropertyValue('--c1').trim()); c2 = rgb(cs.getPropertyValue('--c2').trim()); }
+    // струя как вино из бутылки: тонкая, непрерывная, слегка гуляет; капли идут вплотную и сливаются в одну линию
+    if (pour > 0 && ++fr > 30) for (let k = 0; k < 2; k++) { pour--; pourT++; const r = R() * (.0075 + Math.random() * .002), wob = Math.sin(pourT * .05) * .5 + Math.sin(pourT * .013);
+      balls.push({ x: W * 1.01 - k * W * .002, y: H * .04, vx: -W * (.0042 + wob * .0006), vy: H * .0005, r, fly: 1, heat: 0, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
+    if (pour <= 0 && !lava) { lava = 1; ptT = H * .03; }
+    // лава-лампа: из налитой жидкости время от времени вытягивается и отрывается шар
+    if (lava && balls.filter(b => !b.fly).length < 7 && Math.random() < .006) {
+      const r = R() * (.06 + Math.random() * .05); balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
+    slosh *= .985; imp *= .97;
+    pb += (pbT - pb) * .02; pt += (ptT - pt) * .02;
+    for (let i = balls.length - 1; i >= 0; i--) {
+      const p = balls[i];
+      if (p.fly) { // струя: летит по дуге, у дна — шлепок в лужу и брызги
+        p.vy += H * .0007; p.x += p.vx; p.y += p.vy;
+        if (p.y > H - pb * 1.05) { // струя бьёт в жидкость: уровень растёт, поверхность плещется, иногда брызги
+          pbT = Math.min(H * .15, pbT + H * .0003); slosh = Math.min(1, slosh + .012); imp = Math.min(1, imp + .05); impX = p.x;
+          if (Math.random() < .03) { p.fly = 2; p.vx = (Math.random() - .6) * W * .006; p.vy = -H * (.006 + Math.random() * .008); p.r *= .8; continue; }
+          balls.splice(i, 1); continue;
+        }
+        continue;
       }
+      if (p.rT && p.r < p.rT) p.r += (p.rT - p.r) * .01;
+      const depth = p.y / H;
+      // тепло: у дна греется, у верха остывает; горячий всплывает, холодный тонет
+      p.heat += ((depth > .8 ? 1 : depth < .2 ? 0 : p.heat) - p.heat) * (depth > .8 ? p.hr : .006);
+      p.vy += H * (.00012 - p.heat * .00024);
+      p.ph += .006; p.vx += Math.sin(p.ph) * W * .00002;
+      p.vx *= .985; p.vy *= .985;
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < p.r * .6) { p.x = p.r * .6; p.vx = Math.abs(p.vx) * .4; } if (p.x > W - p.r * .6) { p.x = W - p.r * .6; p.vx = -Math.abs(p.vx) * .4; }
+      if (p.y > H - pb * .6) { p.y = H - pb * .6; p.vy = -Math.abs(p.vy) * .2; } if (p.y < pt * .6) { p.y = pt * .6; p.vy = Math.abs(p.vy) * .2; }
     }
-    fg.putImageData(img, 0, 0);
-    g.clearRect(0, 0, cv.width, cv.height);
-    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-    g.drawImage(fc, 0, 0, cv.width, cv.height);
+    // шары мягко расталкиваются, чтобы не стоять одной кучей (сливаться визуально им это не мешает)
+    for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
+      const p = balls[i], q = balls[j]; if (p.fly || q.fly) continue;
+      const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1, m = (p.r + q.r) * .7;
+      if (d < m) { const f = (m - d) / d * .004; p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f; }
+    }
+    const n = Math.min(MAX, balls.length), arr = new Float32Array(MAX * 3);
+    for (let i = 0; i < n; i++) { arr[i * 3] = balls[i].x; arr[i * 3 + 1] = balls[i].y; arr[i * 3 + 2] = balls[i].r; }
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform2f(uRes, W, H); gl.uniform3fv(uBalls, arr); gl.uniform1i(uN, n); gl.uniform1f(uPb, pb); gl.uniform1f(uPt, pt); gl.uniform1f(uT, now / 1000);
+    gl.uniform1f(uSl, slosh); gl.uniform1f(uIm, imp); gl.uniform1f(uIx, impX); gl.uniform3fv(uC1, c1); gl.uniform3fv(uC2, c2);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
   requestAnimationFrame(step);
   document.body.classList.add('hasglass');
-}
+})();

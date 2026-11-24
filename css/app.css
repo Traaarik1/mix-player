@@ -1385,4 +1385,3 @@ body.calm .backdrop .orbs, body.calm #fx { opacity: 0; }
 /* бокал с шарами (компьютер) */
 #glass { position: absolute; inset: 0; width: 100%; height: 100%; }
 body.hasglass .backdrop .orbs { display: none; }
-#glass { filter: blur(2px); }
