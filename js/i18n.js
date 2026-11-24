@@ -17,7 +17,7 @@ const EN = {
   'Включить распознавание по звуку': 'Enable recognition by sound', 'Во все песни (пока 30 секунд)': 'To all songs (30-second preview for now)',
   'Войти': 'Log in', 'Волна': 'Wave', 'Волне нечего играть: все треки отмечены как «не моё»': 'Nothing for the wave: all tracks are marked “not for me”',
   'Все названия в порядке': 'All titles are fine', 'Все треки уже подтверждены': 'All tracks are already confirmed', 'Вставить': 'Paste',
-  'Вставь ссылку на плейлист': 'Paste a playlist link', 'Вся музыка': 'All music', 'Всё верно, исправлять остальные': 'Looks right, fix the rest',
+  'Вставь ссылку на плейлист': 'Paste a playlist link', 'Вся музыка': 'All music', 'Всё верно, дальше': 'Looks right, continue',
   'Всё время': 'All time', 'Выбери канал с музыкой': 'Choose your music channel',
   'Выбери свой канал. Mix скачает из него все аудиофайлы и будет подтягивать новые': 'Choose your channel. Mix will download all audio files from it and keep fetching new ones',
   'Выбери трек': 'Pick a track', 'Выбрано вручную': 'Chosen manually', 'Выбрать бота': 'Choose bot', 'Выбрать канал': 'Choose channel',

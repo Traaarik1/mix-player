@@ -2743,7 +2743,7 @@ function renderTgCard() {
   const count = order.filter(id => tracks.get(id).source === 'tg').length;
   if (!settings.chanVerified && settings.chanCanary && !chan.running) {
     c.innerHTML = `<b>Проверь канал</b><p>Исправлен первый пост: «${esc(settings.chanCanary)}». Посмотри, что название, обложка и подпись в порядке.</p>
-      <button class="btn primary" data-act="chanGo">Всё верно, исправлять остальные</button>
+      <button class="btn primary" data-act="chanGo">Всё верно, дальше</button>
       <button class="btn" data-act="chanOff" style="margin-top:6px">Не трогать канал</button>`;
     return;
   }
