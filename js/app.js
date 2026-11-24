@@ -3260,16 +3260,16 @@ boot();
   const full = $('#full'), stack = $('#stack');
   let rx = 0, ry = 0, raf = 0, live = 0;
   const apply = () => { raf = 0; stack.style.setProperty('--rx', rx.toFixed(2) + 'deg'); stack.style.setProperty('--ry', ry.toFixed(2) + 'deg'); stack.style.setProperty('--gx', (50 + ry * 3) + '%'); stack.style.setProperty('--gy', (50 - rx * 3) + '%'); };
-  const set = (x, y) => { rx = Math.max(-14, Math.min(14, x)); ry = Math.max(-14, Math.min(14, y)); live = Date.now(); full.classList.add('tilting'); if (!raf) raf = requestAnimationFrame(apply); };
+  const set = (x, y) => { rx = Math.max(-7, Math.min(7, x)); ry = Math.max(-7, Math.min(7, y)); live = Date.now(); full.classList.add('tilting'); if (!raf) raf = requestAnimationFrame(apply); };
   full.addEventListener('pointermove', e => {
     if (e.pointerType !== 'mouse' || !full.classList.contains('open')) return;
     const r = stack.getBoundingClientRect();
-    set(-((e.clientY - r.top) / r.height - .5) * 24, ((e.clientX - r.left) / r.width - .5) * 24);
+    set(-((e.clientY - r.top) / r.height - .5) * 12, ((e.clientX - r.left) / r.width - .5) * 12);
   });
   full.addEventListener('pointerleave', () => { set(0, 0); setTimeout(() => { if (Date.now() - live > 500) full.classList.remove('tilting'); }, 600); });
   // телефон: гироскоп; на iPhone разрешение спрашивается по первому касанию обложки
   let gyro = false;
-  const onTilt = e => { if (!full.classList.contains('open') || e.beta == null) return; set(-(e.beta - 45) * .35, e.gamma * .45); };
+  const onTilt = e => { if (!full.classList.contains('open') || e.beta == null) return; set(-(e.beta - 45) * .18, e.gamma * .22); };
   const startGyro = async () => {
     if (gyro) return; gyro = true;
     try { if (typeof DeviceOrientationEvent?.requestPermission === 'function' && await DeviceOrientationEvent.requestPermission() !== 'granted') return; } catch { return; }
