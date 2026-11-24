@@ -1081,19 +1081,10 @@ body.lite .backdrop, body.lite .fullbg .orbs, body.lite .fullbg i { display: non
 body.lite *, body.lite *::before, body.lite *::after { animation: none !important; transition: none !important; }
 .speeds .chip.on { background: var(--accent); color: var(--night); }
 
-/* волна-прогресс как у голосовых */
-.wbars { position: absolute; inset: 0; display: none; pointer-events: none; }
-.track.wv .wbars { display: block; }
-.track.wv::before, .track.wv .fill { opacity: 0 !important; }
-.wb { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; }
-.wb i { flex: 0 1 3px; min-width: 2px; border-radius: 2px; background: rgb(255 255 255 / .42); }
-.wb.on i { background: linear-gradient(#fff, var(--c1) 35%, var(--c2)); box-shadow: 0 0 6px color-mix(in srgb, var(--c1) 55%, transparent); }
-.wb.on { clip-path: inset(0 100% 0 0); }
-.track.wv { height: 34px; }
+/* волна-прогресс как у голосовых (только большой плеер) */
+.wbars { position: absolute; inset: 0; display: none; pointer-events: none; align-items: center; justify-content: space-between; contain: strict; }
+.track.wv .wbars { display: flex; }
+.track.wv::before, .track.wv .fill, .track.wv .knob { opacity: 0 !important; }
+.wbars i { flex: 0 1 3px; min-width: 2px; border-radius: 2px; background: rgb(255 255 255 / .42); }
+.wbars i.on { background: var(--c1); }
 .full .track.wv { height: 52px; }
-.track.wv .knob { top: 50%; margin-top: -6px; }
-.bar .track.wv .wbars { display: none; }
-.bar .track.wv::before, .bar .track.wv .fill { opacity: 1 !important; }
-.bar .track.wv { height: 16px; }
-@media (max-width: 900px) { .bar .track.wv { height: 3px; } }
-.full .track.wv .knob { display: none !important; }

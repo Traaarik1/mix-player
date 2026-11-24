@@ -1642,14 +1642,23 @@ function paintNext() {
 let dragging = null, lastPos = '', lastDur = '', lastPct = -1, lastChip = '';
 const posEls = $$('[data-pos]'), durEls = $$('[data-dur]');
 const seekEls = $$('[data-seek]').map(tr => [tr.querySelector('.fill'), tr.querySelector('.knob')]);
-// волна как у голосовых в Telegram
-const waveEls = $$('[data-seek]').map(tr => { const w = document.createElement('div'); w.className = 'wbars'; w.innerHTML = '<div class="wb"></div><div class="wb on"></div>'; tr.prepend(w); return w; });
-let waveFor = null;
+// волна как у голосовых в Telegram: только в большом плеере, один слой,
+// столбики перекрашиваются по одному (не каждый кадр) — бережём слабые телефоны
+const waveEl = (() => { const tr = $('.full [data-seek]'); if (!tr) return null; const w = document.createElement('div'); w.className = 'wbars'; tr.prepend(w); return w; })();
+let waveFor = null, waveOn = 0;
 function paintWaveBars() {
+  if (!waveEl) return;
   const p = engine.track?.peaks || '';
-  if (p === waveFor) return; waveFor = p;
-  const html = [...p].map(c => `<i style="height:${8 + c * 10.2}%"></i>`).join('');
-  for (const w of waveEls) { w.parentElement.classList.toggle('wv', !!p); for (const b of w.children) b.innerHTML = html; }
+  if (p === waveFor) return; waveFor = p; waveOn = 0;
+  waveEl.innerHTML = [...p].map(c => `<i style="height:${8 + c * 10.2}%"></i>`).join('');
+  waveEl.parentElement.classList.toggle('wv', !!p);
+}
+function paintWaveOn(pct) {
+  if (!waveEl || !waveFor) return;
+  const bars = waveEl.children, k = Math.round(pct / 100 * bars.length);
+  if (k === waveOn) return;
+  for (let i = Math.min(k, waveOn); i < Math.max(k, waveOn); i++) bars[i]?.classList.toggle('on', i < k);
+  waveOn = k;
 }
 function paintProgress() {
   const pos = dragging ? dragging.pos : engine.position, dur = engine.duration;
@@ -1659,7 +1668,7 @@ function paintProgress() {
   if (pct !== lastPct) {
     lastPct = pct;
     for (const [fill, knob] of seekEls) { fill.style.transform = `scaleX(${pct / 100})`; knob.style.left = pct + '%'; }
-    for (const w of waveEls) w.lastChild.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+    paintWaveOn(pct);
   }
   return pos;
 }
