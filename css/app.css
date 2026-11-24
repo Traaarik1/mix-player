@@ -1182,3 +1182,15 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
 @keyframes coverSway { 0%, 100% { transform: perspective(900px) rotateY(-6deg) rotateX(3deg); } 50% { transform: perspective(900px) rotateY(6deg) rotateX(-3deg); } }
 body.playing .full.open #stack { animation: coverSway 9s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { body.playing .full.open #stack { animation: none; } }
+
+/* 3D-обложка: наклон за курсором/телефоном и блик */
+#stack { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .35s cubic-bezier(.2, .8, .2, 1); transform-style: preserve-3d; }
+.full.tilting #stack { animation: none !important; transition: transform .08s linear; }
+#stack::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 5; mix-blend-mode: soft-light;
+  background: radial-gradient(circle at var(--gx, 50%) var(--gy, 30%), rgb(255 255 255 / .45), transparent 55%); opacity: 0; transition: opacity .3s; }
+.full.tilting #stack::after { opacity: 1; }
+/* лёгкое «дыхание» обложки в такт: пульс тени */
+@keyframes coverGlow { 0%, 100% { box-shadow: 0 30px 70px color-mix(in srgb, var(--c1, #b79cff) 25%, transparent); } 50% { box-shadow: 0 36px 90px color-mix(in srgb, var(--c2, #ff7eb6) 40%, transparent); } }
+body.playing .full.open #stack > :first-child { animation: coverGlow 6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { #stack { transition: none; } body.playing .full.open #stack > :first-child { animation: none; } }
+@media (max-width: 900px) { body.playing .full.open #stack > :first-child { animation: none; } }
