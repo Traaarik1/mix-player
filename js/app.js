@@ -728,6 +728,8 @@ function renderSettings() {
   rows.innerHTML = `<li class="stats settings">
     <div class="sechead"><div><b>Язык</b></div></div>
     <div class="presets"><button class="chip${settings.lang !== 'en' ? ' on' : ''}" data-act="lang:ru">Русский</button><button class="chip${settings.lang === 'en' ? ' on' : ''}" data-act="lang:en">English</button></div>
+    <div class="sechead"><div><b>Тема фона</b></div></div>
+    <div class="presets"><button class="chip${settings.bgTheme !== 'orbs' ? ' on' : ''}" data-act="bg:lava">Лава-лампа</button><button class="chip${settings.bgTheme === 'orbs' ? ' on' : ''}" data-act="bg:orbs">Шары</button></div>
     <div class="sechead"><div><b>Воспроизведение</b></div></div>
     ${row('data-act="setMix"', 'wave', 'Переход между треками', 'Плавный переход, срез тишины')}
     ${row('data-act="setEq"', 'eq', 'Эквалайзер', 'Частоты под твои наушники')}
@@ -2983,6 +2985,7 @@ document.addEventListener('click', async e => {
   else if (a === 'setEq') openEq();
   else if (a === 'about') window.open('about.html?lang=' + (document.documentElement.lang === 'en' ? 'en' : 'ru'), '_blank', 'noopener');
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
+  else if (a?.startsWith('bg:')) { settings.bgTheme = a.slice(3); await saveSettings(); setBgTheme(); render(); }
   else if (a?.startsWith('lang:')) { settings.lang = a.slice(5); await saveSettings(); location.reload(); }
   else if (a === 'invite') openInvite();
   else if (a === 'dupsAll') { for (const g of dupGroups()) { const k = bestCopy(g); for (const t of g) if (t !== k) dropTrack(t.id, k.id); } saveLib(); saveQueue(); rebuildOrder(); render(); toast('Лишние копии убраны'); }
@@ -3349,19 +3352,25 @@ engine.addEventListener('track', () => { const f = $('#full'); f.classList.remov
 // отрывается гладким шаром, всплывает, сливается с верхней лужей; остывшие капли тонут обратно.
 // При запуске один раз из правого верхнего угла выливается струя больших капель и расплёскивается.
 // Рисуется на видеокарте (WebGL, метаболы) — гладкие края и почти без нагрузки. Только на компьютере.
+let setBgTheme = () => {};
 if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) (() => {
   const cv = document.createElement('canvas'); cv.id = 'glass'; cv.setAttribute('aria-hidden', 'true');
   const gl = cv.getContext('webgl', { premultipliedAlpha: false, antialias: false, alpha: true });
   if (!gl) return;
   $('#fx').prepend(cv);
+  const lavaOn = () => settings.bgTheme !== 'orbs';
+  setBgTheme = () => { document.body.classList.toggle('hasglass', lavaOn()); cv.hidden = !lavaOn(); };
+  // в большом плеере тот же фон: холст переезжает внутрь плеера и обратно
+  new MutationObserver(() => { const open = $('#full').classList.contains('open'), home = open ? $('#fullbg') : $('#fx'); if (cv.parentNode !== home) home.prepend(cv); }).observe($('#full'), { attributes: true, attributeFilter: ['class'] });
   const MAX = 128, Q = .6; // считаем в 0,6 разрешения экрана — шейдер всё равно даёт мягкие края
   const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
   const fs = `precision mediump float;
-uniform vec2 res;uniform vec3 balls[${MAX}];uniform int n;uniform float pb,pt,t,sl,im,ix;uniform vec3 c1,c2;
+uniform vec2 res;uniform vec3 balls[${MAX}];uniform int n;uniform vec3 sp[48];uniform int sn;uniform float pb,pt,t,sl,im,ix;uniform vec3 c1,c2;
 void main(){
   vec2 q=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y);
   float f=0.;
   for(int i=0;i<${MAX};i++){ if(i>=n)break; vec2 d=q-balls[i].xy; f+=balls[i].z*balls[i].z/(dot(d,d)+1.); }
+  for(int i=0;i<47;i++){ if(i>=sn-1)break; vec2 a=sp[i].xy,b=sp[i+1].xy,ab=b-a; float h=clamp(dot(q-a,ab)/max(dot(ab,ab),.001),0.,1.); vec2 d=q-a-ab*h; float r=mix(sp[i].z,sp[i+1].z,h); f+=r*r/(dot(d,d)+.5); }
   float wb=pb*(1.+(.08+sl*.35)*sin(q.x*.006+t*(.4+sl*3.))+(.05+sl*.2)*sin(q.x*.013-t*(.3+sl*2.)))+pb*im*.9*exp(-pow((q.x-ix)/(res.x*.08),2.));
   float wt=pt*(1.+.1*sin(q.x*.008-t*.35));
   float db=max(res.y-q.y,1.), dt=max(q.y,1.);
@@ -3374,6 +3383,10 @@ void main(){
   col=mix(col,min(c1*1.45+vec3(.15,.12,.05),vec3(1.)),core*.55*k); // снизу и в середине светится, как воск над лампой
   col*=.82+.18*smoothstep(.9,1.6,f); // край чуть темнее — объём
   float a=max(inside*.85,halo*1.4);
+  float rim=1.-smoothstep(0.,.18,abs(f-1.)); // тонкая светлая кромка по контуру
+  float gloss=smoothstep(1.2,2.2,f)*(1.-smoothstep(2.2,4.,f))*.25; // блик внутри, как на глянцевом воске
+  col=mix(col,min(c1*1.6+vec3(.3),vec3(1.)),rim*.75+gloss);
+  a=max(a,rim*.9);
   gl_FragColor=vec4(mix(c1,col,inside),a);
 }`;
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
@@ -3382,7 +3395,7 @@ void main(){
   gl.useProgram(pr);
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = k => gl.getUniformLocation(pr, k), uRes = U('res'), uBalls = U('balls'), uN = U('n'), uPb = U('pb'), uPt = U('pt'), uT = U('t'), uC1 = U('c1'), uC2 = U('c2'), uSl = U('sl'), uIm = U('im'), uIx = U('ix');
+  const U = k => gl.getUniformLocation(pr, k), uRes = U('res'), uBalls = U('balls'), uN = U('n'), uPb = U('pb'), uPt = U('pt'), uT = U('t'), uC1 = U('c1'), uC2 = U('c2'), uSl = U('sl'), uSp = U('sp'), uSn = U('sn'), uIm = U('im'), uIx = U('ix');
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   let W, H;
   const size = () => { W = Math.round(innerWidth * Q); H = Math.round(innerHeight * Q); cv.width = W; cv.height = H; gl.viewport(0, 0, W, H); };
@@ -3394,26 +3407,31 @@ void main(){
   let pb = 0, pbT = 0, pt = 0, ptT = 0;
   const balls = [];
   // струя при запуске
-  let pour = 640, pourT = 0, fr = 0, lava = 0, slosh = 0, imp = 0, impX = 0;
+  let pour = 380, pourT = 0, fr = 0, lava = 0, slosh = 0, imp = 0, impX = 0;
   const R = () => Math.min(W, H);
   const step = now => {
     requestAnimationFrame(step);
-    if (document.hidden || document.body.classList.contains('calm') || $('#full').classList.contains('open')) return;
-    const dt = 1;
+    const full = $('#full').classList.contains('open');
+    if (document.hidden || !lavaOn() || (!full && document.body.classList.contains('calm'))) return;
+    // на паузе всё замирает; струя при запуске доливается в любом случае
+    const still = engine.paused && pour <= 0 && !balls.some(b => b.fly);
+    if (still) return;
+    const SP = .45; // вальяжно: лава-лампа двигается медленно
     if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); c1 = rgb(cs.getPropertyValue('--c1').trim()); c2 = rgb(cs.getPropertyValue('--c2').trim()); }
     // струя как вино из бутылки: тонкая, непрерывная, слегка гуляет; капли идут вплотную и сливаются в одну линию
-    if (pour > 0 && ++fr > 30) for (let k = 0; k < 2; k++) { pour--; pourT++; const r = R() * (.0075 + Math.random() * .002), wob = Math.sin(pourT * .05) * .5 + Math.sin(pourT * .013);
-      balls.push({ x: W * 1.01 - k * W * .002, y: H * .04, vx: -W * (.0042 + wob * .0006), vy: H * .0005, r, fly: 1, heat: 0, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
+    if (pour > 0 && ++fr > 30) for (let k = 0; k < 1; k++) { pour--; pourT++; const r = R() * (.0075 + Math.random() * .002), wob = Math.sin(pourT * .02) * .6 + Math.sin(pourT * .007) * .4;
+      balls.push({ x: W * 1.005 - k * W * .0015, y: H * .03, vx: -W * (.0036 + wob * .00025), vy: H * .0004, r, r0: r, fly: 1, heat: 0, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
     if (pour <= 0 && !lava) { lava = 1; ptT = H * .03; }
     // лава-лампа: из налитой жидкости время от времени вытягивается и отрывается шар
-    if (lava && balls.filter(b => !b.fly).length < 7 && Math.random() < .006) {
+    if (lava && balls.filter(b => !b.fly).length < 7 && Math.random() < .006 * SP) {
       const r = R() * (.06 + Math.random() * .05); balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
-    slosh *= .985; imp *= .97;
+    slosh *= .992; imp *= .975;
     pb += (pbT - pb) * .02; pt += (ptT - pt) * .02;
     for (let i = balls.length - 1; i >= 0; i--) {
       const p = balls[i];
       if (p.fly) { // струя: летит по дуге, у дна — шлепок в лужу и брызги
-        p.vy += H * .0007; p.x += p.vx; p.y += p.vy;
+        p.vy += H * .0006; p.x += p.vx; p.y += p.vy;
+        if (p.fly === 1) p.r = p.r0 * Math.max(.55, Math.pow((W * .0036) / Math.hypot(p.vx, p.vy), .35)); // разогналась — истончилась
         if (p.y > H - pb * 1.05) { // струя бьёт в жидкость: уровень растёт, поверхность плещется, иногда брызги
           pbT = Math.min(H * .15, pbT + H * .0003); slosh = Math.min(1, slosh + .012); imp = Math.min(1, imp + .05); impX = p.x;
           if (Math.random() < .03) { p.fly = 2; p.vx = (Math.random() - .6) * W * .006; p.vy = -H * (.006 + Math.random() * .008); p.r *= .8; continue; }
@@ -3421,13 +3439,13 @@ void main(){
         }
         continue;
       }
-      if (p.rT && p.r < p.rT) p.r += (p.rT - p.r) * .01;
+      if (p.rT && p.r < p.rT) p.r += (p.rT - p.r) * .006;
       const depth = p.y / H;
       // тепло: у дна греется, у верха остывает; горячий всплывает, холодный тонет
-      p.heat += ((depth > .8 ? 1 : depth < .2 ? 0 : p.heat) - p.heat) * (depth > .8 ? p.hr : .006);
-      p.vy += H * (.00012 - p.heat * .00024);
-      p.ph += .006; p.vx += Math.sin(p.ph) * W * .00002;
-      p.vx *= .985; p.vy *= .985;
+      p.heat += ((depth > .8 ? 1 : depth < .2 ? 0 : p.heat) - p.heat) * (depth > .8 ? p.hr : .006) * SP;
+      p.vy += H * (.00012 - p.heat * .00024) * SP * SP;
+      p.ph += .004; p.vx += Math.sin(p.ph) * W * .00001 * SP;
+      p.vx *= .975; p.vy *= .975; // вязкий воск — без рывков
       p.x += p.vx; p.y += p.vy;
       if (p.x < p.r * .6) { p.x = p.r * .6; p.vx = Math.abs(p.vx) * .4; } if (p.x > W - p.r * .6) { p.x = W - p.r * .6; p.vx = -Math.abs(p.vx) * .4; }
       if (p.y > H - pb * .6) { p.y = H - pb * .6; p.vy = -Math.abs(p.vy) * .2; } if (p.y < pt * .6) { p.y = pt * .6; p.vy = Math.abs(p.vy) * .2; }
@@ -3438,13 +3456,18 @@ void main(){
       const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1, m = (p.r + q.r) * .7;
       if (d < m) { const f = (m - d) / d * .004; p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f; }
     }
-    const n = Math.min(MAX, balls.length), arr = new Float32Array(MAX * 3);
-    for (let i = 0; i < n; i++) { arr[i * 3] = balls[i].x; arr[i * 3 + 1] = balls[i].y; arr[i * 3 + 2] = balls[i].r; }
+    const blobs = balls.filter(b => b.fly !== 1), str = balls.filter(b => b.fly === 1);
+    const n = Math.min(MAX, blobs.length), arr = new Float32Array(MAX * 3);
+    for (let i = 0; i < n; i++) { arr[i * 3] = blobs[i].x; arr[i * 3 + 1] = blobs[i].y; arr[i * 3 + 2] = blobs[i].r; }
+    // точки струи: от горлышка к низу, не больше 48 — между ними шейдер тянет сплошную линию
+    const spA = new Float32Array(48 * 3), stp = Math.max(1, Math.ceil(str.length / 48)); let sn = 0;
+    for (let i = str.length - 1; i >= 0 && sn < 48; i -= stp) { const b = str[i]; spA[sn * 3] = b.x; spA[sn * 3 + 1] = b.y; spA[sn * 3 + 2] = b.r * .8; sn++; }
+    gl.uniform3fv(uSp, spA); gl.uniform1i(uSn, sn);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform2f(uRes, W, H); gl.uniform3fv(uBalls, arr); gl.uniform1i(uN, n); gl.uniform1f(uPb, pb); gl.uniform1f(uPt, pt); gl.uniform1f(uT, now / 1000);
     gl.uniform1f(uSl, slosh); gl.uniform1f(uIm, imp); gl.uniform1f(uIx, impX); gl.uniform3fv(uC1, c1); gl.uniform3fv(uC2, c2);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
   requestAnimationFrame(step);
-  document.body.classList.add('hasglass');
+  setBgTheme();
 })();
