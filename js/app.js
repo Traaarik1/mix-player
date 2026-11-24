@@ -3341,64 +3341,81 @@ engine.addEventListener('track', () => { const f = $('#full'); f.classList.remov
   }
 }
 
-// Бокал: шары падают в бокал по физике и оседают, потом живут как в лава-лампе (греются у дна, всплывают, остывают, тонут).
-// Только на компьютере; при смене трека падают заново.
+// Лава-лампа на фоне: сбоку экрана вливается струя больших капель, они сливаются, а потом живут как в лава-лампе —
+// снизу греется и всплывает пузырями, наверху остывает и стекает, сливаясь то в жижу, то в шары (метаболы).
+// Только на компьютере; при смене трека наливается заново.
 if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
   const cv = document.createElement('canvas'); cv.id = 'glass'; cv.setAttribute('aria-hidden', 'true');
   $('#fx').prepend(cv);
-  const g = cv.getContext('2d'), K = .5; // половинное разрешение: мягко и дёшево
-  let W, H, cx, top, cy, rx, ry, balls = [], cols = ['#f33', '#f63', '#c24'], colT = 0;
-  const size = () => { W = cv.width = Math.round(innerWidth * K); H = cv.height = Math.round(innerHeight * K);
-    cx = W * .58; rx = Math.min(W * .2, H * .32); ry = H * .3; cy = H * .5; top = H * .14; };
+  const g = cv.getContext('2d'), F = 4; // поле считаем в 5 раз мельче экрана — дёшево, а при растяжении края мягкие
+  const fc = document.createElement('canvas'), fg = fc.getContext('2d');
+  let W, H, cx, top, cy, rx, ry, img, field, ps = [], pour = 0, c1 = [255, 60, 60], c2 = [200, 30, 70], colT = 0;
+  const size = () => {
+    W = fc.width = Math.ceil(innerWidth / F); H = fc.height = Math.ceil(innerHeight / F);
+    cv.width = innerWidth; cv.height = innerHeight;
+    cx = W * .58; rx = Math.min(W * .2, H * .32); ry = H * .3; cy = H * .5; top = H * .14;
+    img = fg.createImageData(W, H); field = new Float32Array(W * H);
+  };
   size(); addEventListener('resize', size);
-  // внутренняя граница бокала: для высоты y — полуширина чаши
-  const half = y => y < top ? -1 : y <= cy ? rx * .94 + (rx - rx * .94) * ((y - top) / (cy - top)) : y >= cy + ry ? 0 : rx * Math.sqrt(1 - ((y - cy) / ry) ** 2);
-  const drop = () => { balls = [0, 1, 2].map(i => ({ x: cx + (i - 1) * rx * .5, y: -H * (.1 + i * .25), vx: (Math.random() - .5) * 2, vy: 0, r: rx * (.22 + i * .04), c: i, heat: Math.random(), ph: Math.random() * 6 })); };
-  drop(); engine.addEventListener('track', drop);
-  const readCols = () => { const cs = getComputedStyle(document.documentElement); cols = ['--c1', '--c2', '--c3'].map(v => cs.getPropertyValue(v).trim() || '#f33'); };
-  let last = performance.now();
+  const half = y => y < top ? -1 : y <= cy ? rx * (.94 + .06 * (y - top) / (cy - top)) : y >= cy + ry ? 0 : rx * Math.sqrt(1 - ((y - cy) / ry) ** 2);
+  const N = 34;
+  let grp = [];
+  const refill = () => { ps = []; pour = N; grp = [0, 1, 2, 3, 4].map(i => ({ heat: i / 5, hr: .0015 + Math.random() * .002, x: 0, y: 0, n: 0 })); };
+  refill(); // льётся один раз — при запуске
+  const rgb = c => { fg.fillStyle = '#000'; fg.fillStyle = c; const h = fg.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(Number) : [255, 60, 60]; };
+  let last = performance.now(), t = 0;
   const step = now => {
     requestAnimationFrame(step);
-    const dt = Math.min(2, (now - last) / 16.7); last = now;
+    const dt = Math.min(2, (now - last) / 16.7); last = now; t += dt;
     if (document.hidden || document.body.classList.contains('calm') || $('#full').classList.contains('open')) return;
-    if (now - colT > 1000) { colT = now; readCols(); }
-    for (const b of balls) {
-      const inside = b.y > top;
-      // лава-лампа: шар у дна греется и всплывает, наверху остывает и тонет
-      if (inside) { const depth = (b.y - top) / (cy + ry - top); b.heat += ((depth > .7 ? 1 : depth < .3 ? 0 : b.heat) - b.heat) * .004 * dt; }
-      const buoy = inside ? (b.heat - .5) * .09 : 0;
-      b.vy += (.35 - buoy * 4.2) * dt * (inside ? .12 : 1);
-      if (inside) { b.ph += .01 * dt; b.vx += Math.sin(b.ph) * .006 * dt; }
-      b.vx *= inside ? .985 : .999; b.vy *= inside ? .985 : .999;
-      b.x += b.vx * dt; b.y += b.vy * dt;
-      // стенки чаши: шар (с учётом радиуса) не выходит за контур, отскок с потерей энергии
-      if (b.y > top) {
-        const yy = Math.min(b.y + b.r * .55, cy + ry - 1), w = Math.max(0, half(yy) - b.r * .55);
-        if (b.x > cx + w) { b.x = cx + w; b.vx = -Math.abs(b.vx) * .5; }
-        if (b.x < cx - w) { b.x = cx - w; b.vx = Math.abs(b.vx) * .5; }
-        const floor = cy + ry - b.r * .6;
-        if (b.y > floor) { b.y = floor; b.vy = -Math.abs(b.vy) * .45; }
-        if (b.y < top + b.r * .3 && b.vy < 0) { b.vy *= -.3; }
+    if (now - colT > 1000) { colT = now; const cs = getComputedStyle(document.documentElement); c1 = rgb(cs.getPropertyValue('--c1').trim()); c2 = rgb(cs.getPropertyValue('--c2').trim()); }
+    // льём: капли падают тонкой струйкой сверху
+    if (pour > 0 && Math.random() < .55 * dt) { pour--; ps.push({ fly: 1, g: (N - pour) % 5, x: W + 6, y: -6 + (Math.random() - .5) * 4, vx: -(2.6 + Math.random() * .8), vy: .6 + Math.random() * .4, r: 6 + Math.random() * 4, heat: 0, hr: .002 + Math.random() * .006, ph: Math.random() * 6 }); }
+    // каждая группа капель — свой шар лава-лампы: общая температура и центр
+    for (const q of grp) { q.x = q.y = q.n = 0; }
+    for (const p of ps) { const q = grp[p.g]; q.x += p.x; q.y += p.y; q.n++; }
+    for (const q of grp) if (q.n) { q.x /= q.n; q.y /= q.n; const dp = q.y / H; q.heat += ((dp > .72 ? 1 : dp < .28 ? 0 : q.heat) - q.heat) * (dp > .72 || dp < .28 ? q.hr * 2.2 : 0) * dt; }
+    for (const p of ps) {
+      const depth = p.y / H;
+      if (p.fly) { p.vy += .09 * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.y > H - p.r) { p.fly = 0; p.y = H - p.r; p.vx = (Math.random() - .5) * 9; p.vy = -1.5 - Math.random() * 3.5; } continue; } // струя; у дна — всплеск во все стороны
+      // лава-лампа на весь экран: внизу греется и всплывает, наверху остывает и опускается
+      const G = grp[p.g]; p.heat = G.heat;
+      p.vy += (.035 - p.heat * .07) * dt;
+      if (G.n > 1) { p.vx += (G.x - p.x) * .0018 * dt; p.vy += (G.y - p.y) * .0018 * dt; } // капли своей группы стягиваются в шар
+      p.ph += .008 * dt; p.vx += Math.sin(p.ph + p.y * .03) * .006 * dt;
+      p.vx *= .965; p.vy *= .965;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.x < p.r) { p.x = p.r; p.vx = Math.abs(p.vx) * .3; } if (p.x > W - p.r) { p.x = W - p.r; p.vx = -Math.abs(p.vx) * .3; }
+      if (p.y > H - p.r * .6) { p.y = H - p.r * .6; p.vy = -Math.abs(p.vy) * .2; } if (p.y < p.r * .6) { p.y = p.r * .6; p.vy = Math.abs(p.vy) * .2; }
+    }
+    // жидкость: близкие капли отталкиваются (не схлопываются), чуть дальше — тянутся друг к другу (сливаются в капли и шары)
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
+      const p = ps[i], q = ps[j], dx = q.x - p.x, dy = q.y - p.y, d2 = dx * dx + dy * dy, R = (p.r + q.r) * 1.6;
+      if (d2 > R * R || d2 < .0001) continue;
+      const d = Math.sqrt(d2), rest = (p.r + q.r) * .75, f = (d < rest ? (d - rest) * .07 : p.g === q.g ? (d - rest) * .002 : 0) * dt / d;
+      p.vx += dx * f; p.vy += dy * f; q.vx -= dx * f; q.vy -= dy * f;
+      // соседи делятся теплом — всплывают вместе, пузырём
+    }
+    // поле метаболов
+    field.fill(0);
+    for (const p of ps) {
+      const R = p.r * 2.6, x0 = Math.max(0, p.x - R | 0), x1 = Math.min(W - 1, p.x + R | 0), y0 = Math.max(0, p.y - R | 0), y1 = Math.min(H - 1, p.y + R | 0), rr = p.r * p.r;
+      for (let y = y0; y <= y1; y++) { const dy = y - p.y, row = y * W; for (let x = x0; x <= x1; x++) { const dx = x - p.x, d2 = dx * dx + dy * dy; if (d2 < R * R) field[row + x] += rr / (d2 + .5) * (1 - d2 / (R * R)); } }
+    }
+    const px = img.data;
+    for (let y = 0; y < H; y++) {
+      const k = y / H, r0 = c1[0] + (c2[0] - c1[0]) * k, g0 = c1[1] + (c2[1] - c1[1]) * k, b0 = c1[2] + (c2[2] - c1[2]) * k, row = y * W;
+      for (let x = 0; x < W; x++) {
+        const f = field[row + x], i = (row + x) * 4;
+        if (f < .45) { px[i + 3] = 0; continue; }
+        const a = Math.min(1, (f - .45) * 1.6), l = Math.min(1.45, .85 + (f - 1) * .2); // гуще — светлее, как воск в лампе
+        px[i] = Math.min(255, r0 * l); px[i + 1] = Math.min(255, g0 * l); px[i + 2] = Math.min(255, b0 * l); px[i + 3] = a * 140;
       }
     }
-    // шары мягко расталкивают друг друга
-    for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
-      const a = balls[i], b = balls[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, m = (a.r + b.r) * .55;
-      if (d < m) { const p = (m - d) / d * .05 * dt; a.x -= dx * p; a.y -= dy * p; b.x += dx * p; b.y += dy * p; }
-    }
-    g.clearRect(0, 0, W, H);
-    // контур бокала — еле заметный
-    g.globalCompositeOperation = 'source-over'; g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(cx - rx * .94, top); g.lineTo(cx - rx, cy); g.ellipse(cx, cy, rx, ry, 0, Math.PI, 0, true); g.lineTo(cx + rx * .94, top);
-    g.moveTo(cx, cy + ry); g.lineTo(cx, cy + ry + H * .14); g.moveTo(cx - rx * .55, cy + ry + H * .14); g.lineTo(cx + rx * .55, cy + ry + H * .14); g.stroke();
-    // сами шары: мягкие пятна, при наложении светятся и сливаются как воск
-    g.globalCompositeOperation = 'lighter';
-    for (const b of balls) {
-      const gr = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 1.6);
-      gr.addColorStop(0, cols[b.c]); gr.addColorStop(.45, cols[b.c] + ''); gr.addColorStop(1, 'transparent');
-      g.globalAlpha = .55; g.fillStyle = gr; g.beginPath(); g.arc(b.x, b.y, b.r * 1.6, 0, 7); g.fill();
-    }
-    g.globalAlpha = 1;
+    fg.putImageData(img, 0, 0);
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(fc, 0, 0, cv.width, cv.height);
   };
   requestAnimationFrame(step);
   document.body.classList.add('hasglass');
