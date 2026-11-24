@@ -1218,3 +1218,7 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
 .head h1 .sub { -webkit-text-fill-color: var(--mist); }
 .tabs button.on span, #nav button.on { color: color-mix(in srgb, var(--c1, #b79cff) 60%, #fff); }
 #nav button.on { background: linear-gradient(90deg, color-mix(in srgb, var(--c1, #b79cff) 22%, transparent), transparent); }
+/* телефон: обложка сама плавно крутится в 3D, без гироскопа */
+@keyframes coverSpin { 0% { transform: perspective(900px) rotateY(-14deg) rotateX(6deg); } 25% { transform: perspective(900px) rotateY(0deg) rotateX(-6deg); } 50% { transform: perspective(900px) rotateY(14deg) rotateX(4deg); } 75% { transform: perspective(900px) rotateY(0deg) rotateX(8deg); } 100% { transform: perspective(900px) rotateY(-14deg) rotateX(6deg); } }
+@media (hover: none) { .full.open #stack { animation: coverSpin 12s ease-in-out infinite !important; } body:not(.playing) .full.open #stack { animation-play-state: paused !important; } }
+@media (hover: none) and (prefers-reduced-motion: reduce) { .full.open #stack { animation: none !important; } }

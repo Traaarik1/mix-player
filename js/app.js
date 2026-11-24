@@ -3270,15 +3270,8 @@ boot();
     set(-((e.clientY - r.top) / r.height - .5) * 24, ((e.clientX - r.left) / r.width - .5) * 24);
   });
   full.addEventListener('pointerleave', () => { set(0, 0); setTimeout(() => { if (Date.now() - live > 500) full.classList.remove('tilting'); }, 600); });
-  // телефон: гироскоп; на iPhone разрешение спрашивается по первому касанию обложки
-  let gyro = false;
-  const onTilt = e => { if (!full.classList.contains('open') || e.beta == null) return; set(-(e.beta - 45) * .35, e.gamma * .45); };
-  const startGyro = async () => {
-    if (gyro) return; gyro = true;
-    try { if (typeof DeviceOrientationEvent?.requestPermission === 'function' && await DeviceOrientationEvent.requestPermission() !== 'granted') return; } catch { return; }
-    addEventListener('deviceorientation', onTilt);
-  };
-  if (matchMedia('(hover: none)').matches) stack.addEventListener('pointerup', startGyro, { once: true });
+  // телефон: обложка сама медленно крутится в 3D (CSS coverSpin)
+
 }
 
 // смена трека: короткая анимация названия и обложки
