@@ -865,6 +865,13 @@ function rowHTML(t, n) {
 
 function render() {
   creditCache = null;
+  // шапка плейлиста: мозаика из обложек его треков
+  { const pl = lib.playlists.find(p => p.id === view), head = $('.head'); let hc = $('#hcover');
+    if (pl) { if (!hc) { hc = document.createElement('div'); hc.id = 'hcover'; head.prepend(hc); }
+      const ts = pl.ids.map(id => tracks.get(id)).filter(Boolean).slice(0, 4);
+      hc.className = 'hcover n' + ts.length; hc.innerHTML = ts.map(t => coverHTML(t)).join(''); }
+    else hc?.remove();
+    head.classList.toggle('plview', !!pl); }
   $('.head-tools').hidden = view === 'fix' || view === 'wave' || view === 'wish' || view === 'settings';
   $('.fixbar')?.remove();
   if (view !== 'all') { $('#shelf').hidden = true; $('#shelf').innerHTML = ''; }
