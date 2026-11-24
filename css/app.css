@@ -1348,3 +1348,32 @@ button:active:not(:disabled) { transform: scale(.96); }
 @media (max-width: 900px) { .app::before { display: none; } }
 .rail { scrollbar-color: transparent transparent; } .rail:hover { scrollbar-color: rgb(255 255 255 / .15) transparent; }
 .rail::-webkit-scrollbar-thumb { background: transparent; } .rail:hover::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .15); }
+
+/* атмосфера фона */
+#fx { position: fixed; inset: 0; pointer-events: none; z-index: -1; overflow: hidden; --bass: 0; }
+#fx > * { position: absolute; inset: 0; }
+.fxgrid { background: radial-gradient(circle, color-mix(in srgb, var(--c1) 60%, #fff) 1px, transparent 1.6px) 0 0 / 28px 28px;
+  opacity: calc(.06 + var(--bass) * .35); scale: calc(1 + var(--bass) * .04);
+  -webkit-mask: radial-gradient(70% 60% at 50% 45%, #000, transparent); mask: radial-gradient(70% 60% at 50% 45%, #000, transparent); }
+.fxfog b { position: absolute; left: -20%; right: -20%; bottom: -18vh; height: 45vh; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--c2) 40%, transparent), transparent); opacity: .55; animation: fog 28s ease-in-out infinite alternate; }
+.fxfog b + b { background: radial-gradient(closest-side, color-mix(in srgb, var(--c1) 35%, transparent), transparent); animation-duration: 37s; animation-direction: alternate-reverse; bottom: -24vh; }
+@keyframes fog { from { translate: -12% 0; } to { translate: 12% -4vh; } }
+.fxmotes i { position: absolute; width: calc(3px * var(--z)); aspect-ratio: 1; border-radius: 50%; background: color-mix(in srgb, var(--c1) 50%, #fff);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--c1) 80%, transparent); opacity: 0; animation: mote var(--d) linear infinite var(--dl); }
+@keyframes mote { 0% { opacity: 0; translate: 0 0; } 15% { opacity: .8; } 50% { opacity: .35; } 85% { opacity: .7; } 100% { opacity: 0; translate: 4vw -18vh; } }
+.fxvig { background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgb(0 0 0 / .55)); }
+body::after { animation: grain .9s steps(4) infinite; }
+@keyframes grain { 0% { translate: 0 0; } 25% { translate: -3% 2%; } 50% { translate: 2% -3%; } 75% { translate: -2% -1%; } }
+body:not(.playing) .fxmotes i, body:not(.playing) .fxfog b, body:not(.playing)::after { animation-play-state: paused; }
+@media (max-width: 900px) { .fxgrid { display: none; } .fxmotes i { box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { #fx *, body::after { animation: none !important; } }
+body::after { inset: -6% !important; }
+/* без шва снизу: панель плеера прозрачная, плавно темнеет к низу */
+.bar { background: linear-gradient(180deg, transparent, rgb(0 0 0 / .38)) !important; border-top: 0 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
+@media (max-width: 900px) { .bar { background: color-mix(in srgb, var(--c1) 18%, rgb(12 8 18 / .92)) !important; } }
+/* плавность: дорогое по перерисовке убрано, движение только через композитинг */
+body::after { animation: none !important; }
+.fxmotes i { box-shadow: none; background: radial-gradient(circle, color-mix(in srgb, var(--c1) 40%, #fff), transparent 70%); width: calc(7px * var(--z)); will-change: translate, opacity; }
+.fxfog b { will-change: translate; }
+.fxgrid { will-change: opacity, scale; }
