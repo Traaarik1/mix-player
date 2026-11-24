@@ -729,7 +729,7 @@ function renderSettings() {
     <div class="sechead"><div><b>Язык</b></div></div>
     <div class="presets"><button class="chip${settings.lang !== 'en' ? ' on' : ''}" data-act="lang:ru">Русский</button><button class="chip${settings.lang === 'en' ? ' on' : ''}" data-act="lang:en">English</button></div>
     <div class="sechead"><div><b>Тема фона</b></div></div>
-    <div class="presets"><button class="chip${settings.bgTheme !== 'orbs' ? ' on' : ''}" data-act="bg:lava">Лава-лампа</button><button class="chip${settings.bgTheme === 'orbs' ? ' on' : ''}" data-act="bg:orbs">Шары</button></div>
+    <div class="presets"><button class="chip${settings.bgTheme === 'lava' ? ' on' : ''}" data-act="bg:lava">Лава-лампа</button><button class="chip${settings.bgTheme !== 'lava' ? ' on' : ''}" data-act="bg:orbs">Шары</button></div>
     <div class="sechead"><div><b>Воспроизведение</b></div></div>
     ${row('data-act="setMix"', 'wave', 'Переход между треками', 'Плавный переход, срез тишины')}
     ${row('data-act="setEq"', 'eq', 'Эквалайзер', 'Частоты под твои наушники')}
@@ -3358,7 +3358,7 @@ if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-m
   const gl = cv.getContext('webgl', { premultipliedAlpha: false, antialias: false, alpha: true });
   if (!gl) return;
   $('#fx').prepend(cv);
-  const lavaOn = () => settings.bgTheme !== 'orbs';
+  const lavaOn = () => settings.bgTheme === 'lava'; // по умолчанию — шары
   setBgTheme = () => { document.body.classList.toggle('hasglass', lavaOn()); cv.hidden = !lavaOn(); };
   // в большом плеере тот же фон: холст переезжает внутрь плеера и обратно
   new MutationObserver(() => { const open = $('#full').classList.contains('open'), home = open ? $('#fullbg') : $('#fx'); if (cv.parentNode !== home) home.prepend(cv); }).observe($('#full'), { attributes: true, attributeFilter: ['class'] });
@@ -3406,19 +3406,21 @@ void main(){
   const rgb = c => { tmp.fillStyle = '#000'; tmp.fillStyle = c; const h = tmp.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(v => v / 255) : [1, .3, .3]; };
   let c1 = [1, .3, .3], c2 = [.8, .15, .3], colT = 0, tc1 = c1, tc2 = c2;
   // лужи: растут, когда в них падает струя
-  let pb = 0, pbT = 0, pt = 0, ptT = 0;
+  let pb = H * .17, pbT = pb, pt = H * .13, ptT = pt; // без струи: лужи внизу и вверху сразу налиты
   const balls = [];
   // струя при запуске
-  let pour = 620, pourT = 0, fr = 0, lava = 0, slosh = 0, imp = 0, impX = 0;
+  let idle = 0, pour = 0, pourT = 0, fr = 0, lava = 1, slosh = 0, imp = 0, impX = 0;
   const R = () => Math.min(W, H);
   const step = now => {
     requestAnimationFrame(step);
+    if (document.body.classList.contains('hasglass') !== lavaOn()) setBgTheme(); // настройки грузятся позже скрипта
     const full = $('#full').classList.contains('open');
     if (document.hidden || !lavaOn() || (!full && document.body.classList.contains('calm'))) return;
     // на паузе всё замирает; струя при запуске доливается в любом случае
     const still = engine.paused && pour <= 0 && !balls.some(b => b.fly);
-    if (still) return;
+    if (still && (idle++ % 30)) return; // на паузе всё стоит; перерисовываем редко, чтобы картинка не пропадала
     const SP = .45; // вальяжно: лава-лампа двигается медленно
+    if (!still) {
     if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); const soft = c => { const l = c[0] * .3 + c[1] * .59 + c[2] * .11; return c.map(v => Math.min(.85, (v * .55 + l * .45) * .8)); }; // приглушаем: без кислотных цветов
       tc1 = soft(rgb(cs.getPropertyValue('--c1').trim())); tc2 = soft(rgb(cs.getPropertyValue('--c2').trim())); }
     // струя как вино из бутылки: тонкая, непрерывная, слегка гуляет; капли идут вплотную и сливаются в одну линию
@@ -3458,6 +3460,7 @@ void main(){
       const p = balls[i], q = balls[j]; if (p.fly || q.fly) continue;
       const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1, m = (p.r + q.r) * .7;
       if (d < m) { const f = (m - d) / d * .004; p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f; }
+    }
     }
     const blobs = balls.filter(b => b.fly !== 1), str = balls.filter(b => b.fly === 1);
     const n = Math.min(MAX, blobs.length), arr = new Float32Array(MAX * 3);
