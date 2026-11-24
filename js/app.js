@@ -113,7 +113,7 @@ async function toneOf(blob) {
   if (!w) return [hash(blob.size + ''), 15];
   return [Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360), Math.round(Math.min(100, sat / w * 110))];
 }
-const toneFor = t => t?.tone || [t ? hash(t.title + t.artist) : 258, 70];
+const toneFor = t => t?.tone || [t ? hash(t.title + t.artist) : 356, 80];
 // Три главных цвета обложки — для цветных шаров на фоне
 async function paletteOf(blob) {
   const bmp = await createImageBitmap(blob);

@@ -7,7 +7,7 @@
   --mist: #A69CB8;
   --amber: #FFC56B;
   /* цвет текущей обложки; меняется плавно во время перехода */
-  --h: 258; --s: 100%;
+  --h: 356; --s: 100%;
   --accent: hsl(var(--h) var(--s) 76%);
   --accent-deep: hsl(var(--h) calc(var(--s) * .55) 22%);
   --display: "Unbounded", system-ui, sans-serif;
@@ -910,7 +910,7 @@ body:not(.playing) .backdrop::before, body:not(.playing) .backdrop::after, body:
 }
 
 /* ---------- цветные шары в цвета обложки: крутятся и плывут ---------- */
-:root { --c1: hsl(258 80% 60%); --c2: hsl(320 80% 58%); --c3: hsl(30 85% 58%); }
+:root { --c1: hsl(356 85% 55%); --c2: hsl(12 90% 55%); --c3: hsl(335 80% 45%); }
 .backdrop::before, .backdrop::after { display: none; }
 .backdrop i.on { opacity: .16; }
 .orbs { position: absolute; inset: -15%; animation: orbspin 80s linear infinite; will-change: transform; }
@@ -1328,3 +1328,11 @@ button:active:not(:disabled) { transform: scale(.96); }
   .tile .cov, .tile img, .row .cov, .row img { box-shadow: none; transition: none; }
 }
 .tgcard .btn { width: 100%; white-space: normal; text-align: center; justify-content: center; line-height: 1.25; }
+/* кнопки: мягкие, со стеклом и градиентом */
+.btn { padding: 11px 20px; background: rgb(255 255 255 / .07); border: 1px solid rgb(255 255 255 / .09); color: var(--paper);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .08); transition: background .2s, border-color .2s, transform .15s, box-shadow .25s; }
+.btn:hover { background: rgb(255 255 255 / .12); border-color: rgb(255 255 255 / .16); }
+.btn.primary { background: linear-gradient(135deg, color-mix(in srgb, var(--c1) 85%, #fff), var(--c2)); color: #fff; border: 0;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--c1) 40%, transparent), inset 0 1px 0 rgb(255 255 255 / .25) !important; text-shadow: 0 1px 2px rgb(0 0 0 / .2); }
+.btn.primary:hover { filter: brightness(1.08) saturate(1.1); box-shadow: 0 12px 30px color-mix(in srgb, var(--c1) 55%, transparent) !important; }
+.btn:disabled { opacity: .45; }
