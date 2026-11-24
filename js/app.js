@@ -3277,3 +3277,6 @@ boot();
   };
   if (matchMedia('(hover: none)').matches) stack.addEventListener('pointerup', startGyro, { once: true });
 }
+
+// смена трека: короткая анимация названия и обложки
+engine.addEventListener('track', () => { const f = $('#full'); f.classList.remove('newtrk'); void f.offsetWidth; f.classList.add('newtrk'); });

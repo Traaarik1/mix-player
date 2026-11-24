@@ -1196,3 +1196,15 @@ body.playing .full.open #stack > :first-child { animation: coverGlow 6s ease-in-
 @media (max-width: 900px) { body.playing .full.open #stack > :first-child { animation: none; } }
 /* обложка в большом плеере чуть меньше */
 .full .stack { width: min(88%, 54vh); justify-self: center; margin-inline: auto; }
+
+/* эффекты смены трека и кнопок */
+@keyframes trkIn { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.full.newtrk .ftitle { animation: trkIn .5s cubic-bezier(.2, .8, .2, 1) both; }
+.full.newtrk .fartist { animation: trkIn .5s .08s cubic-bezier(.2, .8, .2, 1) both; }
+.full.newtrk .fnext { animation: trkIn .5s .16s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes ppPulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c1, #b79cff) 55%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
+.pp:active { animation: ppPulse .5s ease-out; }
+.ib.like.on svg, .like.on svg { animation: likePop .35s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes likePop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+.morerow, .row, .tile { -webkit-tap-highlight-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .full.newtrk .ftitle, .full.newtrk .fartist, .full.newtrk .fnext, .pp:active { animation: none; } }
