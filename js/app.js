@@ -149,7 +149,11 @@ function setPalette(pal, tone) {
     const l = (mx + mn) / 2, ss = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
     return `hsl(${hh} ${Math.round(Math.max(.5, Math.min(.8, ss)) * 100)}% ${Math.round(Math.min(.52, Math.max(.42, l)) * 100)}%)`;
   };
-  if (pal.mono != null) { const L = pal.mono > .6 ? [62, 48, 36] : [26, 18, 34]; for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), `hsl(250 6% ${L[i]}%)`); return; }
+  if (pal.mono != null) { const L = pal.mono > .6 ? [62, 48, 36] : [26, 18, 34]; for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), `hsl(250 6% ${L[i]}%)`); setToneVars(250, 8); return; }
+  // акцент кнопок и значков — тоже из главного цвета обложки, а не из запасного тона по названию
+  if (pal[0]) { const [R, G, B] = pal[0].map(v => v / 255), mx = Math.max(R, G, B), mn = Math.min(R, G, B), d = mx - mn;
+    let hh = !d ? 0 : mx === R ? ((G - B) / d) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4; hh = (hh * 60 + 360) % 360;
+    setToneVars(hh, Math.max(60, Math.min(100, d / (1 - Math.abs(mx + mn - 1)) * 100))); }
   for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), pal[i] ? vivid(pal[i]) : fill[i]);
 }
 // Цвет обложки меняется плавно (1,2 с): анимируем сами, без CSS @property — его Safari на iPhone ломал
