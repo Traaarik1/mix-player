@@ -1208,3 +1208,13 @@ body.playing .full.open #stack > :first-child { animation: coverGlow 6s ease-in-
 @keyframes likePop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
 .morerow, .row, .tile { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) { .full.newtrk .ftitle, .full.newtrk .fartist, .full.newtrk .fnext, .pp:active { animation: none; } }
+
+/* ярче шары, зерно плёнки, акценты */
+.orbs span { opacity: .75; filter: saturate(1.35); }
+.fullbg .orbs span { opacity: .85; }
+body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: .05; mix-blend-mode: overlay;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.head h1 { background: linear-gradient(100deg, var(--paper) 40%, color-mix(in srgb, var(--c1, #b79cff) 70%, #fff)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.head h1 .sub { -webkit-text-fill-color: var(--mist); }
+.tabs button.on span, #nav button.on { color: color-mix(in srgb, var(--c1, #b79cff) 60%, #fff); }
+#nav button.on { background: linear-gradient(90deg, color-mix(in srgb, var(--c1, #b79cff) 22%, transparent), transparent); }
