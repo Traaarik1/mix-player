@@ -1598,6 +1598,8 @@ async function paintNow() {
   $('#openFull').innerHTML = t ? coverHTML(t) : '';
   hydrateIn($('#openFull'), true);
   $('#fTitle').textContent = t?.title || '';
+  // имя артиста ведёт на его страницу
+  { const p = t && creditIndex().get(t.id)?.[0], fa = $('#fArtist'); if (p) fa.dataset.view = 'artist:' + p.key; else if (t?.artist) fa.dataset.view = 'webartist:' + encodeURIComponent(t.artist); else delete fa.dataset.view; }
   $('#fArtist').textContent = t ? (t.artist || '') + (t.source === 'preview' ? (t.because ? '. ' + t.because : '') + '. Превью 30 секунд' : '') : '';
   $('#fMix').textContent = settings.cf ? `Микс ${settings.cf} с` : 'Без перехода';
   document.title = t ? `${t.title} — ${t.artist || 'Mix'}` : 'Mix';
@@ -3132,6 +3134,7 @@ $('#queueBtn').onclick = $('#fQueue').onclick = openQueue;
 $('#fMix').onclick = () => layer.querySelector('.mixviz') ? closeLayer() : openMix();
 const openFull = () => { if (engine.track) $('#full').classList.add('open'); };
 const closeFull = () => { $('#full').classList.remove('open'); setLyrics(false); };
+$('#fArtist').addEventListener('click', () => { if ($('#fArtist').dataset.view) closeFull(); });
 $('.np').addEventListener('click', e => { if (isPhone() && !e.target.closest('button:not(#openFull)')) openFull(); });
 setupRowSwipe($('#rows'), id => addToQueue(id));
 setupGestures({ full: $('#full'), stack: $('#stack'), mini: $('#bar'), onClose: closeFull, onOpen: openFull, onNext: next, onPrev: prev });
