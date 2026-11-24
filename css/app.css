@@ -1337,16 +1337,6 @@ button:active:not(:disabled) { transform: scale(.96); }
 .btn.primary:hover { filter: brightness(1.08) saturate(1.1); box-shadow: 0 12px 30px color-mix(in srgb, var(--c1) 55%, transparent) !important; }
 .btn:disabled { opacity: .45; }
 
-/* лучи от обложки */
-.rays { position: absolute; width: calc(var(--rs, 300px) * 3.2); aspect-ratio: 1; translate: -50% -50%; pointer-events: none; z-index: -1; opacity: 0; transition: opacity 1.2s;
-  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c1) 55%, transparent) 0deg 5deg, transparent 9deg 22deg, color-mix(in srgb, var(--c2) 35%, transparent) 25deg 28deg, transparent 32deg 45deg);
-  -webkit-mask: radial-gradient(closest-side, #000 18%, rgb(0 0 0 / .5) 45%, transparent 100%); mask: radial-gradient(closest-side, #000 18%, rgb(0 0 0 / .5) 45%, transparent 100%);
-  filter: blur(6px); animation: raysSpin 60s linear infinite; }
-.full.open .rays { opacity: .55; }
-.full.ly .rays { opacity: 0; }
-body:not(.playing) .rays { animation-play-state: paused; }
-@keyframes raysSpin { to { rotate: 360deg; } }
-@media (max-width: 900px) { .rays { filter: none; } .full.open .rays { opacity: .45; } }
-@media (prefers-reduced-motion: reduce) { .rays { animation: none; } }
+
 /* без шва между меню и основной частью */
 @media (min-width: 901px) { .rail { background: transparent !important; border-right: 0 !important; box-shadow: none !important; } }

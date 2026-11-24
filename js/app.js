@@ -3318,12 +3318,3 @@ boot();
 
 // смена трека: короткая анимация названия и обложки
 engine.addEventListener('track', () => { const f = $('#full'); f.classList.remove('newtrk'); void f.offsetWidth; f.classList.add('newtrk'); });
-
-// Свет от обложки: мягкие лучи медленно вращаются вокруг неё
-{
-  const full = $('#full'), rays = document.createElement('div'); rays.className = 'rays'; rays.setAttribute('aria-hidden', 'true');
-  full.prepend(rays);
-  const place = () => { const r = $('#stack').getBoundingClientRect(), f = full.getBoundingClientRect(); if (!r.width) return; rays.style.left = r.left - f.left + r.width / 2 + 'px'; rays.style.top = r.top - f.top + r.height / 2 + 'px'; rays.style.setProperty('--rs', r.width + 'px'); };
-  new ResizeObserver(place).observe($('#stack')); addEventListener('resize', place);
-  new MutationObserver(() => setTimeout(place, 50)).observe(full, { attributes: true, attributeFilter: ['class'] });
-}
