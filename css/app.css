@@ -1124,3 +1124,9 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
 .full .fmeta > * { flex-shrink: 0; }
 #fArtist[data-view] { cursor: pointer; width: fit-content; max-width: 100%; }
 #fArtist[data-view]:hover, #fArtist[data-view]:active { color: var(--paper); text-decoration: underline; text-underline-offset: 3px; }
+
+/* списки: играющий трек подсвечен цветом обложки, мягкие скругления */
+.row { border-radius: 12px; }
+.row.on { background: linear-gradient(90deg, color-mix(in srgb, var(--c1, #b79cff) 22%, transparent), transparent 85%); }
+.row.on .t { color: color-mix(in srgb, var(--c1, #b79cff) 70%, #fff); }
+.row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
