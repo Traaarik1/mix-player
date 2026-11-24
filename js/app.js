@@ -3373,11 +3373,11 @@ if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-m
   const MAX = 128, Q = .6; // считаем в 0,6 разрешения экрана — шейдер всё равно даёт мягкие края
   const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
   const fs = `precision mediump float;
-uniform vec2 res;uniform vec3 balls[${MAX}];uniform int n;uniform vec3 sp[48];uniform int sn;uniform float pb,pt,t,sl,im,ix;uniform vec3 c1,c2;
+uniform vec2 res;uniform vec3 balls[${MAX}];uniform vec2 shp[${MAX}];uniform int n;uniform vec3 sp[48];uniform int sn;uniform float pb,pt,t,sl,im,ix;uniform vec3 c1,c2;
 void main(){
   vec2 q=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y);
   float f=0.;
-  for(int i=0;i<${MAX};i++){ if(i>=n)break; vec2 d=q-balls[i].xy; f+=balls[i].z*balls[i].z/(dot(d,d)+1.); }
+  for(int i=0;i<${MAX};i++){ if(i>=n)break; vec2 d=(q-balls[i].xy)/shp[i]; f+=balls[i].z*balls[i].z/(dot(d,d)+1.); }
   for(int i=0;i<47;i++){ if(i>=sn-1)break; vec2 a=sp[i].xy,b=sp[i+1].xy,ab=b-a; float h=clamp(dot(q-a,ab)/max(dot(ab,ab),.001),0.,1.); vec2 d=q-a-ab*h; float r=mix(sp[i].z,sp[i+1].z,h); f+=r*r/(dot(d,d)+.5); }
   float wb=pb*(1.+(.08+sl*.35)*sin(q.x*.006+t*(.4+sl*3.))+(.05+sl*.2)*sin(q.x*.013-t*(.3+sl*2.)))+pb*im*.9*exp(-pow((q.x-ix)/(res.x*.08),2.));
   float wt=pt*(1.+.1*sin(q.x*.008-t*.35));
@@ -3405,7 +3405,7 @@ void main(){
   gl.useProgram(pr);
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = k => gl.getUniformLocation(pr, k), uRes = U('res'), uBalls = U('balls'), uN = U('n'), uPb = U('pb'), uPt = U('pt'), uT = U('t'), uC1 = U('c1'), uC2 = U('c2'), uSl = U('sl'), uSp = U('sp'), uSn = U('sn'), uIm = U('im'), uIx = U('ix');
+  const U = k => gl.getUniformLocation(pr, k), uRes = U('res'), uBalls = U('balls'), uShp = U('shp'), uN = U('n'), uPb = U('pb'), uPt = U('pt'), uT = U('t'), uC1 = U('c1'), uC2 = U('c2'), uSl = U('sl'), uSp = U('sp'), uSn = U('sn'), uIm = U('im'), uIx = U('ix');
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   let W, H;
   const size = () => { W = Math.round(innerWidth * Q); H = Math.round(innerHeight * Q); cv.width = W; cv.height = H; gl.viewport(0, 0, W, H); };
@@ -3414,7 +3414,7 @@ void main(){
   const rgb = c => { tmp.fillStyle = '#000'; tmp.fillStyle = c; const h = tmp.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(v => v / 255) : [1, .3, .3]; };
   let c1 = [1, .3, .3], c2 = [.8, .15, .3], colT = 0, tc1 = c1, tc2 = c2;
   // лужи: растут, когда в них падает струя
-  let pb = H * .1, pbT = pb, pt = H * .075, ptT = pt; // без струи: лужи внизу и вверху сразу налиты
+  let pb = H * .065, pbT = pb, pt = H * .045, ptT = pt; // без струи: лужи внизу и вверху сразу налиты
   const balls = [];
   // струя при запуске
   let idle = 0, pour = 0, pourT = 0, fr = 0, lava = 1, slosh = 0, imp = 0, impX = 0;
@@ -3436,8 +3436,8 @@ void main(){
       balls.push({ x: W * 1.005 - k * W * .0015, y: H * .03, vx: -W * (.0036 + wob * .00025), vy: H * .0004, r, r0: r, fly: 1, heat: 0, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
     if (pour <= 0 && !lava) { lava = 1; }
     // лава-лампа: из налитой жидкости время от времени вытягивается и отрывается шар
-    if (lava && balls.filter(b => !b.fly).length < 7 && Math.random() < .006 * SP) {
-      const r = R() * (.1 + Math.random() * .06); { balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); } }
+    if (lava && balls.filter(b => !b.fly).length < 5 && Math.random() < .006 * SP) {
+      const r = R() * (.045 + Math.random() ** 1.8 * .11); { balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, st: .1 + Math.random() * .3, so: Math.random() * 6, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); } }
     slosh *= .992; imp *= .975;
     pb += (pbT - pb) * .02; pt += (ptT - pt) * .02;
     for (let i = balls.length - 1; i >= 0; i--) {
@@ -3472,6 +3472,9 @@ void main(){
     }
     const blobs = balls.filter(b => b.fly !== 1), str = balls.filter(b => b.fly === 1);
     const n = Math.min(MAX, blobs.length), arr = new Float32Array(MAX * 3);
+    const sh = new Float32Array(MAX * 2).fill(1);
+    for (let i = 0; i < n; i++) { const b = blobs[i], k = 1 + (b.st || 0) * Math.sin(b.ph * 1.7 + (b.so || 0)); sh[i * 2] = k; sh[i * 2 + 1] = 1 / k; } // форма: каждый шар медленно сплющивается и вытягивается по-своему
+    gl.uniform2fv(uShp, sh);
     for (let i = 0; i < n; i++) { arr[i * 3] = blobs[i].x; arr[i * 3 + 1] = blobs[i].y; arr[i * 3 + 2] = blobs[i].r; }
     // точки струи: от горлышка к низу, не больше 48 — между ними шейдер тянет сплошную линию
     const spA = new Float32Array(48 * 3), stp = Math.max(1, Math.ceil(str.length / 48)); let sn = 0;
