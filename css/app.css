@@ -1392,3 +1392,27 @@ body.hasglass .full .fullbg i.on { opacity: .35; }
 @media (min-width: 901px) { .fullbg i { filter: blur(36px) saturate(1.4) !important; } }
 /* фон-обложка уже размыта заранее (24×24), CSS-blur не нужен — Firefox его иногда выключает */
 .backdrop i, .fullbg i { filter: saturate(1.4) !important; image-rendering: auto; }
+/* кнопки плеера: мягкие круглые подложки, ровные размеры, отклик */
+.ib { width: 40px; height: 40px; border-radius: 50%; display: inline-grid; place-items: center; color: rgb(255 255 255 / .72);
+  transition: background .2s, color .2s, transform .15s, box-shadow .25s; }
+.ib svg { width: 21px; height: 21px; }
+.ib:hover { background: rgb(255 255 255 / .09); color: #fff; }
+.ib:active { transform: scale(.9); }
+.ib.on, .ib[aria-pressed="true"] { color: color-mix(in srgb, var(--c1) 70%, #fff); background: color-mix(in srgb, var(--c1) 16%, transparent); }
+.ctrl [data-act="prev"], .ctrl [data-act="next"] { width: 46px; height: 46px; }
+.ctrl [data-act="prev"] svg, .ctrl [data-act="next"] svg { width: 25px; height: 25px; }
+.pp { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: #15101c; border: 0;
+  background: radial-gradient(circle at 35% 30%, #fff, color-mix(in srgb, var(--c1) 22%, #fff) 70%) !important;
+  box-shadow: 0 8px 26px color-mix(in srgb, var(--c1) 45%, transparent), 0 0 0 6px color-mix(in srgb, var(--c1) 12%, transparent), inset 0 -2px 6px rgb(0 0 0 / .12) !important;
+  transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .3s; }
+.pp:hover { transform: scale(1.06); box-shadow: 0 12px 34px color-mix(in srgb, var(--c1) 60%, transparent), 0 0 0 9px color-mix(in srgb, var(--c1) 16%, transparent), inset 0 -2px 6px rgb(0 0 0 / .12) !important; }
+.pp:active { transform: scale(.93); }
+.pp svg { width: 26px; height: 26px; }
+.full .pp { width: 74px; height: 74px; } .full .pp svg { width: 32px; height: 32px; }
+.full .ctrl [data-act="prev"], .full .ctrl [data-act="next"] { width: 56px; height: 56px; }
+.full .ctrl [data-act="prev"] svg, .full .ctrl [data-act="next"] svg { width: 30px; height: 30px; }
+@media (max-width: 900px) { .bar .pp { width: 46px; height: 46px; } .bar .pp svg { width: 22px; height: 22px; } }
+.fullbg #glass { z-index: 2; }
+/* обложку не удалось ужать (чужой сервер запретил) — размываем фильтром */
+.backdrop i.raw, .fullbg i.raw { filter: blur(40px) saturate(1.4) !important; }
+.backdrop i, .fullbg i { background-size: cover !important; background-repeat: no-repeat !important; background-position: center !important; }

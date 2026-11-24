@@ -1645,7 +1645,7 @@ async function paintBackdrop(t) {
   const rnd = m => ((Math.random() * 2 - 1) * m).toFixed(1);
   for (const box of $$('#backdrop, #fullbg')) {
     const [x, y] = box.children, on = bdFlip ? y : x, off = bdFlip ? x : y;
-    if (url) { const u = url; tinyBlur(u).then(d => { if (bdUrl === u) on.style.backgroundImage = `url("${d}")`; }); }
+    if (url) { const u = url; tinyBlur(u).then(d => { if (bdUrl !== u) return; on.style.background = `center / cover no-repeat url("${d}")`; on.classList.toggle('raw', d === u); }); }
     on.classList.toggle('on', !!url); off.classList.remove('on');
   }
 }
@@ -3429,7 +3429,7 @@ void main(){
     if (still && (idle++ % 30)) return; // на паузе всё стоит; перерисовываем редко, чтобы картинка не пропадала
     const SP = .62; // вальяжно: лава-лампа двигается медленно
     if (!still) {
-    if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); const soft = c => { const l = c[0] * .3 + c[1] * .59 + c[2] * .11; return c.map(v => Math.min(.85, (v * .55 + l * .45) * .8)); }; // приглушаем: без кислотных цветов
+    if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); const soft = c => { const l = c[0] * .3 + c[1] * .59 + c[2] * .11; return c.map(v => Math.min(.9, (v * .75 + l * .25) * .92)); }; // приглушаем: без кислотных цветов
       tc1 = soft(rgb(cs.getPropertyValue('--c1').trim())); tc2 = soft(rgb(cs.getPropertyValue('--c2').trim())); }
     // струя как вино из бутылки: тонкая, непрерывная, слегка гуляет; капли идут вплотную и сливаются в одну линию
     if (pour > 0 && ++fr > 30) for (let k = 0; k < 1; k++) { pour--; pourT++; const r = R() * (.011 + Math.random() * .002), wob = Math.sin(pourT * .02) * .6 + Math.sin(pourT * .007) * .4;
