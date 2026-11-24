@@ -3260,7 +3260,10 @@ boot();
   const full = $('#full'), stack = $('#stack');
   let rx = 0, ry = 0, raf = 0, live = 0;
   const apply = () => { raf = 0; stack.style.setProperty('--rx', rx.toFixed(2) + 'deg'); stack.style.setProperty('--ry', ry.toFixed(2) + 'deg'); stack.style.setProperty('--gx', (50 + ry * 3) + '%'); stack.style.setProperty('--gy', (50 - rx * 3) + '%'); };
-  const set = (x, y) => { rx = Math.max(-7, Math.min(7, x)); ry = Math.max(-7, Math.min(7, y)); live = Date.now(); full.classList.add('tilting'); if (!raf) raf = requestAnimationFrame(apply); };
+  // плавно догоняем цель (сглаживание), а не прыгаем к ней
+  let tx = 0, ty = 0;
+  const step = () => { rx += (tx - rx) * .045; ry += (ty - ry) * .045; apply(); if (Math.abs(tx - rx) + Math.abs(ty - ry) > .02) raf = requestAnimationFrame(step); };
+  const set = (x, y) => { tx = Math.max(-6, Math.min(6, x)); ty = Math.max(-6, Math.min(6, y)); live = Date.now(); full.classList.add('tilting'); if (!raf) raf = requestAnimationFrame(step); };
   full.addEventListener('pointermove', e => {
     if (e.pointerType !== 'mouse' || !full.classList.contains('open')) return;
     const r = stack.getBoundingClientRect();
