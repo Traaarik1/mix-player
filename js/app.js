@@ -189,7 +189,7 @@ function viewIds() {
   let ids;
   if (view === 'all' || view === 'fix' || view === 'wave' || view === 'wish') ids = order;
   else if (view === 'liked') ids = order.filter(id => lib.likes.has(id));
-  else if (view === 'recent') ids = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id));
+  else if (view === 'recent') ids = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id)).slice(0, 500); // не больше 500, чтобы список не тормозил
   else if (view.startsWith('artist:')) { const k = view.slice(7), idx = creditIndex(); ids = order.filter(id => idx.get(id).some(p => p.key === k)); }
   else if (view === 'artists' || view === 'albums') ids = order;
   else if (view.startsWith('album:')) { const k = view.slice(6); ids = order.filter(id => albumKey(tracks.get(id)) === k).sort((x, y) => (tracks.get(x).trackNo || 99) - (tracks.get(y).trackNo || 99)); return ids; }
@@ -1004,9 +1004,7 @@ function openMore() {
     ${row('data-view="albums"', 'list', 'Альбомы')}
     ${row('data-view="recent"', 'clock', 'Недавние')}
     <div class="morehead">Инструменты</div>
-    ${row('data-view="wish"', 'wish', 'Хочу скачать', wishes().length)}
     ${row('data-view="fix"', 'wand', 'Проверка названий', fixCount())}
-    ${row('data-act="listen"', 'mic', 'Что играет?')}
     ${row('data-act="import"', 'plus', 'Импорт плейлиста')}
     ${row('data-view="dups"', 'copy', 'Дубликаты')}
     ${row('data-act="invite"', 'artist', 'Mix для друга')}
@@ -1035,9 +1033,8 @@ function renderNav() {
     + item('albums', 'list', 'Альбомы')
     + item('liked', 'heart', 'Любимое', lib.likes.size || null)
     + item('recent', 'clock', 'Недавние')
-    + head('Инструменты') + item('wish', 'wish', 'Хочу скачать', wishes().length || null)
+    + head('Инструменты')
     + item('fix', 'wand', 'Проверка названий', fixCount() || null)
-    + `<button data-act="listen"><svg><use href="#i-mic"/></svg>Что играет?</button>`
     + `<button data-act="import"><svg><use href="#i-plus"/></svg>Импорт плейлиста</button>`
     + item('dups', 'copy', 'Дубликаты')
     + `<button data-act="invite"><svg><use href="#i-artist"/></svg>Mix для друга</button>`
