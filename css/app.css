@@ -1386,3 +1386,6 @@ body.calm .backdrop .orbs, body.calm #fx { opacity: 0; }
 #glass { position: absolute; inset: 0; width: 100%; height: 100%; }
 body.hasglass .backdrop .orbs { display: none; }
 body.hasglass .fullbg .orbs { display: none; }
+.fxgrid { display: none !important; }
+/* большой плеер с лавой: обложка-фон приглушена, чтобы лава читалась */
+body.hasglass .full .fullbg i.on { opacity: .35; }

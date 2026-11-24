@@ -3380,13 +3380,15 @@ void main(){
   float core=smoothstep(1.,3.5,f);
   float k=q.y/res.y;
   vec3 col=mix(c2,c1*1.15,.4+.6*core);
-  col=mix(col,min(c1*1.45+vec3(.15,.12,.05),vec3(1.)),core*.55*k); // снизу и в середине светится, как воск над лампой
+  col=mix(col,min(c1*1.25+vec3(.06,.05,.02),vec3(1.)),core*.4*k); // снизу и в середине светится, как воск над лампой
   col*=.82+.18*smoothstep(.9,1.6,f); // край чуть темнее — объём
   float a=max(inside*.85,halo*1.4);
-  float rim=1.-smoothstep(0.,.18,abs(f-1.)); // тонкая светлая кромка по контуру
+  float rim=smoothstep(.9,1.05,f)*(1.-smoothstep(1.05,1.45,f)); // светлая кромка внутри контура
+  float edge=smoothstep(.78,.95,f)*(1.-smoothstep(.95,1.02,f)); // тёмная тонкая линия по самому краю
   float gloss=smoothstep(1.2,2.2,f)*(1.-smoothstep(2.2,4.,f))*.25; // блик внутри, как на глянцевом воске
-  col=mix(col,min(c1*1.6+vec3(.3),vec3(1.)),rim*.75+gloss);
-  a=max(a,rim*.9);
+  col=mix(col,min(c1*1.3+vec3(.12),vec3(1.)),rim*.45+gloss*.7);
+  col=mix(col,c2*.35,edge*.7);
+  a=max(a,max(rim*.9,edge*.8));
   gl_FragColor=vec4(mix(c1,col,inside),a);
 }`;
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
@@ -3402,12 +3404,12 @@ void main(){
   size(); addEventListener('resize', size);
   const tmp = document.createElement('canvas').getContext('2d');
   const rgb = c => { tmp.fillStyle = '#000'; tmp.fillStyle = c; const h = tmp.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(v => v / 255) : [1, .3, .3]; };
-  let c1 = [1, .3, .3], c2 = [.8, .15, .3], colT = 0;
+  let c1 = [1, .3, .3], c2 = [.8, .15, .3], colT = 0, tc1 = c1, tc2 = c2;
   // лужи: растут, когда в них падает струя
   let pb = 0, pbT = 0, pt = 0, ptT = 0;
   const balls = [];
   // струя при запуске
-  let pour = 380, pourT = 0, fr = 0, lava = 0, slosh = 0, imp = 0, impX = 0;
+  let pour = 620, pourT = 0, fr = 0, lava = 0, slosh = 0, imp = 0, impX = 0;
   const R = () => Math.min(W, H);
   const step = now => {
     requestAnimationFrame(step);
@@ -3417,14 +3419,15 @@ void main(){
     const still = engine.paused && pour <= 0 && !balls.some(b => b.fly);
     if (still) return;
     const SP = .45; // вальяжно: лава-лампа двигается медленно
-    if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); c1 = rgb(cs.getPropertyValue('--c1').trim()); c2 = rgb(cs.getPropertyValue('--c2').trim()); }
+    if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); const soft = c => { const l = c[0] * .3 + c[1] * .59 + c[2] * .11; return c.map(v => Math.min(.85, (v * .55 + l * .45) * .8)); }; // приглушаем: без кислотных цветов
+      tc1 = soft(rgb(cs.getPropertyValue('--c1').trim())); tc2 = soft(rgb(cs.getPropertyValue('--c2').trim())); }
     // струя как вино из бутылки: тонкая, непрерывная, слегка гуляет; капли идут вплотную и сливаются в одну линию
-    if (pour > 0 && ++fr > 30) for (let k = 0; k < 1; k++) { pour--; pourT++; const r = R() * (.0075 + Math.random() * .002), wob = Math.sin(pourT * .02) * .6 + Math.sin(pourT * .007) * .4;
+    if (pour > 0 && ++fr > 30) for (let k = 0; k < 1; k++) { pour--; pourT++; const r = R() * (.011 + Math.random() * .002), wob = Math.sin(pourT * .02) * .6 + Math.sin(pourT * .007) * .4;
       balls.push({ x: W * 1.005 - k * W * .0015, y: H * .03, vx: -W * (.0036 + wob * .00025), vy: H * .0004, r, r0: r, fly: 1, heat: 0, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
-    if (pour <= 0 && !lava) { lava = 1; ptT = H * .03; }
+    if (pour <= 0 && !lava) { lava = 1; }
     // лава-лампа: из налитой жидкости время от времени вытягивается и отрывается шар
     if (lava && balls.filter(b => !b.fly).length < 7 && Math.random() < .006 * SP) {
-      const r = R() * (.06 + Math.random() * .05); balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); }
+      const r = R() * (.1 + Math.random() * .06); if (pbT - Math.PI * r * r / W > H * .03) { pbT -= Math.PI * r * r / W; balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); } }
     slosh *= .992; imp *= .975;
     pb += (pbT - pb) * .02; pt += (ptT - pt) * .02;
     for (let i = balls.length - 1; i >= 0; i--) {
@@ -3433,7 +3436,7 @@ void main(){
         p.vy += H * .0006; p.x += p.vx; p.y += p.vy;
         if (p.fly === 1) p.r = p.r0 * Math.max(.55, Math.pow((W * .0036) / Math.hypot(p.vx, p.vy), .35)); // разогналась — истончилась
         if (p.y > H - pb * 1.05) { // струя бьёт в жидкость: уровень растёт, поверхность плещется, иногда брызги
-          pbT = Math.min(H * .15, pbT + H * .0003); slosh = Math.min(1, slosh + .012); imp = Math.min(1, imp + .05); impX = p.x;
+          pbT += Math.PI * p.r0 * p.r0 * 1.4 / W; // сколько налилось — на столько и поднялось slosh = Math.min(1, slosh + .012); imp = Math.min(1, imp + .05); impX = p.x;
           if (Math.random() < .03) { p.fly = 2; p.vx = (Math.random() - .6) * W * .006; p.vy = -H * (.006 + Math.random() * .008); p.r *= .8; continue; }
           balls.splice(i, 1); continue;
         }
@@ -3465,7 +3468,8 @@ void main(){
     gl.uniform3fv(uSp, spA); gl.uniform1i(uSn, sn);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform2f(uRes, W, H); gl.uniform3fv(uBalls, arr); gl.uniform1i(uN, n); gl.uniform1f(uPb, pb); gl.uniform1f(uPt, pt); gl.uniform1f(uT, now / 1000);
-    gl.uniform1f(uSl, slosh); gl.uniform1f(uIm, imp); gl.uniform1f(uIx, impX); gl.uniform3fv(uC1, c1); gl.uniform3fv(uC2, c2);
+    gl.uniform1f(uSl, slosh); gl.uniform1f(uIm, imp); gl.uniform1f(uIx, impX); c1 = c1.map((v, i) => v + (tc1[i] - v) * .006); c2 = c2.map((v, i) => v + (tc2[i] - v) * .006); // ~5 с на переход к цвету новой обложки
+    gl.uniform3fv(uC1, c1); gl.uniform3fv(uC2, c2);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
   requestAnimationFrame(step);
