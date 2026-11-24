@@ -1007,6 +1007,14 @@ function openMore() {
     ${lib.playlists.map(p => row(`data-view="${esc(p.id)}"`, 'list', p.name, p.ids.length)).join('') || '<p class="morenote">Пока нет. Нажми плюс, чтобы создать первый.</p>'}
     <div class="tgcard moretg">${$('#tgcard').innerHTML}</div>`);
 }
+// папки в боковом меню: «Подборки» и «Плейлисты» складываются по нажатию на заголовок
+let navFold = {}; try { navFold = JSON.parse(localStorage.getItem('mixFold') || '{}'); } catch {}
+const fold = (k, name, extra, body) => `<div class="nav-title navgrp fhead${navFold[k] ? ' shut' : ''}" data-fold="${k}"><span class="fchev"><svg><use href="#i-up"/></svg></span><span class="fname">${name}</span>${extra}</div><div class="fbody${navFold[k] ? ' shut' : ''}"><div>${body}</div></div>`;
+$('#nav').addEventListener('click', e => {
+  const h = e.target.closest('[data-fold]'); if (!h || e.target.closest('button')) return;
+  const k = h.dataset.fold; navFold[k] = !navFold[k]; try { localStorage.setItem('mixFold', JSON.stringify(navFold)); } catch {}
+  h.classList.toggle('shut', navFold[k]); h.nextElementSibling.classList.toggle('shut', navFold[k]);
+});
 function renderNav() {
   renderTabs();
   const item = (id, icon, name, n) => `<button class="${view === id || (id === 'artists' && view.startsWith('artist:')) ? 'on' : ''}" data-view="${esc(id)}"><svg><use href="#i-${icon}"/></svg>${esc(name)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
@@ -1026,11 +1034,11 @@ function renderNav() {
     + item('dups', 'copy', 'Дубликаты')
     + `<button data-act="invite"><svg><use href="#i-artist"/></svg>Mix для друга</button>`
     + item('settings', 'eq', 'Настройки')
-    + `<div class="nav-title navgrp">Подборки</div>` + smartEntries().map(([k, n]) => item(k, 'list', n)).join('')
-    + `<div class="nav-title navgrp">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>`
-    + (settings.collabs || []).map(c => item('collab:' + c.id, 'artist', '👥 ' + c.title)).join('')
-    + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('')
-    + `<button data-act="collab"><svg><use href="#i-plus"/></svg>Совместный плейлист</button>`;
+    + fold('sm', 'Подборки', '', smartEntries().map(([k, n]) => item(k, 'list', n)).join(''))
+    + fold('pl', 'Плейлисты', `<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button>`,
+      (settings.collabs || []).map(c => item('collab:' + c.id, 'artist', '👥 ' + c.title)).join('')
+      + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('')
+      + `<button data-act="collab"><svg><use href="#i-plus"/></svg>Совместный плейлист</button>`);
 }
 
 // ---------- очередь и плеер ----------

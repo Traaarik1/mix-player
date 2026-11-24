@@ -1290,3 +1290,31 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
     linear-gradient(180deg, color-mix(in srgb, var(--c1) 75%, #000), color-mix(in srgb, var(--c2) 70%, #000) 55%, color-mix(in srgb, var(--c3) 70%, #000)) !important; }
   .full .fullbg::after { background: linear-gradient(180deg, transparent, rgb(0 0 0 / .25)) !important; }
 }
+/* папки в меню */
+.fhead { cursor: pointer; user-select: none; justify-content: flex-start !important; gap: 6px; border-radius: 8px; padding: 6px 10px !important; transition: background .2s, color .2s; }
+.fhead:hover { background: rgb(255 255 255 / .05); color: var(--paper); }
+.fhead .fname { flex: 1; }
+.fchev { display: grid; place-items: center; width: 16px; height: 16px; transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
+.fchev svg { width: 16px; height: 16px; fill: currentColor; transform: rotate(180deg); }
+.fhead.shut .fchev { transform: rotate(-90deg); }
+.fbody { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .35s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+.fbody > div { overflow: hidden; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.fbody.shut { grid-template-rows: 0fr; opacity: 0; }
+@media (max-width: 900px) { .fbody { display: contents; } .fhead { display: none !important; } }
+
+/* современный вид: мягкие слои, нажатия, стекло */
+button { -webkit-tap-highlight-color: transparent; }
+button:active:not(:disabled) { transform: scale(.96); }
+.row { border-radius: 12px; transition: background .18s, transform .18s; }
+.row:hover { background: rgb(255 255 255 / .05); }
+.row .cov, .row img { border-radius: 8px; box-shadow: 0 4px 14px rgb(0 0 0 / .35); }
+.tile .cov, .tile img { border-radius: 14px; box-shadow: 0 10px 30px rgb(0 0 0 / .4); transition: transform .3s cubic-bezier(.2, .8, .2, 1), box-shadow .3s; }
+.tile:hover .cov, .tile:hover img { transform: translateY(-4px) scale(1.02); box-shadow: 0 18px 40px color-mix(in srgb, var(--c1) 35%, rgb(0 0 0 / .5)); }
+.btn { border-radius: 999px; transition: background .2s, transform .15s, box-shadow .2s; }
+.btn:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--c1) 30%, transparent); }
+.bar { backdrop-filter: blur(24px) saturate(1.4); background: color-mix(in srgb, #0f0b16 72%, transparent); border-top: 1px solid rgb(255 255 255 / .06); }
+.head h1 { letter-spacing: -1.2px; }
+.sechead b { font-size: 20px; letter-spacing: -.4px; }
+:focus-visible { outline: 2px solid var(--c2); outline-offset: 2px; border-radius: 8px; }
+.rail { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .15) transparent; }
+.rail::-webkit-scrollbar { width: 6px; } .rail::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .15); border-radius: 3px; } .rail::-webkit-scrollbar-track { background: transparent; }
