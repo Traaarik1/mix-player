@@ -1230,3 +1230,47 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
     radial-gradient(110% 70% at 90% 100%, color-mix(in srgb, var(--c2) 55%, transparent), transparent 65%),
     linear-gradient(180deg, color-mix(in srgb, var(--c3) 30%, #0f0b16), #0f0b16) !important; }
 }
+/* свайпы: вправо — очередь, влево — плейлист */
+.row.swiping.armedl { box-shadow: 120px 0 0 var(--c2, #ff8fb8); }
+.row.swiping { box-shadow: -120px 0 0 var(--accent), 120px 0 0 color-mix(in srgb, var(--c2, #ff8fb8) 60%, transparent); }
+/* 1: шапка раздела в цвет обложки */
+.main { position: relative; }
+.main::before { content: ""; position: absolute; inset: 0 0 auto; height: 340px; pointer-events: none; z-index: 0; transition: background 1.2s;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 38%, transparent), transparent); }
+.main > * { position: relative; z-index: 1; }
+/* 2: эквалайзер у играющего трека — цветной, 3 полоски */
+.eqi i { background: linear-gradient(0deg, var(--c1), var(--c2)); }
+/* 4: скелетоны */
+.skel { list-style: none; height: 58px; margin: 6px 0; border-radius: 12px;
+  background: linear-gradient(90deg, rgb(255 255 255 / .04) 20%, rgb(255 255 255 / .1) 50%, rgb(255 255 255 / .04) 80%) 0 0 / 200% 100%; animation: skel 1.3s linear infinite; }
+@keyframes skel { to { background-position: -200% 0; } }
+/* 5: плавная смена раздела */
+.main.vin > * { animation: vin .32s cubic-bezier(.2, .8, .2, 1); }
+@keyframes vin { from { opacity: 0; transform: translateY(10px); } }
+/* 8: «Для тебя» */
+.contcard { list-style: none; display: flex; align-items: center; gap: 14px; padding: 12px; margin: 6px 0 14px; border-radius: 18px; cursor: pointer;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--c1) 30%, transparent), color-mix(in srgb, var(--c2) 18%, transparent)); border: 1px solid rgb(255 255 255 / .08); transition: transform .2s; }
+.contcard:hover { transform: translateY(-2px); }
+.contcard .cov, .contcard img { width: 64px; height: 64px; border-radius: 12px; flex: none; }
+.contcard div { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.contcard small { color: var(--mist); font-weight: 600; } .contcard b { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contcard span { color: var(--mist); font-size: 13px; } .contcard svg { width: 30px; height: 30px; fill: currentColor; flex: none; }
+.fyshelf { list-style: none; margin-bottom: 14px; } .fyshelf > small { display: block; color: var(--mist); font-weight: 700; margin: 0 0 8px 2px; }
+.fyshelf .shelf { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x mandatory; }
+.fyshelf .tile { flex: 0 0 132px; scroll-snap-align: start; }
+/* 9: текст песни на весь экран — крупнее, мягкие края */
+.full.ly .lyrics { -webkit-mask: linear-gradient(transparent, #000 14%, #000 86%, transparent); mask: linear-gradient(transparent, #000 14%, #000 86%, transparent); }
+@media (min-width: 901px) { .full.ly .lyrics p { font-size: clamp(28px, 3.2vw, 46px); } }
+.lyrics p.now { color: #fff; text-shadow: 0 0 24px color-mix(in srgb, var(--c1) 70%, transparent); }
+/* боковая панель */
+@media (min-width: 901px) {
+  .rail { background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 12%, rgb(255 255 255 / .03)), rgb(255 255 255 / .02)); border-right: 1px solid rgb(255 255 255 / .06); backdrop-filter: blur(18px); }
+  .nav button { position: relative; transition: background .2s, color .2s, transform .15s; }
+  .nav button:hover { transform: translateX(3px); }
+  .nav button svg { transition: color .2s; }
+  .nav button:hover svg { color: var(--c2); }
+  .nav button.on { background: linear-gradient(90deg, color-mix(in srgb, var(--c1) 30%, transparent), transparent); }
+  .nav button.on::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: linear-gradient(var(--c1), var(--c2)); }
+  .nav button .n { background: rgb(255 255 255 / .08); padding: 1px 8px; border-radius: 999px; }
+  .navgrp { margin-top: 16px; text-transform: uppercase; font-size: 11px; letter-spacing: 1.2px; opacity: .7; }
+}

@@ -863,8 +863,10 @@ function rowHTML(t, n) {
   </li>`;
 }
 
+let lastView;
 function render() {
   creditCache = null;
+  if (lastView !== view) { lastView = view; const m = $('#main'); m.classList.remove('vin'); void m.offsetWidth; m.classList.add('vin'); }
   // шапка плейлиста: мозаика из обложек его треков
   { const pl = lib.playlists.find(p => p.id === view), head = $('.head'); let hc = $('#hcover');
     if (pl) { if (!hc) { hc = document.createElement('div'); hc.id = 'hcover'; head.prepend(hc); }
@@ -1463,11 +1465,22 @@ function renderWave() {
   $('#rows').innerHTML = `<li class="wavehero" style="list-style:none">
       <button class="orb${live ? ' live' : ''}" data-act="${live ? 'toggle' : 'waveStart'}" title="${live ? 'Пауза / играть' : 'Запустить мою волну'}"><i></i><i></i><svg><use href="#i-${live && !engine.paused ? 'pause' : 'play'}"/></svg></button>
       <div><h2>Моя волна</h2><p>${noTaste ? 'Появится, когда в библиотеке будет музыка.' : 'Бесконечный поток: твои треки вперемешку с похожими. Пропуски и лайки меняют его на ходу.'}</p>
-        <label class="wavesim"><input type="checkbox" class="sw" id="waveSim"${settings.waveSimilar ? ' checked' : ''}>Добавлять похожие (бесплатно доступно только 30 секунд)</label></div></li>
-    <li class="sechead"><div><b>Новое для тебя</b><small>${sug.loading ? '<span class="spin"></span>Подбираю, первый раз это около 30 секунд' : 'Похоже на то, что ты слушаешь. Нравится трек — скопируй название, найди и кинь в канал'}</small></div>
+        <label class="wavesim"><input type="checkbox" class="sw" id="waveSim"${settings.waveSimilar ? ' checked' : ''}>Добавлять похожие (бесплатно доступно только 30 секунд)</label></div></li>`
+    + forYouHTML() + `<li class="sechead"><div><b>Новое для тебя</b><small>${sug.loading ? '<span class="spin"></span>Подбираю, первый раз это около 30 секунд' : 'Похоже на то, что ты слушаешь. Нравится трек — скопируй название, найди и кинь в канал'}</small></div>
       <button class="btn" data-act="waveMore"${sug.loading || noTaste ? ' disabled' : ''}>Другая подборка</button></li>`
     + (sug.items.length ? sug.items.map(sugRow).join('')
+      : sug.loading ? '<li class="skel"></li>'.repeat(6)
       : !sug.loading ? `<li class="sechead"><small>${noTaste ? 'Подборка строится по твоей музыке. Добавь треки, и она появится.' : navigator.onLine ? 'Пока ничего не нашлось. Послушай ещё немного и обнови подборку.' : 'Для подборки нужен интернет.'}</small></li>` : '');
+}
+function forYouHTML() {
+  const rec = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id)).slice(0, 12);
+  if (!rec.length && !lib.playlists.length) return '';
+  const tile = id => { const t = tracks.get(id); return `<button class="tile" data-play="${esc(id)}">${coverHTML(t)}<b>${esc(t.title)}</b><small>${esc(t.artist || 'Неизвестный артист')}</small></button>`; };
+  const pls = lib.playlists.map(p => { const t = tracks.get(p.ids[0]); return `<button class="tile" data-view="${esc(p.id)}">${t ? coverHTML(t) : '<span class="cov"></span>'}<b>${esc(p.name)}</b><small>${tracksWord(p.ids.length)}</small></button>`; }).join('');
+  return `<li class="sechead foryou"><div><b>Для тебя</b></div></li>`
+    + (rec[0] ? `<li class="contcard" data-play="${esc(rec[0])}">${coverHTML(tracks.get(rec[0]))}<div><small>Продолжить</small><b>${esc(tracks.get(rec[0]).title)}</b><span>${esc(tracks.get(rec[0]).artist || '')}</span></div><svg><use href="#i-play"/></svg></li>` : '')
+    + (rec.length > 1 ? `<li class="fyshelf"><small>Недавние</small><div class="shelf">${rec.slice(1).map(tile).join('')}</div></li>` : '')
+    + (pls ? `<li class="fyshelf"><small>Плейлисты</small><div class="shelf">${pls}</div></li>` : '');
 }
 function paintOrb() {
   const o = $('.orb'); if (!o) return;
@@ -3147,7 +3160,7 @@ const closeFull = () => { $('#full').classList.remove('open'); setLyrics(false);
 $('#fArtist').addEventListener('click', () => { if ($('#fArtist').dataset.view) closeFull(); });
 $('#npArtist').addEventListener('click', () => { if ($('#npArtist').dataset.view) setTimeout(closeFull, 0); });
 $('.np').addEventListener('click', e => { if (isPhone() && !e.target.closest('button:not(#openFull)')) openFull(); });
-setupRowSwipe($('#rows'), id => addToQueue(id));
+setupRowSwipe($('#rows'), id => addToQueue(id), id => pickPlaylist(id));
 setupGestures({ full: $('#full'), stack: $('#stack'), mini: $('#bar'), onClose: closeFull, onOpen: openFull, onNext: next, onPrev: prev });
 $('#vol').oninput = e => { settings.vol = +e.target.value; e.target.style.setProperty('--p', settings.vol + '%'); engine.setVolume(settings.vol / 100); saveSettings(); };
 $('#openFull').onclick = () => { if (engine.track) $('#full').classList.add('open'); };
