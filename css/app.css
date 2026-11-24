@@ -1170,3 +1170,10 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
 .main::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .12); border-radius: 8px; }
 .main::-webkit-scrollbar-track { background: transparent; }
 ::selection { background: color-mix(in srgb, var(--c1, #b79cff) 45%, transparent); }
+
+/* кнопка «послушать» поверх обложки, а не под ней */
+.art-wrap { position: relative; }
+.art-wrap > button { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 8px; background: rgb(0 0 0 / .45); color: #fff; opacity: 0; transition: opacity .15s; }
+.art-wrap > button svg { width: 20px; height: 20px; }
+.sug:hover .art-wrap > button, .art-wrap > button:focus-visible { opacity: 1; }
+@media (hover: none) { .art-wrap > button { opacity: 1; background: rgb(0 0 0 / .3); } }
