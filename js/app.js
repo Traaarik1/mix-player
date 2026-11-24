@@ -3414,7 +3414,7 @@ void main(){
   const rgb = c => { tmp.fillStyle = '#000'; tmp.fillStyle = c; const h = tmp.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(v => v / 255) : [1, .3, .3]; };
   let c1 = [1, .3, .3], c2 = [.8, .15, .3], colT = 0, tc1 = c1, tc2 = c2;
   // лужи: растут, когда в них падает струя
-  let pb = H * .17, pbT = pb, pt = H * .13, ptT = pt; // без струи: лужи внизу и вверху сразу налиты
+  let pb = H * .1, pbT = pb, pt = H * .075, ptT = pt; // без струи: лужи внизу и вверху сразу налиты
   const balls = [];
   // струя при запуске
   let idle = 0, pour = 0, pourT = 0, fr = 0, lava = 1, slosh = 0, imp = 0, impX = 0;
@@ -3437,7 +3437,7 @@ void main(){
     if (pour <= 0 && !lava) { lava = 1; }
     // лава-лампа: из налитой жидкости время от времени вытягивается и отрывается шар
     if (lava && balls.filter(b => !b.fly).length < 7 && Math.random() < .006 * SP) {
-      const r = R() * (.1 + Math.random() * .06); if (pbT - Math.PI * r * r / W > H * .03) { pbT -= Math.PI * r * r / W; balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); } }
+      const r = R() * (.1 + Math.random() * .06); { balls.push({ x: W * (.15 + Math.random() * .7), y: H - pb * .7, vx: 0, vy: 0, r: r * .3, rT: r, fly: 0, heat: .75, hr: .002 + Math.random() * .003, ph: Math.random() * 6 }); } }
     slosh *= .992; imp *= .975;
     pb += (pbT - pb) * .02; pt += (ptT - pt) * .02;
     for (let i = balls.length - 1; i >= 0; i--) {
