@@ -1137,3 +1137,10 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
 .hcover.n0, .hcover.n1 { grid-template-columns: 1fr; }
 .hcover.n2 > *, .hcover.n3 > :first-child { grid-row: span 2; }
 @media (max-width: 900px) { .hcover { width: 96px; height: 96px; border-radius: 14px; } .head.plview { flex-wrap: wrap; } }
+
+/* ПК: полноэкранный плеер — крупнее обложка, подсветка цветом обложки */
+@media (min-width: 901px) {
+  .full #stack { filter: drop-shadow(0 30px 60px color-mix(in srgb, var(--c1, #b79cff) 35%, transparent)); }
+  .full .ftitle { font-size: clamp(32px, 3.4vw, 52px); letter-spacing: -.02em; line-height: 1.05; }
+  .full .fartist { font-size: 18px; }
+}
