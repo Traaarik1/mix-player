@@ -1151,3 +1151,5 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
 .setrow svg { color: color-mix(in srgb, var(--c1, #b79cff) 75%, #fff); }
 .setrow small { opacity: .8; }
 .sechead { margin-top: 26px; }
+#npArtist[data-view] { cursor: pointer; }
+#npArtist[data-view]:hover { text-decoration: underline; text-underline-offset: 3px; }
