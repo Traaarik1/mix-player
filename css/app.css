@@ -1390,3 +1390,5 @@ body.hasglass .fullbg .orbs { display: none; }
 /* большой плеер с лавой: обложка-фон приглушена, чтобы лава читалась */
 body.hasglass .full .fullbg i.on { opacity: .35; }
 @media (min-width: 901px) { .fullbg i { filter: blur(36px) saturate(1.4) !important; } }
+/* фон-обложка уже размыта заранее (24×24), CSS-blur не нужен — Firefox его иногда выключает */
+.backdrop i, .fullbg i { filter: saturate(1.4) !important; image-rendering: auto; }

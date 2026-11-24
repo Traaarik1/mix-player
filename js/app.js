@@ -1623,6 +1623,14 @@ function orbSwap(apply) {
     os.forEach((o, i) => { o.style.transition = `translate 2s cubic-bezier(.2,.8,.2,1) ${i * 90}ms, scale 1.6s cubic-bezier(.2,.8,.2,1) ${i * 90}ms, opacity 1.2s ${i * 90}ms`; o.style.translate = `${rnd(16)}vmax ${rnd(12)}vmax`; o.style.scale = ''; o.style.opacity = ''; });
   }, 650);
 }
+// Размытая обложка для фона без CSS-blur: Firefox при нехватке видеопамяти молча выключает фильтр, и фон становится резким.
+// Ужимаем обложку до 24×24 — при растягивании она сама получается мягким цветным пятном.
+const tinyCache = new Map();
+function tinyBlur(url) {
+  if (tinyCache.has(url)) return tinyCache.get(url);
+  const p = new Promise(res => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { try { const c = document.createElement('canvas'); c.width = c.height = 24; const g = c.getContext('2d'); g.filter = 'blur(2px)'; g.drawImage(im, -2, -2, 28, 28); res(c.toDataURL()); } catch { res(url); } }; im.onerror = () => res(url); im.src = url; });
+  tinyCache.set(url, p); return p;
+}
 async function paintBackdrop(t) {
   const url = !t ? '' : t.cover ? await coverUrl(t.id).catch(() => '') : (t.art || '');
   if (url === bdUrl) return;
@@ -1637,7 +1645,7 @@ async function paintBackdrop(t) {
   const rnd = m => ((Math.random() * 2 - 1) * m).toFixed(1);
   for (const box of $$('#backdrop, #fullbg')) {
     const [x, y] = box.children, on = bdFlip ? y : x, off = bdFlip ? x : y;
-    if (url) on.style.backgroundImage = `url("${url}")`;
+    if (url) { const u = url; tinyBlur(u).then(d => { if (bdUrl === u) on.style.backgroundImage = `url("${d}")`; }); }
     on.classList.toggle('on', !!url); off.classList.remove('on');
   }
 }
