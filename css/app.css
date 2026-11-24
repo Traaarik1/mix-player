@@ -1144,3 +1144,10 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
   .full .ftitle { font-size: clamp(32px, 3.4vw, 52px); letter-spacing: -.02em; line-height: 1.05; }
   .full .fartist { font-size: 18px; }
 }
+
+/* настройки: строки как карточки-группы */
+.setrow { border-radius: 14px; background: rgb(255 255 255 / .035); margin-bottom: 6px; padding-block: 12px; }
+.setrow:hover { background: rgb(255 255 255 / .07); }
+.setrow svg { color: color-mix(in srgb, var(--c1, #b79cff) 75%, #fff); }
+.setrow small { opacity: .8; }
+.sechead { margin-top: 26px; }
