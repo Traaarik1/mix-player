@@ -1153,3 +1153,9 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
 .sechead { margin-top: 26px; }
 #npArtist[data-view] { cursor: pointer; }
 #npArtist[data-view]:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* телефон: мини-плеер — стеклянная карточка со скруглёнными углами */
+@media (max-width: 900px) {
+  .bar { border-radius: 18px 18px 0 0; background: color-mix(in srgb, var(--night, #140f1e) 78%, var(--c1, #b79cff) 10%); box-shadow: 0 -8px 30px rgb(0 0 0 / .35); }
+  .bar .cov, .bar img { border-radius: 10px; }
+}
