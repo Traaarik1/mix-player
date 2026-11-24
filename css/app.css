@@ -1177,3 +1177,8 @@ button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allow
 .art-wrap > button svg { width: 20px; height: 20px; }
 .sug:hover .art-wrap > button, .art-wrap > button:focus-visible { opacity: 1; }
 @media (hover: none) { .art-wrap > button { opacity: 1; background: rgb(0 0 0 / .3); } }
+
+/* большой плеер: обложка медленно «плывёт» в 3D, пока играет музыка */
+@keyframes coverSway { 0%, 100% { transform: perspective(900px) rotateY(-6deg) rotateX(3deg); } 50% { transform: perspective(900px) rotateY(6deg) rotateX(-3deg); } }
+body.playing .full.open #stack { animation: coverSway 9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { body.playing .full.open #stack { animation: none; } }

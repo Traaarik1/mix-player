@@ -2873,11 +2873,13 @@ function holdStart(btn) {
     hold.tick = setInterval(holdTick, 100);
   }, HOLD_MS) };
 }
+// шары фона крутятся быстрее, пока зажато «вперёд»
+function orbSpeed(k) { for (const el of document.querySelectorAll('.orbs, .orbs span')) for (const a of el.getAnimations()) a.playbackRate = k; }
 function holdTick() {
   const t = (Date.now() - hold.at) / 1000;
   if (hold.dir === 'next') {
     const rate = HOLD_RATES[Math.min(HOLD_RATES.length - 1, Math.floor(t / 1.5))];
-    if (rate !== hold.rate) { hold.rate = rate; engine.setRate(rate); }
+    if (rate !== hold.rate) { hold.rate = rate; engine.setRate(rate); orbSpeed(rate * 2); }
     paintProgress();
     // дошли до конца трека — следующий начинается обычным образом
     if (engine.position >= engine.duration - 1.5) { const h = hold; holdStop(true); h && next(); }
@@ -2887,6 +2889,7 @@ function holdTick() {
   }
 }
 function holdStop(ended) {
+  orbSpeed(1);
   const h = hold; hold = null;
   if (!h) return;
   clearTimeout(h.timer); clearInterval(h.tick);
