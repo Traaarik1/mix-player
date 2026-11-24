@@ -1,60 +1,35 @@
-# Mix
+# Mix — Your music. Your rules.
 
-Личный плеер для музыки из своего Telegram-канала. Треки скачиваются на устройство и играют без интернета, а между треками идёт плавный переход, как в Spotify. ТЗ и этапы — в [SPEC.md](SPEC.md).
+Mix is a free, ad-free music player for **your own music library**. Your tracks live in your own Telegram channel (free, unlimited cloud storage) and in your browser, and Mix turns them into a modern player with crossfades, smart mixes, lyrics and offline playback.
 
-## Запуск
+**Open Mix:** https://traaarik1.github.io/mix-player/ · **Setup guide:** [English](https://traaarik1.github.io/mix-player/guide-en.html) · [Русский](https://traaarik1.github.io/mix-player/guide.html) · **About, FAQ, privacy:** [about.html](https://traaarik1.github.io/mix-player/about.html)
 
-Двойной клик по `Запустить Mix.cmd` или:
+Mix is not a streaming service. It doesn't host or sell music — it plays the music you already own and store yourself.
 
-```
-powershell -ExecutionPolicy Bypass -File serve.ps1
-```
+## What it does
+- **Your library from Telegram:** sign in with your own account, pick a channel, Mix downloads the audio to your device and picks up new posts.
+- **Works offline:** downloaded tracks always play, even without internet. Installs as an app (PWA) on iPhone, Android, Mac and PC.
+- **Smooth DJ-style crossfades,** even volume across tracks, 7-band equalizer, playback speed.
+- **Wave:** an endless mix of your music that learns from what you play and skip; mood and genre mixes; radio from any track.
+- **Recognition:** identifies tracks by sound, fixes messy titles and adds original covers.
+- **Artists and albums:** discography, popular tracks, similar artists, what's missing from an album.
+- **Synced lyrics,** search by a line of a song.
+- **Playlists:** import from Spotify, Apple Music, Deezer or plain text; share a playlist with a friend; shared playlists via a Telegram group.
+- **Sync between devices** through your own Telegram "Saved Messages" — no Mix servers.
+- **Interface** in English and Russian, lock-screen and headphone controls, mini player.
 
-Откроется http://localhost:5173. Окно PowerShell не закрывать, пока слушаешь.
+## Principles
+- **Free forever.** No subscription, no ads, no paywalled library.
+- **Your data stays yours.** No accounts on Mix servers — there are no Mix servers. Music, likes and playlists are stored on your device and in your own Telegram.
+- **No selling of data.** Anonymous visit counter only (GoatCounter, no cookies).
 
-## Что умеет (этап 1)
-- Вход в Telegram своим аккаунтом, выбор канала, скачивание всех аудио из него и подтягивание новых.
-- Переход между треками 0–12 с по равномощной кривой. «Умный микс» срезает тишину в начале и конце треков.
-- Переход заранее ставится в расписание звукового потока, поэтому не зависит от таймеров страницы (задел для iPhone с заблокированным экраном).
-- Экран «Сейчас играет»: во время перехода обложка, цвет фона и название перетекают вместе со звуком.
-- Обложки: из тегов файла, из превью в Telegram, недостающие ищутся через iTunes Search API.
-- Любимое, недавние, плейлисты, поиск, перемешивание, повтор, эквалайзер на 7 полос с пресетами.
-- Свои файлы с компьютера: кнопка «Файлы» или перетаскивание в окно.
-- **Проверка названий:** каждый скачанный трек распознаётся по звуку (Chromaprint + AcoustID, нужен бесплатный ключ) и по очищенному имени файла (iTunes). Список «было → станет»: принять всё, по одному, выбрать другой вариант (с 30-секундным прослушиванием) или вписать вручную.
-- **Исправления в канале:** принятое название, артист и обложка перезаливаются в тот же пост канала (редактирование поста, он остаётся на месте). Выключается переключателем «Исправлять и в канале».
-- **Текст песни, как в Spotify:** кнопка с облачком. Строчки из LRCLIB подсвечиваются в такт, клик по строчке перематывает трек. Тексты кэшируются для офлайна после первого показа.
-- Горячие клавиши: пробел — пауза, ←/→ — перемотка на 10 с, Ctrl+←/→ — трек назад/вперёд.
+## Support
+Mix is built by one developer. Voluntary support will be possible soon — see [about.html](https://traaarik1.github.io/mix-player/about.html#support).
 
-- **Волна:** бесконечный поток из своей библиотеки по вкусу (прослушивания, пропуски, лайки) и подборка «Новое для тебя» с 30-секундными превью. Алгоритм: [docs/wave-algorithm.md](docs/wave-algorithm.md).
-- **Синхронизация:** лайки, плейлисты, история и исправленные названия одинаковы на устройствах; хранятся файлом `mix-sync.json` в «Избранном» Telegram. Подробно: [docs/sync-and-listen.md](docs/sync-and-listen.md).
-- **«Что играет?»:** распознавание через микрофон и кнопка «Как Шазам» для нераспознанных треков (AudD, бесплатно с лимитом).
-- **iPhone:** установка на экран «Домой» и работа без сети. Как опубликовать: [docs/DEPLOY.md](docs/DEPLOY.md).
-- **Защита канала:** правится только аудио-пост выбранного канала; самый первый исправленный пост ждёт твоей проверки, остальные идут после кнопки «Всё верно».
+## Feedback
+Found a bug or have an idea? Open an [issue](https://github.com/Traaarik1/mix-player/issues).
 
-Тесты: `node --test tests/`
+## License
+Proprietary, all rights reserved — see [LICENSE](LICENSE). The app is free to use on the official website; the code may not be copied or redistributed. Third-party components in `vendor/` keep their own licenses.
 
-## Устройство
-- `index.html`, `css/app.css` — интерфейс.
-- `js/engine.js` — звук: расписанные переходы, эквалайзер, анализ тишины.
-- `js/app.js` — библиотека, очередь, экраны, синхронизация с Telegram.
-- `js/tg.js` — Telegram через библиотеку teleproto (форк GramJS, версия зафиксирована, грузится с esm.sh).
-- `js/identify.js`, `js/fingerprint.js` — распознавание треков; `vendor/chromaprint/` — Chromaprint в WASM (MIT).
-- `js/lyrics.js` — тексты из LRCLIB; `js/covers.js` — поиск в iTunes.
-- `js/db.js` — хранилище в браузере (IndexedDB): треки, файлы, обложки, настройки, сессия Telegram.
-
-## Важно
-- Сессия Telegram хранится в браузере на этом устройстве. Выйти можно в Telegram: Настройки → Устройства.
-- Данные живут в браузере, через который открыт плеер. Очистка данных сайта удалит скачанную музыку.
-
-## Что добавилось 05.11.2026
-- Распознавание: русские каталоги, транслит, LRCLIB, AudD как запасной вариант. Уверенно узнанный трек сам получает оригинальные название и обложку, сомнительные попадают в «Проверку названий».
-- Плюс у каждого трека и у играющего: любимое, все песни, альбом или плейлист.
-- Волна с похожими треками (30-секундные превью между своими), её можно отключить.
-- Сортировка (дата добавления, название, автор, альбом, дата выхода, длительность, частота) и раздел «Авторы».
-- «Хочу скачать»: похожий трек ждёт в списке с превью; когда такой же появится в канале, он сам заменит превью, лайки и плейлисты сохраняются. Полные треки плеер сам не скачивает: их находишь и добавляешь ты.
-- «Подключить телефон»: QR-код на компьютере переносит ключи и канал на iPhone, сессия Telegram при этом не передаётся.
-- Мини-плеер: в Chrome и Edge окно поверх остальных, в других браузерах отдельное маленькое окно. Настоящего виджета iPhone у сайта быть не может.
-- Ярлык на рабочем столе: `powershell -ExecutionPolicy Bypass -File make-shortcut.ps1`.
-- Эквалайзер: 13 режимов и сброс.
-- Скип и выбор трека идут без перехода, старый трек глушится сразу. Плавный переход только в конце трека.
-- Простой и лёгкий интерфейс: виртуальный список (в странице только видимые строки), миниатюры обложек, распознавание в отдельном потоке. На 2000 треках: 697 элементов вместо 44 тысяч, перерисовка 44 мс вместо 3,9 с.
+Developer notes (Russian): [docs/DEV.ru.md](docs/DEV.ru.md).

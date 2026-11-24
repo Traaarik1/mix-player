@@ -1,5 +1,10 @@
 [
   {
+    "added": "2026-11-24",
+    "ru": "<b>Страница «О Mix»</b> — вопросы и ответы, конфиденциальность и условия. Меню разбито на группы «Слушать», «Библиотека», «Инструменты».",
+    "en": "<b>“About Mix” page</b> — FAQ, privacy and terms. The menu is grouped into Listen, Library and Tools."
+  },
+  {
     "added": "2026-11-23",
     "ru": "<b>Волна вместо полоски</b> — прогресс трека как у голосовых в Telegram, видно громкие и тихие места.",
     "en": "<b>Waveform progress bar</b> — like Telegram voice messages, shows loud and quiet parts."

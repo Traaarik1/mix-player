@@ -1088,3 +1088,8 @@ body.lite *, body.lite *::before, body.lite *::after { animation: none !importan
 .wbars i { flex: 0 1 3px; min-width: 2px; border-radius: 2px; background: rgb(255 255 255 / .42); }
 .wbars i.on { background: var(--c1); }
 .full .track.wv { height: 52px; }
+
+/* группы бокового меню и общие состояния кнопок */
+.nav-title.navgrp { margin: 16px 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
+#nav > .navgrp:first-child { margin-top: 4px; }
+button:disabled, .btn:disabled, .chip:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }

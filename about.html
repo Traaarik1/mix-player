@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mix — Your music. Your rules.</title>
+  <meta name="description" content="Free, ad-free player for your own music library. Your tracks in your own Telegram, offline playback, crossfades, smart mixes, lyrics.">
+  <meta property="og:title" content="Mix — Your music. Your rules.">
+  <meta property="og:description" content="Free, ad-free player for your own music library.">
+  <meta property="og:image" content="icons/icon-512.png">
+  <meta name="theme-color" content="#140f1e">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #0f0b16; --bg2: #1a1426; --card: rgb(255 255 255 / .05); --line: rgb(255 255 255 / .09); --text: #f4effa; --mist: #b9aecb; --lilac: #b79cff; --pink: #ff7eb6; --amber: #ffc46b; }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body { margin: 0; font: 400 16px/1.6 Manrope, system-ui, sans-serif; color: var(--text); background: radial-gradient(1200px 600px at 80% -10%, rgb(183 156 255 / .18), transparent 60%), radial-gradient(900px 500px at -10% 30%, rgb(255 126 182 / .12), transparent 60%), var(--bg); }
+    a { color: var(--lilac); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; color: var(--text); text-decoration: none; }
+    .logo img { width: 34px; height: 34px; border-radius: 10px; }
+    .lang { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px; padding: 7px 14px; font: 700 14px Manrope, system-ui; cursor: pointer; }
+    .lang:hover { border-color: var(--lilac); }
+    .hero { padding: 56px 0 40px; }
+    h1 { font-size: clamp(36px, 7vw, 64px); line-height: 1.05; letter-spacing: -.02em; margin: 0 0 18px; }
+    h1 span { background: linear-gradient(90deg, var(--lilac), var(--pink) 55%, var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lead { font-size: 19px; color: var(--mist); max-width: 640px; margin: 0 0 28px; }
+    .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; font-weight: 800; text-decoration: none; transition: transform .15s, box-shadow .15s; }
+    .btn.main { color: #1a1226; background: linear-gradient(135deg, var(--lilac), var(--pink) 55%, var(--amber)); box-shadow: 0 10px 30px rgb(255 126 182 / .25); }
+    .btn.alt { color: var(--text); border: 1px solid var(--line); background: var(--card); }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:focus-visible, .lang:focus-visible, summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+    h2 { font-size: 28px; letter-spacing: -.01em; margin: 56px 0 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; }
+    .card b { display: block; margin-bottom: 4px; }
+    .card p { margin: 0; color: var(--mist); font-size: 15px; }
+    .pr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .pr .card b { font-size: 18px; }
+    details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 18px; margin-bottom: 10px; }
+    summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
+    details p, details ul { color: var(--mist); margin: 0 0 14px; }
+    .legal { color: var(--mist); font-size: 15px; }
+    .legal h3 { color: var(--text); font-size: 17px; margin: 22px 0 6px; }
+    footer { border-top: 1px solid var(--line); margin-top: 64px; padding: 24px 0 40px; color: var(--mist); font-size: 14px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+    [data-l="ru"] { display: none; }
+    html[lang="ru"] [data-l="ru"] { display: revert; }
+    html[lang="ru"] [data-l="en"] { display: none; }
+    @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="./"><img src="icons/icon-192.png" alt="">Mix</a>
+    <button class="lang" id="lang" type="button">RU</button>
+  </header>
+
+  <section class="hero">
+    <h1>Your music.<br><span>Your rules.</span></h1>
+    <p class="lead" data-l="en">Mix is a free, ad-free player for your own music library. Keep your tracks in your own Telegram channel — Mix turns them into a beautiful player that works offline, mixes like a DJ and learns your taste.</p>
+    <p class="lead" data-l="ru">Mix — бесплатный плеер без рекламы для твоей собственной музыки. Треки лежат в твоём Telegram-канале, а Mix превращает их в красивый плеер, который работает без интернета, сводит треки как диджей и учится твоему вкусу.</p>
+    <div class="cta">
+      <a class="btn main" href="./"><span data-l="en">Open Mix</span><span data-l="ru">Открыть Mix</span></a>
+      <a class="btn alt" href="guide-en.html" data-l="en">Setup guide (5 min)</a>
+      <a class="btn alt" href="guide.html" data-l="ru">Инструкция (5 минут)</a>
+    </div>
+  </section>
+
+  <div class="pr">
+    <div class="card"><b data-l="en">Free forever</b><b data-l="ru">Бесплатно навсегда</b><p data-l="en">No subscription. No paywalled features.</p><p data-l="ru">Без подписки и платных функций.</p></div>
+    <div class="card"><b data-l="en">No ads</b><b data-l="ru">Без рекламы</b><p data-l="en">Not now, not later.</p><p data-l="ru">Ни сейчас, ни потом.</p></div>
+    <div class="card"><b data-l="en">Your data</b><b data-l="ru">Твои данные</b><p data-l="en">No Mix servers. Everything stays on your device and in your Telegram.</p><p data-l="ru">У Mix нет серверов. Всё хранится на твоём устройстве и в твоём Telegram.</p></div>
+    <div class="card"><b data-l="en">No limits</b><b data-l="ru">Без ограничений</b><p data-l="en">Your library is as big as you want.</p><p data-l="ru">Библиотека любого размера.</p></div>
+  </div>
+
+  <h2 data-l="en">What Mix can do</h2><h2 data-l="ru">Что умеет Mix</h2>
+  <div class="grid">
+    <div class="card"><b data-l="en">Library from Telegram</b><b data-l="ru">Библиотека из Telegram</b><p data-l="en">Sign in with your account, pick a channel — Mix downloads the audio and picks up new posts.</p><p data-l="ru">Войди своим аккаунтом, выбери канал — Mix скачает аудио и подхватит новые посты.</p></div>
+    <div class="card"><b data-l="en">Offline</b><b data-l="ru">Без интернета</b><p data-l="en">Downloaded tracks always play. Installs as an app on iPhone, Android, Mac and PC.</p><p data-l="ru">Скачанные треки играют всегда. Ставится как приложение на iPhone, Android, Mac и ПК.</p></div>
+    <div class="card"><b data-l="en">DJ crossfades</b><b data-l="ru">Переходы как у диджея</b><p data-l="en">Smooth transitions, even volume, equalizer, playback speed.</p><p data-l="ru">Плавные переходы, ровная громкость, эквалайзер, скорость.</p></div>
+    <div class="card"><b data-l="en">Wave and mixes</b><b data-l="ru">Волна и миксы</b><p data-l="en">Endless mix that learns from plays and skips; mood mixes; radio from any track.</p><p data-l="ru">Бесконечный поток по вкусу, миксы по настроению, радио по треку.</p></div>
+    <div class="card"><b data-l="en">Recognition</b><b data-l="ru">Распознавание</b><p data-l="en">Identifies tracks by sound, fixes messy titles, adds original covers.</p><p data-l="ru">Узнаёт треки по звуку, исправляет названия, ставит оригинальные обложки.</p></div>
+    <div class="card"><b data-l="en">Artists and albums</b><b data-l="ru">Артисты и альбомы</b><p data-l="en">Discography, popular tracks, similar artists, what's missing from an album.</p><p data-l="ru">Дискография, популярное, похожие артисты, чего не хватает в альбоме.</p></div>
+    <div class="card"><b data-l="en">Lyrics</b><b data-l="ru">Тексты песен</b><p data-l="en">Synced lyrics and search by a line.</p><p data-l="ru">Текст в такт музыке и поиск песни по строчке.</p></div>
+    <div class="card"><b data-l="en">Playlists</b><b data-l="ru">Плейлисты</b><p data-l="en">Import from Spotify, Apple Music, Deezer; share with friends; shared playlists.</p><p data-l="ru">Импорт из Spotify, Apple Music, Deezer; отправка друзьям; общие плейлисты.</p></div>
+    <div class="card"><b data-l="en">Sync</b><b data-l="ru">Синхронизация</b><p data-l="en">Likes, playlists and history match on all your devices — via your own Telegram.</p><p data-l="ru">Лайки, плейлисты и история одинаковы на всех устройствах — через твой Telegram.</p></div>
+  </div>
+
+  <h2 id="faq">FAQ</h2>
+  <div data-l="en">
+    <details><summary>Is Mix a streaming service?</summary><p>No. Mix doesn't host, sell or stream music from a catalog. It plays music you store yourself — in your Telegram channel or as files on your device.</p></details>
+    <details><summary>Is it really free?</summary><p>Yes. There's no subscription and no ads. If you like Mix, you can support it voluntarily — it never unlocks or limits features.</p></details>
+    <details><summary>Why Telegram?</summary><p>Telegram gives free, unlimited cloud storage that you control. Mix uses it as your personal music cloud and to sync between devices.</p></details>
+    <details><summary>Is my Telegram account safe?</summary><p>You sign in directly with Telegram; the session is stored only in your browser on your device. Mix has no servers and never receives your login. Don't share your api_hash or the device-pairing QR code with anyone.</p></details>
+    <details><summary>Which devices are supported?</summary><p>Any modern browser: iPhone (Safari), Android (Chrome), Mac and Windows (Chrome, Edge, Safari, Firefox). Install it as an app for the best experience — see the setup guide.</p></details>
+    <details><summary>Can I use my own files without Telegram?</summary><p>Yes — add files with the "Files" button or drag them into the window. Telegram is needed for cloud storage and sync between devices.</p></details>
+    <details><summary>I found a bug</summary><p>Please open an <a href="https://github.com/Traaarik1/mix-player/issues">issue on GitHub</a> with a screenshot and your device/browser.</p></details>
+  </div>
+  <div data-l="ru">
+    <details><summary>Mix — это стриминг?</summary><p>Нет. Mix не хранит, не продаёт и не раздаёт музыку из каталога. Он играет музыку, которую ты хранишь сам — в своём Telegram-канале или файлами на устройстве.</p></details>
+    <details><summary>Это правда бесплатно?</summary><p>Да. Без подписки и рекламы. Если Mix нравится, его можно поддержать добровольно — это ничего не открывает и не ограничивает.</p></details>
+    <details><summary>Почему Telegram?</summary><p>Telegram даёт бесплатное безлимитное облако, которым управляешь ты. Mix использует его как твоё личное музыкальное облако и для синхронизации устройств.</p></details>
+    <details><summary>Мой Telegram в безопасности?</summary><p>Вход идёт напрямую в Telegram, сессия хранится только в браузере на твоём устройстве. У Mix нет серверов, твой вход он никуда не передаёт. Никому не показывай свой api_hash и QR-код для подключения устройства.</p></details>
+    <details><summary>На каких устройствах работает?</summary><p>В любом современном браузере: iPhone (Safari), Android (Chrome), Mac и Windows (Chrome, Edge, Safari, Firefox). Лучше установить как приложение — смотри инструкцию.</p></details>
+    <details><summary>Можно без Telegram, своими файлами?</summary><p>Да — кнопка «Файлы» или перетаскивание в окно. Telegram нужен для облака и синхронизации между устройствами.</p></details>
+    <details><summary>Нашёл ошибку</summary><p>Напиши в <a href="https://github.com/Traaarik1/mix-player/issues">issues на GitHub</a>: скриншот и какое устройство/браузер.</p></details>
+  </div>
+
+  <h2 id="support" data-l="en">Support Mix</h2><h2 data-l="ru">Поддержать Mix</h2>
+  <div class="card">
+    <p data-l="en">Mix is built by one developer and will stay free. Voluntary support (one-time or monthly) helps pay for time and devices for testing. A support link will appear here soon. Meanwhile the best support is telling a friend about Mix and <a href="https://github.com/Traaarik1/mix-player/issues">sending feedback</a>.</p>
+    <p data-l="ru">Mix делает один разработчик, и он останется бесплатным. Добровольная поддержка (разово или ежемесячно) помогает оплачивать время и устройства для тестов. Ссылка для поддержки скоро появится здесь. А пока лучшая поддержка — рассказать о Mix другу и <a href="https://github.com/Traaarik1/mix-player/issues">прислать отзыв</a>.</p>
+  </div>
+
+  <h2 id="privacy" data-l="en">Privacy Policy</h2><h2 data-l="ru">Политика конфиденциальности</h2>
+  <div class="legal" data-l="en">
+    <p>Last updated: 24 November 2026.</p>
+    <h3>No Mix servers</h3><p>Mix runs entirely in your browser. There is no Mix account and no Mix server that stores your data.</p>
+    <h3>What is stored and where</h3><p>Your music, covers, likes, playlists, history and settings are stored in your browser (IndexedDB) on your device. Your Telegram session and API keys are stored only there. If sync is on, a sync file is saved in your own Telegram "Saved Messages"; it never contains your keys or session.</p>
+    <h3>Third-party services</h3><p>To work, Mix connects directly from your device to: Telegram (your music and sync); Deezer, iTunes Search, MusicBrainz, Cover Art Archive, LRCLIB, Last.fm/ListenBrainz (covers, metadata, lyrics, similar music — Mix sends track and artist names); AcoustID and AudD (only if you enable recognition — a short audio fingerprint or clip is sent). These services have their own privacy policies.</p>
+    <h3>Statistics</h3><p>Mix counts anonymous page visits with GoatCounter: no cookies, no personal data, no tracking across sites.</p>
+    <h3>Deleting your data</h3><p>Clear the site data in your browser settings (or remove the installed app) to delete everything Mix stored on the device. Messages in your Telegram are yours to delete there.</p>
+    <h3>Contact</h3><p>Questions: <a href="https://github.com/Traaarik1/mix-player/issues">GitHub issues</a>.</p>
+  </div>
+  <div class="legal" data-l="ru">
+    <p>Обновлено: 24 ноября 2026.</p>
+    <h3>У Mix нет серверов</h3><p>Mix работает полностью в браузере. Нет аккаунта Mix и нет сервера Mix, где хранились бы твои данные.</p>
+    <h3>Что и где хранится</h3><p>Музыка, обложки, лайки, плейлисты, история и настройки хранятся в браузере (IndexedDB) на твоём устройстве. Сессия Telegram и ключи API — только там. Если включена синхронизация, файл синхронизации лежит в твоём «Избранном» Telegram; ключей и сессии в нём нет.</p>
+    <h3>Сторонние сервисы</h3><p>Для работы Mix напрямую с твоего устройства обращается к: Telegram (музыка и синхронизация); Deezer, iTunes Search, MusicBrainz, Cover Art Archive, LRCLIB, Last.fm/ListenBrainz (обложки, данные о треках, тексты, похожая музыка — отправляются названия треков и артистов); AcoustID и AudD (только если включено распознавание — отправляется отпечаток звука или короткий фрагмент). У этих сервисов свои политики конфиденциальности.</p>
+    <h3>Статистика</h3><p>Mix считает анонимные посещения через GoatCounter: без cookies, без личных данных, без слежки между сайтами.</p>
+    <h3>Удаление данных</h3><p>Очисти данные сайта в настройках браузера (или удали установленное приложение) — всё, что Mix хранил на устройстве, удалится. Сообщения в своём Telegram ты удаляешь там.</p>
+    <h3>Связь</h3><p>Вопросы: <a href="https://github.com/Traaarik1/mix-player/issues">GitHub issues</a>.</p>
+  </div>
+
+  <h2 id="terms" data-l="en">Terms of Use</h2><h2 data-l="ru">Условия использования</h2>
+  <div class="legal" data-l="en">
+    <p>By using Mix you agree to these terms.</p>
+    <h3>Your content</h3><p>Mix is a player for music you have the right to use. You are responsible for the music you store, play and share, and for following copyright law and Telegram's terms. Mix does not provide, host or distribute music.</p>
+    <h3>The app</h3><p>Mix is provided free, "as is", without warranties. Features may change. The developer is not liable for data loss — keep your music in your Telegram or other backups.</p>
+    <h3>Intellectual property</h3><p>The Mix code, design and texts are proprietary (see LICENSE). You may use the app on the official website, but may not copy, modify or redistribute its code.</p>
+    <h3>Fair use</h3><p>Don't use Mix to spam, to break other services' rules or to abuse third-party APIs.</p>
+  </div>
+  <div class="legal" data-l="ru">
+    <p>Пользуясь Mix, ты принимаешь эти условия.</p>
+    <h3>Твой контент</h3><p>Mix — плеер для музыки, которой ты вправе пользоваться. Ты сам отвечаешь за музыку, которую хранишь, слушаешь и отправляешь, и за соблюдение авторского права и правил Telegram. Mix не предоставляет, не хранит и не распространяет музыку.</p>
+    <h3>Приложение</h3><p>Mix предоставляется бесплатно, «как есть», без гарантий. Функции могут меняться. Разработчик не отвечает за потерю данных — храни музыку в Telegram или резервных копиях.</p>
+    <h3>Интеллектуальная собственность</h3><p>Код, дизайн и тексты Mix защищены (см. LICENSE). Пользоваться приложением на официальном сайте можно, копировать, изменять и распространять его код — нельзя.</p>
+    <h3>Честное использование</h3><p>Не используй Mix для спама, нарушения правил других сервисов и злоупотребления сторонними API.</p>
+  </div>
+
+  <footer>
+    <span>© 2026 Mix</span>
+    <span><a href="./">Mix</a> · <a href="guide-en.html" data-l="en">Guide</a><a href="guide.html" data-l="ru">Инструкция</a> · <a href="#faq">FAQ</a> · <a href="#privacy">Privacy</a> · <a href="#terms">Terms</a> · <a href="https://github.com/Traaarik1/mix-player/issues">Feedback</a></span>
+  </footer>
+</div>
+<script src="about.js"></script>
+</body>
+</html>

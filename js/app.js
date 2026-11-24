@@ -741,6 +741,8 @@ function renderSettings() {
     ${GC && settings.owner ? `<div class="sechead"><div><b>Статистика Mix</b><small>Видно только тебе</small></div></div>
       <div class="statnums"><div><b id="stInst">…</b><small>установок</small></div><div><b id="stUsers">…</b><small>пользователей</small></div></div>
       ${row('data-act="openStats"', 'list', 'Подробная статистика', dashboard())}` : ''}
+    <div class="sechead"><div><b>О Mix</b></div></div>
+    ${row('data-act="about"', 'list', 'О Mix и поддержка', 'Вопросы, конфиденциальность, условия')}
     <div class="sechead"><div><b>Память</b></div></div>
     <div class="store">${$('#store').innerHTML}</div>
   </li>`;
@@ -977,11 +979,14 @@ function renderTabs() {
 function openMore() {
   const row = (attr, icon, name, n) => `<button class="morerow" ${attr}><svg><use href="#i-${icon}"/></svg><span>${esc(name)}</span>${n ? `<em>${n}</em>` : ''}</button>`;
   modal(`<div class="grab"></div>
-    ${row('data-view="albums"', 'list', 'Альбомы')}
-    ${row('data-view="recent"', 'clock', 'Недавние')}
+    <div class="morehead">Слушать</div>
     ${row('data-view="news"', 'wave', 'Новинки', newsUnseen())}
     ${row('data-view="stats"', 'clock', 'Итоги')}
     ${smartEntries().map(([k, n]) => row(`data-view="${k}"`, 'list', n)).join('')}
+    <div class="morehead">Библиотека</div>
+    ${row('data-view="albums"', 'list', 'Альбомы')}
+    ${row('data-view="recent"', 'clock', 'Недавние')}
+    <div class="morehead">Инструменты</div>
     ${row('data-view="wish"', 'wish', 'Хочу скачать', wishes().length)}
     ${row('data-view="fix"', 'wand', 'Проверка названий', fixCount())}
     ${row('data-act="listen"', 'mic', 'Что играет?')}
@@ -996,23 +1001,24 @@ function openMore() {
 function renderNav() {
   renderTabs();
   const item = (id, icon, name, n) => `<button class="${view === id || (id === 'artists' && view.startsWith('artist:')) ? 'on' : ''}" data-view="${esc(id)}"><svg><use href="#i-${icon}"/></svg>${esc(name)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
-  $('#nav').innerHTML = item('wave', 'wave', 'Волна')
-    + item('all', 'all', 'Вся музыка', order.length || null)
+  const head = name => `<div class="nav-title navgrp">${name}</div>`;
+  $('#nav').innerHTML = head('Слушать') + item('wave', 'wave', 'Волна')
+    + item('news', 'wave', 'Новинки', newsUnseen() || null)
+    + item('stats', 'clock', 'Итоги')
+    + head('Библиотека') + item('all', 'all', 'Вся музыка', order.length || null)
     + item('artists', 'artist', 'Авторы')
     + item('albums', 'list', 'Альбомы')
     + item('liked', 'heart', 'Любимое', lib.likes.size || null)
     + item('recent', 'clock', 'Недавние')
-    + item('news', 'wave', 'Новинки', newsUnseen() || null)
-    + item('stats', 'clock', 'Итоги')
-    + item('wish', 'wish', 'Хочу скачать', wishes().length || null)
+    + head('Инструменты') + item('wish', 'wish', 'Хочу скачать', wishes().length || null)
     + item('fix', 'wand', 'Проверка названий', fixCount() || null)
     + `<button data-act="listen"><svg><use href="#i-mic"/></svg>Что играет?</button>`
     + `<button data-act="import"><svg><use href="#i-plus"/></svg>Импорт плейлиста</button>`
     + item('dups', 'copy', 'Дубликаты')
     + `<button data-act="invite"><svg><use href="#i-artist"/></svg>Mix для друга</button>`
     + item('settings', 'eq', 'Настройки')
-    + `<div class="nav-title" style="margin-top:14px">Подборки</div>` + smartEntries().map(([k, n]) => item(k, 'list', n)).join('')
-    + `<div class="nav-title" style="margin-top:14px">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>`
+    + `<div class="nav-title navgrp">Подборки</div>` + smartEntries().map(([k, n]) => item(k, 'list', n)).join('')
+    + `<div class="nav-title navgrp">Плейлисты<button data-act="newPlaylist" title="Новый плейлист"><svg><use href="#i-plus"/></svg></button></div>`
     + (settings.collabs || []).map(c => item('collab:' + c.id, 'artist', '👥 ' + c.title)).join('')
     + lib.playlists.map(p => item(p.id, 'list', p.name, p.ids.length || null)).join('')
     + `<button data-act="collab"><svg><use href="#i-plus"/></svg>Совместный плейлист</button>`;
@@ -2919,6 +2925,7 @@ document.addEventListener('click', async e => {
   else if (a === 'sharePl') { const pl = lib.playlists.find(p => p.id === view); if (pl) sharePlaylist(pl); }
   else if (a === 'openStats') window.open(dashboard(), '_blank', 'noopener');
   else if (a === 'setEq') openEq();
+  else if (a === 'about') window.open('about.html?lang=' + (document.documentElement.lang === 'en' ? 'en' : 'ru'), '_blank', 'noopener');
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
   else if (a?.startsWith('lang:')) { settings.lang = a.slice(5); await saveSettings(); location.reload(); }
   else if (a === 'invite') openInvite();
