@@ -3343,3 +3343,66 @@ engine.addEventListener('track', () => { const f = $('#full'); f.classList.remov
     requestAnimationFrame(tick);
   }
 }
+
+// Бокал: шары падают в бокал по физике и оседают, потом живут как в лава-лампе (греются у дна, всплывают, остывают, тонут).
+// Только на компьютере; при смене трека падают заново.
+if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const cv = document.createElement('canvas'); cv.id = 'glass'; cv.setAttribute('aria-hidden', 'true');
+  $('#fx').prepend(cv);
+  const g = cv.getContext('2d'), K = .5; // половинное разрешение: мягко и дёшево
+  let W, H, cx, top, cy, rx, ry, balls = [], cols = ['#f33', '#f63', '#c24'], colT = 0;
+  const size = () => { W = cv.width = Math.round(innerWidth * K); H = cv.height = Math.round(innerHeight * K);
+    cx = W * .58; rx = Math.min(W * .2, H * .32); ry = H * .3; cy = H * .5; top = H * .14; };
+  size(); addEventListener('resize', size);
+  // внутренняя граница бокала: для высоты y — полуширина чаши
+  const half = y => y < top ? -1 : y <= cy ? rx * .94 + (rx - rx * .94) * ((y - top) / (cy - top)) : y >= cy + ry ? 0 : rx * Math.sqrt(1 - ((y - cy) / ry) ** 2);
+  const drop = () => { balls = [0, 1, 2].map(i => ({ x: cx + (i - 1) * rx * .5, y: -H * (.1 + i * .25), vx: (Math.random() - .5) * 2, vy: 0, r: rx * (.22 + i * .04), c: i, heat: Math.random(), ph: Math.random() * 6 })); };
+  drop(); engine.addEventListener('track', drop);
+  const readCols = () => { const cs = getComputedStyle(document.documentElement); cols = ['--c1', '--c2', '--c3'].map(v => cs.getPropertyValue(v).trim() || '#f33'); };
+  let last = performance.now();
+  const step = now => {
+    requestAnimationFrame(step);
+    const dt = Math.min(2, (now - last) / 16.7); last = now;
+    if (document.hidden || document.body.classList.contains('calm') || $('#full').classList.contains('open')) return;
+    if (now - colT > 1000) { colT = now; readCols(); }
+    for (const b of balls) {
+      const inside = b.y > top;
+      // лава-лампа: шар у дна греется и всплывает, наверху остывает и тонет
+      if (inside) { const depth = (b.y - top) / (cy + ry - top); b.heat += ((depth > .7 ? 1 : depth < .3 ? 0 : b.heat) - b.heat) * .004 * dt; }
+      const buoy = inside ? (b.heat - .5) * .09 : 0;
+      b.vy += (.35 - buoy * 4.2) * dt * (inside ? .12 : 1);
+      if (inside) { b.ph += .01 * dt; b.vx += Math.sin(b.ph) * .006 * dt; }
+      b.vx *= inside ? .985 : .999; b.vy *= inside ? .985 : .999;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      // стенки чаши: шар (с учётом радиуса) не выходит за контур, отскок с потерей энергии
+      if (b.y > top) {
+        const yy = Math.min(b.y + b.r * .55, cy + ry - 1), w = Math.max(0, half(yy) - b.r * .55);
+        if (b.x > cx + w) { b.x = cx + w; b.vx = -Math.abs(b.vx) * .5; }
+        if (b.x < cx - w) { b.x = cx - w; b.vx = Math.abs(b.vx) * .5; }
+        const floor = cy + ry - b.r * .6;
+        if (b.y > floor) { b.y = floor; b.vy = -Math.abs(b.vy) * .45; }
+        if (b.y < top + b.r * .3 && b.vy < 0) { b.vy *= -.3; }
+      }
+    }
+    // шары мягко расталкивают друг друга
+    for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
+      const a = balls[i], b = balls[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, m = (a.r + b.r) * .55;
+      if (d < m) { const p = (m - d) / d * .05 * dt; a.x -= dx * p; a.y -= dy * p; b.x += dx * p; b.y += dy * p; }
+    }
+    g.clearRect(0, 0, W, H);
+    // контур бокала — еле заметный
+    g.globalCompositeOperation = 'source-over'; g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(cx - rx * .94, top); g.lineTo(cx - rx, cy); g.ellipse(cx, cy, rx, ry, 0, Math.PI, 0, true); g.lineTo(cx + rx * .94, top);
+    g.moveTo(cx, cy + ry); g.lineTo(cx, cy + ry + H * .14); g.moveTo(cx - rx * .55, cy + ry + H * .14); g.lineTo(cx + rx * .55, cy + ry + H * .14); g.stroke();
+    // сами шары: мягкие пятна, при наложении светятся и сливаются как воск
+    g.globalCompositeOperation = 'lighter';
+    for (const b of balls) {
+      const gr = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 1.6);
+      gr.addColorStop(0, cols[b.c]); gr.addColorStop(.45, cols[b.c] + ''); gr.addColorStop(1, 'transparent');
+      g.globalAlpha = .55; g.fillStyle = gr; g.beginPath(); g.arc(b.x, b.y, b.r * 1.6, 0, 7); g.fill();
+    }
+    g.globalAlpha = 1;
+  };
+  requestAnimationFrame(step);
+  document.body.classList.add('hasglass');
+}
