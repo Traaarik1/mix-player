@@ -873,6 +873,7 @@ function rowHTML(t, n) {
 let lastView;
 function render() {
   creditCache = null;
+  document.body.classList.toggle('calm', view === 'all' || view === 'liked' || lib.playlists.some(p => p.id === view)); // в списках музыки фон спокойный
   if (lastView !== view) { lastView = view; const m = $('#main'); m.classList.remove('vin'); void m.offsetWidth; m.classList.add('vin'); }
   // шапка плейлиста: мозаика из обложек его треков
   { const pl = lib.playlists.find(p => p.id === view), head = $('.head'); let hc = $('#hcover');
@@ -3325,7 +3326,7 @@ engine.addEventListener('track', () => { const f = $('#full'); f.classList.remov
   const phone = matchMedia('(max-width: 900px)').matches, n = phone ? 14 : 26;
   let motes = '';
   for (let i = 0; i < n; i++) motes += `<i style="left:${(Math.random() * 100).toFixed(1)}%;top:${(Math.random() * 100).toFixed(1)}%;--d:${(14 + Math.random() * 18).toFixed(1)}s;--dl:-${(Math.random() * 30).toFixed(1)}s;--z:${(.5 + Math.random()).toFixed(2)}"></i>`;
-  fx.innerHTML = `<div class="fxgrid"></div><div class="fxfog"><b></b><b></b></div><div class="fxmotes">${motes}</div><div class="fxvig"></div>`;
+  fx.innerHTML = `<div class="fxgrid"></div><div class="fxfog"><b></b><b></b></div><div class="fxvig"></div>`;
   $('#backdrop').after(fx);
   // бас: только на компьютере, анализатор подключается сбоку к общему выходу
   if (!phone) {

@@ -1377,3 +1377,7 @@ body::after { animation: none !important; }
 .fxmotes i { box-shadow: none; background: radial-gradient(circle, color-mix(in srgb, var(--c1) 40%, #fff), transparent 70%); width: calc(7px * var(--z)); will-change: translate, opacity; }
 .fxfog b { will-change: translate; }
 .fxgrid { will-change: opacity, scale; }
+/* меньше шаров; в «Вся музыка», «Любимое» и плейлистах — без фоновых эффектов */
+.orbs span:nth-child(n+4) { display: none; }
+.backdrop .orbs, #fx { transition: opacity .8s; }
+body.calm .backdrop .orbs, body.calm #fx { opacity: 0; }
