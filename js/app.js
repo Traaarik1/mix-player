@@ -873,7 +873,7 @@ function rowHTML(t, n) {
 let lastView;
 function render() {
   creditCache = null;
-  document.body.classList.toggle('calm', view === 'all' || view === 'liked' || lib.playlists.some(p => p.id === view)); // в списках музыки фон спокойный
+  document.body.classList.toggle('calm', !(view === 'all' || view === 'liked' || lib.playlists.some(p => p.id === view))); // эффекты фона только во «Вся музыка», «Любимое» и плейлистах
   if (lastView !== view) { lastView = view; const m = $('#main'); m.classList.remove('vin'); void m.offsetWidth; m.classList.add('vin'); }
   // шапка плейлиста: мозаика из обложек его треков
   { const pl = lib.playlists.find(p => p.id === view), head = $('.head'); let hc = $('#hcover');
