@@ -140,8 +140,6 @@ const palCache = new Map();
 let lastPal = [[], [0, 0]];
 function setPalette(pal, tone) {
   lastPal = [pal, tone];
-  // своя гамма: серая или чёрная вместо цветов обложки
-  if (settings.tint === 'gray') pal = { mono: .8 }; else if (settings.tint === 'black') pal = { mono: 0 };
   const [h, s] = tone, r = document.documentElement.style;
   // не хватило ярких цветов — добираем соседними оттенками основного
   const fill = [`hsl(${h} ${Math.max(55, s)}% 58%)`, `hsl(${(h + 40) % 360} ${Math.max(55, s)}% 55%)`, `hsl(${(h + 320) % 360} ${Math.max(50, s)}% 50%)`];
@@ -153,7 +151,8 @@ function setPalette(pal, tone) {
     const l = (mx + mn) / 2, ss = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
     return `hsl(${hh} ${Math.round(Math.max(.5, Math.min(.8, ss)) * 100)}% ${Math.round(Math.min(.52, Math.max(.42, l)) * 100)}%)`;
   };
-  if (pal.mono != null) { const L = pal.mono > .6 ? [62, 48, 36] : [26, 18, 34]; for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), `hsl(250 6% ${L[i]}%)`); setToneVars(250, 8); return; }
+  if (pal.mono != null) { // бесцветная обложка: чёрная → чёрное, серая → серое, белая → светло-серое
+    const L = pal.mono < .22 ? [14, 9, 20] : pal.mono < .55 ? [42, 30, 52] : [66, 52, 40]; for (let i = 0; i < 3; i++) r.setProperty('--c' + (i + 1), `hsl(250 6% ${L[i]}%)`); setToneVars(250, 8); return; }
   // акцент кнопок и значков — тоже из главного цвета обложки, а не из запасного тона по названию
   if (pal[0]) { const [R, G, B] = pal[0].map(v => v / 255), mx = Math.max(R, G, B), mn = Math.min(R, G, B), d = mx - mn;
     let hh = !d ? 0 : mx === R ? ((G - B) / d) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4; hh = (hh * 60 + 360) % 360;
@@ -734,8 +733,6 @@ function renderSettings() {
     <div class="presets"><button class="chip${settings.lang !== 'en' ? ' on' : ''}" data-act="lang:ru">Русский</button><button class="chip${settings.lang === 'en' ? ' on' : ''}" data-act="lang:en">English</button></div>
     <div class="sechead"><div><b>Тема фона</b></div></div>
     <div class="presets"><button class="chip${settings.bgTheme === 'lava' ? ' on' : ''}" data-act="bg:lava">Лава-лампа</button><button class="chip${settings.bgTheme !== 'lava' ? ' on' : ''}" data-act="bg:orbs">Шары</button></div>
-    <div class="sechead"><div><b>Цвета</b></div></div>
-    <div class="presets">${[['cover', 'Из обложки'], ['gray', 'Серый'], ['black', 'Чёрный']].map(([k, n]) => `<button class="chip${(settings.tint || 'cover') === k ? ' on' : ''}" data-act="tint:${k}">${n}</button>`).join('')}</div>
     <div class="sechead"><div><b>Смена обложки</b></div></div>
     <div class="presets">${[['blur', 'Наплыв'], ['flip', 'Переворот'], ['wave', 'Волна'], ['pixels', 'Пиксели']].map(([k, n]) => `<button class="chip${(settings.coverFx || 'blur') === k ? ' on' : ''}" data-act="cfx:${k}">${n}</button>`).join('')}</div>
     <div class="sechead"><div><b>Таймер сна</b></div></div>
@@ -3028,7 +3025,6 @@ document.addEventListener('click', async e => {
   else if (a === 'setEq') openEq();
   else if (a === 'about') window.open('about.html?lang=' + (document.documentElement.lang === 'en' ? 'en' : 'ru'), '_blank', 'noopener');
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
-  else if (a?.startsWith('tint:')) { settings.tint = a.slice(5); await saveSettings(); setPalette(...lastPal); render(); }
   else if (a?.startsWith('cfx:')) { settings.coverFx = a.slice(4); await saveSettings(); render(); }
   else if (a?.startsWith('sleep:')) window.setSleep(+a.slice(6));
   else if (a?.startsWith('bg:')) { settings.bgTheme = a.slice(3); await saveSettings(); setBgTheme(); render(); }
