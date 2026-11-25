@@ -1713,6 +1713,9 @@ function paintStack() {
       t.style.cssText = `left:${x * 100 / N}%;top:${y * 100 / N}%;width:${100 / N + .3}%;height:${100 / N + .3}%;background-image:url("${src}");background-size:${N * 100}%;background-position:${x * 100 / (N - 1)}% ${y * 100 / (N - 1)}%;animation-delay:${d}ms`; box.append(t); }
     prev.replaceWith(box); nu.classList.add('cx-in-pixels'); setTimeout(() => box.remove(), 1300); return;
   }
+  // переворот: вся 3D-обложка оборачивается вокруг оси как монета, на ребре меняется картинка
+  if (fx === 'flip') { nu.style.opacity = 0; st.classList.remove('cx-coin'); void st.offsetWidth; st.classList.add('cx-coin');
+    setTimeout(() => { prev.remove(); nu.style.opacity = ''; }, 450); setTimeout(() => st.classList.remove('cx-coin'), 950); return; }
   prev.classList.add('cx-out-' + fx); nu.classList.add('cx-in-' + fx);
   if (fx === 'wave') { const r = document.createElement('span'); r.className = 'cxring'; st.append(r); setTimeout(() => r.remove(), 1000); }
   setTimeout(() => { prev.remove(); nu.classList.remove('cx-in-' + fx); }, 1000);
