@@ -1617,11 +1617,10 @@ let orbT = 0;
 function orbSwap(apply) {
   const os = $$('.orbs span'), rnd = m => ((Math.random() * 2 - 1) * m).toFixed(1);
   if (!os.length || matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(); return; }
-  clearTimeout(orbT);
+  clearTimeout(orbT); apply(); // цвет — сразу, шары догоняют
   const dirs = os.map(() => Math.random() * Math.PI * 2);
   os.forEach((o, i) => { o.style.transition = 'translate .7s cubic-bezier(.5,0,.8,.4), opacity .6s'; o.style.translate = `${(Math.cos(dirs[i]) * 70).toFixed(1)}vmax ${(Math.sin(dirs[i]) * 70).toFixed(1)}vmax`; o.style.opacity = 0; });
   orbT = setTimeout(() => {
-    apply();
     os.forEach(o => { o.style.transition = 'none'; o.style.translate = `${rnd(30)}vmax ${rnd(25)}vmax`; o.style.scale = '.3'; });
     void os[0].offsetWidth;
     os.forEach((o, i) => { o.style.transition = `translate 2s cubic-bezier(.2,.8,.2,1) ${i * 90}ms, scale 1.6s cubic-bezier(.2,.8,.2,1) ${i * 90}ms, opacity 1.2s ${i * 90}ms`; o.style.translate = `${rnd(16)}vmax ${rnd(12)}vmax`; o.style.scale = ''; o.style.opacity = ''; });
@@ -1720,6 +1719,7 @@ function paintStack() {
 }
 function paintNext() {
   const n = engine.nextTrack || (curId && getT(neighbour(curId, 1)));
+  if (n) (async () => { const u = n.cover ? await coverUrl(n.id).catch(() => '') : (n.art || ''); if (u && !palCache.has(u)) palCache.set(u, await fetch(u).then(r => r.blob()).then(paletteOf).catch(() => [])); tinyBlur(u); })();
   const el = $('#fNext');
   if (!n || n.id === curId) { el.innerHTML = ''; return; }
   el.innerHTML = `${coverHTML(n)}<span>Дальше<b>${esc(n.title)}${n.artist ? ' — ' + esc(n.artist) : ''}</b></span>`;
@@ -3512,7 +3512,7 @@ void main(){
       put(p.x, p.y, p.r, sx + flat, sy - flat);
       if (v > .05) { const dir = Math.sign(p.vy) || 1; put(p.x + Math.sin(p.ph) * p.r * .1, p.y - dir * p.r * (.95 + v * .35), p.r * (.32 + .18 * v), .8, 1.25); }
     }
-    c1 = c1.map((v, i) => v + (tc1[i] - v) * .006); c2 = c2.map((v, i) => v + (tc2[i] - v) * .006); // ~5 с на переход к цвету новой обложки
+    c1 = c1.map((v, i) => v + (tc1[i] - v) * .03); c2 = c2.map((v, i) => v + (tc2[i] - v) * .03); // ~5 с на переход к цвету новой обложки
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform2f(u.res, W, H); gl.uniform3fv(u.balls, arr); gl.uniform2fv(u.shp, shp); gl.uniform1i(u.n, n);
     gl.uniform1f(u.pb, pb); gl.uniform1f(u.pt, pt); gl.uniform1f(u.t, sim);
