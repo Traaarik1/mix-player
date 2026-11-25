@@ -1717,7 +1717,14 @@ function paintStack() {
   if (fx === 'flip') { nu.style.opacity = 0; st.classList.remove('cx-coin'); void st.offsetWidth; st.classList.add('cx-coin');
     setTimeout(() => { prev.remove(); nu.style.opacity = ''; }, 450); setTimeout(() => st.classList.remove('cx-coin'), 950); return; }
   prev.classList.add('cx-out-' + fx); nu.classList.add('cx-in-' + fx);
-  if (fx === 'wave') { const r = document.createElement('span'); r.className = 'cxring'; st.append(r); setTimeout(() => r.remove(), 1000); }
+  if (fx === 'wave') {
+    const r = document.createElement('span'); r.className = 'cxring'; st.append(r); setTimeout(() => r.remove(), 1000);
+    // кольцо — средний яркий цвет НОВОЙ обложки (сразу из картинки, не дожидаясь смены палитры)
+    const tint = () => { try { const c = document.createElement('canvas'); c.width = c.height = 8; const g = c.getContext('2d'); g.drawImage(nu, 0, 0, 8, 8); const d = g.getImageData(0, 0, 8, 8).data; let best = [0, 0, 0], bs = -1;
+      for (let i = 0; i < d.length; i += 4) { const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]), sc = (mx - mn) * 2 + mx; if (sc > bs) { bs = sc; best = [d[i], d[i + 1], d[i + 2]]; } }
+      r.style.setProperty('--rc', `rgb(${best})`); } catch {} };
+    if (nu.tagName === 'IMG') nu.complete && nu.naturalWidth ? tint() : nu.addEventListener('load', tint, { once: true });
+  }
   setTimeout(() => { prev.remove(); nu.classList.remove('cx-in-' + fx); }, 1000);
 }
 function paintNext() {
