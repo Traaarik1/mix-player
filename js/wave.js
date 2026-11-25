@@ -229,6 +229,7 @@ export function flowScore(a, b, trans = {}, solo = null) {
   if (!a || !b) return 1;
   let k = 1;
   if (a.album && a.album === b.album && a.artist === b.artist) k *= .6; // целый альбом подряд — это уже не волна
+  if (a.title && b.title && normKey(a.title.replace(/(.*?)|[.*?]|-.*(remix|mix|edit|version|live|slowed|sped).*$/gi, '')) === normKey(b.title.replace(/(.*?)|[.*?]|-.*(remix|mix|edit|version|live|slowed|sped).*$/gi, ''))) k *= .1; // та же песня в другой версии — не подряд
   if (a.genre && b.genre) k *= a.genre === b.genre ? W.FLOW_GENRE_SAME : W.FLOW_GENRE_OTHER;
   const ya = parseInt(a.released, 10), yb = parseInt(b.released, 10);
   if (ya && yb) { const d = Math.abs(ya - yb); k *= d <= 5 ? W.FLOW_ERA_NEAR : d > 20 ? W.FLOW_ERA_FAR : 1; }

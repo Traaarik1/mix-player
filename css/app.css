@@ -1523,3 +1523,5 @@ input[type=search]:focus, .search input:focus, select:focus { border-color: colo
   100% { transform: perspective(900px) rotateY(0) scale(1); filter: none; } }
 .cxring { --rc: var(--c1); border-color: color-mix(in srgb, var(--rc) 75%, #fff) !important; box-shadow: 0 0 26px var(--rc), inset 0 0 20px var(--rc) !important; }
 .stack img, .stack .cov, .full #stack > * { transition: none !important; }
+.qtools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 10px; }
+.qtools small { flex: 1; color: var(--ink-soft); font-size: 12.5px; min-width: 110px; }

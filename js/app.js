@@ -1135,7 +1135,8 @@ const queueRow = (id, kind, n) => {
 };
 function queueHTML() {
   const mine = userQueue.filter(getT), next = queueUpcoming();
-  return `<h3>Очередь</h3>${engine.track ? `<div class="qhead">Сейчас играет</div><ul class="qlist">${queueRow(engine.track.id, 'now', 0).replace(/<button[\s\S]*<\/button>/, '')}</ul>` : ''}
+  const secs = [...mine, ...next].reduce((a, id) => a + (getT(id)?.duration || 0), 0), h = Math.floor(secs / 3600), m = Math.round(secs % 3600 / 60);
+  return `<h3>Очередь</h3><div class="qtools"><small>${tracksWord(mine.length + next.length)}${secs ? ` · ${h ? h + ' ч ' : ''}${m} мин` : ''}</small><button class="chip" data-qa="more">+10 похожих</button><button class="chip" data-qa="mix">Перемешать дальше</button></div>${engine.track ? `<div class="qhead">Сейчас играет</div><ul class="qlist">${queueRow(engine.track.id, 'now', 0).replace(/<button[\s\S]*<\/button>/, '')}</ul>` : ''}
     ${mine.length ? `<div class="qhead">В очереди<button class="chip" data-qa="clear">Очистить</button></div><ul class="qlist">${mine.map((id, n) => queueRow(id, 'user', n)).join('')}</ul>` : '<p class="qempty">Нажми плюс у трека и выбери «В очередь».</p>'}
     ${next.length ? `<div class="qhead">Дальше по списку</div><ul class="qlist">${next.map(id => queueRow(id, 'base', 0)).join('')}</ul>` : ''}`;
 }
@@ -1175,6 +1176,14 @@ function openQueue() {
     const a = e.target.closest('[data-qa]')?.dataset.qa, row = e.target.closest('.qrow'), id = row?.dataset.q;
     if (a === 'drag') return;
     if (a === 'clear') { userQueue = []; }
+    else if (a === 'more') { // 10 треков, которые подходят к тому, что играет сейчас и стоит в очереди
+      const last = getT(userQueue[userQueue.length - 1]) || engine.track, used = new Set([curId, ...userQueue].map(String));
+      const add = nextWave([...tracks.values()].filter(t => !used.has(String(t.id))), currentTaste(), { count: 10, after: last, history: [...recentIds(), ...userQueue] }).map(t => t.id);
+      userQueue.push(...add); toast(add.length ? `Добавил ${tracksWord(add.length)}` : 'Нечего добавить');
+    } else if (a === 'mix') { // оставшееся по списку — вперемешку, но с плавными переходами
+      const i = queue.indexOf(curId !== fromUser && queue.includes(curId) ? curId : queueAnchor), rest = queue.slice(i + 1);
+      if (rest.length > 1) { const sm = smartShuffle(queue[i], rest); queue = [...queue.slice(0, i + 1), ...sm.slice(1)]; toast('Перемешал'); }
+    }
     else if (a === 'del') {
       if (row.dataset.kind === 'user') userQueue = userQueue.filter(x => x !== id);
       else queue = queueBase = queue.filter(x => x !== id);
