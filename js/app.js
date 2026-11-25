@@ -3399,56 +3399,34 @@ engine.addEventListener('track', () => { const f = $('#full'); f.classList.remov
   }
 }
 
-// Лава-лампа на фоне — как настоящая.
-// Как устроена живая лампа (по видео): снизу лампа греет воск, он вспучивается бугром, вытягивается на «шее» и отрывается
-// каплей-слезинкой (круглая голова сверху, хвостик снизу); всплывает медленно, наверху остывает, сплющивается куполом,
-// прилипает к верхней луже или стекает обратно вниз. Воск полупрозрачный: светится изнутри, снизу ярче (там лампочка),
-// по краю темнее, сверху мягкий блик. Жидкость вокруг тоже подсвечена снизу.
-// Рисуется на видеокарте (WebGL, метаболы с освещением). Только на компьютере, по умолчанию выключена (тема «Шары»).
+// Лава-лампа на фоне — заранее отрисованная запись (tools/lava-render.mjs): 5 фрагментов по 3 минуты, 15 минут без повторов.
+// Видео в оттенках серого: яркость = материал (тёмное — жидкость, светлое — воск, самое светлое — блик).
+// Здесь на видеокарте яркость превращается в цвета обложки: воск — первый цвет, жидкость — второй.
+// Фрагменты идут в случайном порядке и сменяют друг друга плавным наплывом. Видео лёгкое — работает и на телефоне.
 let setBgTheme = () => {};
-if (!matchMedia('(max-width: 900px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) (() => {
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) (() => {
   const cv = document.createElement('canvas'); cv.id = 'glass'; cv.setAttribute('aria-hidden', 'true');
-  const gl = cv.getContext('webgl', { premultipliedAlpha: false, antialias: false, alpha: true });
+  const gl = cv.getContext('webgl', { antialias: false, alpha: false });
   if (!gl) return;
   $('#fx').prepend(cv);
-  const lavaOn = () => settings.bgTheme === 'lava'; // по умолчанию — шары
-  setBgTheme = () => { document.body.classList.toggle('hasglass', lavaOn()); cv.hidden = !lavaOn(); };
-  // в большом плеере тот же фон: холст переезжает внутрь плеера и обратно
+  const lavaOn = () => settings.bgTheme === 'lava';
+  setBgTheme = () => { document.body.classList.toggle('hasglass', lavaOn()); cv.hidden = !lavaOn(); if (!lavaOn()) vids.forEach(v => v.pause()); };
   new MutationObserver(() => { const open = $('#full').classList.contains('open'), home = open ? $('#fullbg') : $('#fx'); if (cv.parentNode !== home) home.prepend(cv); }).observe($('#full'), { attributes: true, attributeFilter: ['class'] });
-  const MAX = 24, Q = .6; // считаем в 0,6 разрешения экрана
-  const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
-  const fs = `precision mediump float;
-uniform vec2 res;uniform vec3 balls[${MAX}];uniform vec2 shp[${MAX}];uniform int n;uniform float pb,pt,t,mb,mx,mt,mtx;uniform vec3 c1,c2;
+  const CLIPS = 5, FADE = 2.5;
+  const vids = [0, 1].map(() => { const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('playsinline', ''); v.crossOrigin = 'anonymous'; return v; });
+  let order = [], cur = 0, fadeT = -1; // fadeT ≥ 0 — идёт наплыв на второй ролик
+  const nextClip = () => { if (!order.length) order = [...Array(CLIPS).keys()].sort(() => Math.random() - .5); return `media/lava/lava${order.pop() + 1}.mp4`; };
+  vids[0].src = nextClip(); vids[0].currentTime = 0;
+  const vs = 'attribute vec2 p;varying vec2 uv;uniform vec2 sc;void main(){uv=(vec2(p.x,-p.y)*sc+1.)*.5;gl_Position=vec4(p,0.,1.);}';
+  const fs = `precision mediump float;varying vec2 uv;uniform sampler2D ta,tb;uniform float mx;uniform vec3 c1,c2;
 void main(){
-  vec2 q=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y);
-  float f=0.; vec2 g=vec2(0.);
-  for(int i=0;i<${MAX};i++){ if(i>=n)break; vec2 d=(q-balls[i].xy)/shp[i]; float r2=balls[i].z*balls[i].z, den=dot(d,d)+1.; f+=r2/den; g+=-2.*r2*d/(den*den)/shp[i]; }
-  // лужи: снизу — с бугром там, где готовится оторваться капля; сверху — с наплывом там, где капля собирается стечь
-  float wb=pb*(1.+.06*sin(q.x*.005+t*.25)+.04*sin(q.x*.011-t*.18))+mb*exp(-pow((q.x-mx)/(res.y*.09),2.));
-  float wt=pt*(1.+.07*sin(q.x*.007-t*.2))+mt*exp(-pow((q.x-mtx)/(res.y*.08),2.));
-  float db=max(res.y-q.y,1.), dt=max(q.y,1.);
-  f+=wb*wb/(db*db)+wt*wt/(dt*dt);
-  g+=vec2(0.,2.*wb*wb/(db*db*db))+vec2(0.,-2.*wt*wt/(dt*dt*dt));
-  float k=q.y/res.y; // 0 вверху, 1 внизу — у дна ближе к лампочке
-  // свет лампы в самой жидкости: снизу тёплое свечение, к верху темнеет
-  vec3 liquid=c2*(.10+.32*k*k);
-  float la=.20+.35*k*k;
-  float inside=smoothstep(.94,1.06,f);
-  // объём воска: нормаль из градиента поля
-  float R0=res.y*.035;
-  vec3 nrm=normalize(vec3(-g*R0/(f+.6)*(1.-smoothstep(1.1,2.6,f)),1.)); // наклон поверхности есть только у края, середина капли гладкая
-  float diff=.55+.45*max(dot(nrm,normalize(vec3(0.,.7,.7))),0.);       // свет снизу, от лампочки
-  float thick=smoothstep(1.,4.5,f);                                    // толще — сильнее светится изнутри
-  vec3 wax=c1*(.55+.5*thick)*diff*(.75+.5*k);
-  wax+=c1*c1*.35*thick*k;                                              // подповерхностное свечение у дна
-  float spec=pow(max(dot(reflect(-normalize(vec3(-.35,-.75,.6)),nrm),vec3(0.,0.,1.)),0.),24.)*.28; // мягкий блик сверху-слева
-  wax+=vec3(spec);
-  float rimDark=smoothstep(.94,1.02,f)*(1.-smoothstep(1.02,1.35,f));    // край чуть темнее — воск тоньше
-  wax*=1.-.28*rimDark;
-  float halo=smoothstep(.45,.98,f)*(1.-inside)*.22;                     // ореол света вокруг капли в жидкости
-  vec3 col=mix(liquid+c1*halo*.9,wax,inside);
-  float a=mix(la+halo,.93,inside);
-  gl_FragColor=vec4(min(col,vec3(1.)),a);
+  float L=mix(texture2D(ta,uv).r,texture2D(tb,uv).r,mx);
+  // жидкость: от почти чёрной вверху до подсвеченной лампой внизу
+  vec3 liq=mix(c2*.04,c2*.55+.015,smoothstep(.02,.3,L));
+  // воск: тень → цвет обложки → у самого яркого места светлый блик
+  vec3 wax=mix(c1*.62,c1*1.06,smoothstep(.52,.86,L));
+  wax=mix(wax,mix(c1,vec3(1.),.6),smoothstep(.86,1.,L));
+  gl_FragColor=vec4(mix(liq,wax,smoothstep(.34,.5,L)),1.);
 }`;
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.warn('lava shader', gl.getShaderInfoLog(o)); return o; };
   const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
@@ -3456,94 +3434,45 @@ void main(){
   gl.useProgram(pr);
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = k => gl.getUniformLocation(pr, k), u = {}; for (const k of ['res', 'balls', 'shp', 'n', 'pb', 'pt', 't', 'mb', 'mx', 'mt', 'mtx', 'c1', 'c2']) u[k] = U(k);
-  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  let W, H;
-  const size = () => { W = Math.round(innerWidth * Q); H = Math.round(innerHeight * Q); cv.width = W; cv.height = H; gl.viewport(0, 0, W, H); };
+  const U = k => gl.getUniformLocation(pr, k);
+  const tex = [0, 1].map(i => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([10, 10, 10, 255])); return t; });
+  gl.uniform1i(U('ta'), 0); gl.uniform1i(U('tb'), 1);
+  const uSc = U('sc'), uMx = U('mx'), uC1 = U('c1'), uC2 = U('c2');
+  // холст: экран в половинном разрешении (картинка мягкая, больше не нужно); видео 16:9 обрезается «по cover»
+  const size = () => { const q = Math.min(1, 900 / Math.max(innerWidth, innerHeight)); cv.width = Math.round(innerWidth * q); cv.height = Math.round(innerHeight * q); gl.viewport(0, 0, cv.width, cv.height);
+    const a = cv.width / cv.height, va = 16 / 9; gl.uniform2f(uSc, a > va ? 1 : a / va, a > va ? va / a : 1); };
   size(); addEventListener('resize', size);
   const tmp = document.createElement('canvas').getContext('2d');
   const rgb = c => { tmp.fillStyle = '#000'; tmp.fillStyle = c; const h = tmp.fillStyle; if (h[0] === '#') return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(v => v / 255) : [1, .3, .3]; };
-  // приглушаем цвета обложки: без кислотных
-  const soft = c => { const l = c[0] * .3 + c[1] * .59 + c[2] * .11; return c.map(v => Math.min(.9, (v * .75 + l * .25) * .92)); };
-  let c1 = [.8, .3, .3], c2 = [.6, .2, .25], tc1 = c1, tc2 = c2, colT = 0, idle = 0, sim = 0;
-  const R = () => Math.min(W, H);
-  const pbBase = () => H * .07, ptBase = () => H * .045;
-  let pb = pbBase(), pt = ptBase();
-  // «рождение» капли: бугор на нижней луже (или наплыв на верхней) растёт, потом из него выходит капля
-  let mound = null; // { top, x, r, t }
-  let mb = 0, mx = 0, mt = 0, mtx = 0;
-  const balls = [];
-  const born = () => {
-    const top = Math.random() < .3 && balls.length > 1; // иногда капля стекает сверху
-    mound = { top, x: W * (.12 + Math.random() * .76), r: R() * (.05 + Math.random() ** 1.7 * .1), t: 0 };
-  };
+  const soft = c => { const l = c[0] * .3 + c[1] * .59 + c[2] * .11; return c.map(v => Math.min(.92, v * .8 + l * .2)); };
+  let c1 = [.8, .3, .3], c2 = [.5, .2, .3], tc1 = c1, tc2 = c2, colT = 0, last = 0;
+  const up = (i, v) => { if (v.readyState >= 2) { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tex[i]); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, v); } };
   const step = now => {
     requestAnimationFrame(step);
-    if (document.body.classList.contains('hasglass') !== lavaOn()) setBgTheme(); // настройки грузятся позже скрипта
+    if (document.body.classList.contains('hasglass') !== lavaOn()) setBgTheme();
     const full = $('#full').classList.contains('open');
-    if (document.hidden || !lavaOn() || (!full && document.body.classList.contains('calm'))) return;
-    const still = engine.paused;
-    if (still && (idle++ % 30)) return; // на паузе всё стоит; изредка перерисовываем, чтобы картинка не пропадала
-    if (now - colT > 800) { colT = now; const cs = getComputedStyle(document.documentElement); tc1 = soft(rgb(cs.getPropertyValue('--c1').trim())); tc2 = soft(rgb(cs.getPropertyValue('--c2').trim())); }
-    if (!still) {
-      sim += 1 / 60;
-      // новая капля, когда их мало
-      if (!mound && balls.length < 5 && Math.random() < .004) born();
-      if (mound) {
-        mound.t += .0035; // ~5 секунд бугор набухает
-        const k = Math.min(1, mound.t), amp = mound.r * 1.5 * Math.sin(Math.min(1, k) * Math.PI / 2);
-        if (mound.top) { mt = amp; mtx = mound.x; } else { mb = amp; mx = mound.x; }
-        if (k >= 1) { // отрыв: капля уходит, бугор оседает (шея тянется за счёт хвостика у капли)
-          balls.push({ x: mound.x, y: mound.top ? pt + mound.r * .6 : H - pb - mound.r * .6, vx: 0, vy: 0, r: mound.r, heat: mound.top ? 0 : 1, hr: .0015 + Math.random() * .002, ph: Math.random() * 6, so: Math.random() * 6 });
-          mound = null;
-        }
-      }
-      if (!mound) { mb *= .985; mt *= .985; }
-      const SP = .62;
-      for (let i = balls.length - 1; i >= 0; i--) {
-        const p = balls[i], depth = p.y / H;
-        // тепло: у дна греется, у верха остывает; горячий всплывает, холодный тонет
-        p.heat += ((depth > .78 ? 1 : depth < .22 ? 0 : p.heat) - p.heat) * (depth > .78 || depth < .22 ? p.hr : .0005) * SP;
-        p.vy += H * (.00011 - p.heat * .00022) * SP * SP;
-        p.ph += .004; p.vx += Math.sin(p.ph) * W * .000008 * SP;
-        p.vx *= .975; p.vy *= .975; // вязкий воск — без рывков
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < p.r) { p.x = p.r; p.vx = Math.abs(p.vx) * .3; } if (p.x > W - p.r) { p.x = W - p.r; p.vx = -Math.abs(p.vx) * .3; }
-        // долетела до лужи и остыла/нагрелась — сливается с ней (капля «прилипла»), лужа на миг вздувается
-        const atTop = p.y < pt + p.r * .2 && p.heat < .35, atBot = p.y > H - pb - p.r * .2 && p.heat > .65;
-        if ((atTop || atBot) && sim > 3) {
-          if (atTop) { mt = Math.max(mt, p.r * 1.2); mtx = p.x; } else { mb = Math.max(mb, p.r * 1.2); mx = p.x; }
-          balls.splice(i, 1); continue;
-        }
-        p.y = Math.min(Math.max(p.y, pt * .5), H - pb * .5);
-      }
-      // капли мягко расталкиваются, но могут касаться и сливаться
-      for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
-        const p = balls[i], q = balls[j], dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1, m = (p.r + q.r) * .65;
-        if (d < m) { const f = (m - d) / d * .003; p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f; }
-      }
-    }
-    // форма: в движении капля вытягивается вдоль пути, а сзади тянется хвостик — получается слезинка
-    const arr = new Float32Array(MAX * 3), shp = new Float32Array(MAX * 2).fill(1); let n = 0;
-    const put = (x, y, r, sx, sy) => { if (n >= MAX) return; arr[n * 3] = x; arr[n * 3 + 1] = y; arr[n * 3 + 2] = r; shp[n * 2] = sx; shp[n * 2 + 1] = sy; n++; };
-    for (const p of balls) {
-      const v = Math.min(1, Math.abs(p.vy) / (H * .0025)), wob = .06 * Math.sin(p.ph * 1.3 + p.so);
-      const sy = 1 + v * .28 + wob, sx = 1 / Math.sqrt(sy);
-      // остывшая капля наверху сплющивается куполом
-      const flat = p.heat < .3 && p.y < H * .3 ? .12 : 0;
-      put(p.x, p.y, p.r, sx + flat, sy - flat);
-      if (v > .05) { const dir = Math.sign(p.vy) || 1; put(p.x + Math.sin(p.ph) * p.r * .1, p.y - dir * p.r * (.95 + v * .35), p.r * (.32 + .18 * v), .8, 1.25); }
-    }
-    c1 = c1.map((v, i) => v + (tc1[i] - v) * .03); c2 = c2.map((v, i) => v + (tc2[i] - v) * .03); // ~5 с на переход к цвету новой обложки
-    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.uniform2f(u.res, W, H); gl.uniform3fv(u.balls, arr); gl.uniform2fv(u.shp, shp); gl.uniform1i(u.n, n);
-    gl.uniform1f(u.pb, pb); gl.uniform1f(u.pt, pt); gl.uniform1f(u.t, sim);
-    gl.uniform1f(u.mb, mb); gl.uniform1f(u.mx, mx); gl.uniform1f(u.mt, mt); gl.uniform1f(u.mtx, mtx);
-    gl.uniform3fv(u.c1, c1); gl.uniform3fv(u.c2, c2);
+    const show = !document.hidden && lavaOn() && (full || !document.body.classList.contains('calm'));
+    const run = show && !engine.paused;
+    const [a, b] = [vids[cur], vids[cur ^ 1]];
+    if (!run) { vids.forEach(v => v.paused || v.pause()); if (!show || now - last < 1000) return; }
+    else { if (a.paused) a.play().catch(() => {}); if (fadeT >= 0 && b.paused) b.play().catch(() => {}); }
+    if (run && now - last < 33) return; // 30 кадров в секунду хватает — запись 24
+    last = now;
+    // ближе к концу ролика заранее грузим следующий и плавно переходим на него
+    if (fadeT < 0 && a.duration && a.currentTime > a.duration - FADE - .3) { b.src = nextClip(); b.currentTime = 0; fadeT = 0; }
+    let m = 0;
+    if (fadeT >= 0) { m = b.readyState >= 2 ? Math.min(1, b.currentTime / FADE) : 0; if (m >= 1 || a.ended) { a.pause(); cur ^= 1; fadeT = -1; m = 0; } }
+    if (now - colT > 500) { colT = now; const cs = getComputedStyle(document.documentElement); tc1 = soft(rgb(cs.getPropertyValue('--c1').trim())); tc2 = soft(rgb(cs.getPropertyValue('--c2').trim())); }
+    c1 = c1.map((v, i) => v + (tc1[i] - v) * .08); c2 = c2.map((v, i) => v + (tc2[i] - v) * .08);
+    up(cur === 0 ? 0 : 1, vids[cur]); if (fadeT >= 0) up(cur === 0 ? 1 : 0, vids[cur ^ 1]);
+    // ta — ролик 0, tb — ролик 1; mx — доля второго
+    const shareB = cur === 0 ? m : 1 - m;
+    gl.uniform1f(uMx, shareB); gl.uniform3fv(uC1, c1); gl.uniform3fv(uC2, c2);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
-  // сразу есть пара капель в пути, чтобы лампа не начиналась пустой
-  for (let i = 0; i < 3; i++) balls.push({ x: W * (.2 + i * .3), y: H * (.3 + Math.random() * .4), vx: 0, vy: 0, r: R() * (.05 + Math.random() * .06), heat: i % 2 ? .9 : .1, hr: .002, ph: Math.random() * 6, so: Math.random() * 6 });
   requestAnimationFrame(step);
   setBgTheme();
 })();
