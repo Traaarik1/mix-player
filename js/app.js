@@ -3580,3 +3580,6 @@ void main(){
     $('#stack').append(h); setTimeout(() => h.remove(), 900);
   });
 })();
+
+// Текст песни — к кнопкам «В любимое / Добавить», чтобы play стоял ровно по центру ряда
+{ const ly = $('.full .btns [data-act=lyrics]'), row = $('.full .fadd'); if (ly && row) row.append(ly); }

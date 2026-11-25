@@ -1525,3 +1525,25 @@ input[type=search]:focus, .search input:focus, select:focus { border-color: colo
 .stack img, .stack .cov, .full #stack > * { transition: none !important; }
 .qtools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 10px; }
 .qtools small { flex: 1; color: var(--ink-soft); font-size: 12.5px; min-width: 110px; }
+/* ===== Большой плеер: прогресс-волна и кнопки ===== */
+.full .prog { gap: 12px; align-items: center; }
+.full .prog span { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-soft); min-width: 34px; letter-spacing: .3px; }
+.full .prog span[data-dur] { text-align: right; }
+.full .track.wv { height: 46px; }
+.wbars { gap: 2px; }
+.wbars i { flex: 1 1 0; min-width: 2px; max-width: 4px; border-radius: 3px; background: rgb(255 255 255 / .18); transition: background .25s, transform .25s; transform-origin: center; }
+.wbars i.on { background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 55%, #fff), var(--c1)); box-shadow: 0 0 8px color-mix(in srgb, var(--c1) 45%, transparent); }
+/* текущее место: последний закрашенный столбик чуть выше и светится */
+.wbars i.on:has(+ i:not(.on)) { transform: scaleY(1.18); background: #fff; box-shadow: 0 0 12px color-mix(in srgb, var(--c1) 80%, transparent); }
+.full .track.wv:hover .wbars i:not(.on) { background: rgb(255 255 255 / .28); }
+/* кнопки: play строго по центру, вокруг равные отступы */
+.full .btns { display: grid !important; grid-template-columns: repeat(5, 1fr); justify-items: center; align-items: center; max-width: 380px; margin: 10px auto 0; gap: 0; }
+.full .btns .ib { width: 48px; height: 48px; border-radius: 50%; position: relative; color: rgb(233 228 238 / .7); }
+.full .btns .ib svg { width: 22px; height: 22px; }
+.full .btns [data-act=prev] svg, .full .btns [data-act=next] svg { width: 28px; height: 28px; }
+.full .btns [data-act=prev], .full .btns [data-act=next] { color: var(--paper); }
+.full .btns .ib.on { color: color-mix(in srgb, var(--c1) 60%, #fff); background: color-mix(in srgb, var(--c1) 14%, transparent); }
+.full .btns .ib.on::after { content: ""; position: absolute; bottom: 4px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor; }
+.full .btns .pp { width: 72px; height: 72px; box-shadow: 0 10px 30px rgb(0 0 0 / .4), 0 0 0 6px color-mix(in srgb, var(--c1) 14%, transparent), 0 0 40px color-mix(in srgb, var(--c1) 30%, transparent) !important; }
+.full .btns .pp svg { width: 28px; height: 28px; }
+.full .fadd [data-act=lyrics] { margin-left: auto; }
