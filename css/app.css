@@ -1466,3 +1466,14 @@ input[type=search]:focus, .search input:focus, select:focus { border-color: colo
 .lyrics p.past { color: rgb(233 228 238 / .45); }
 .lyrics p.now { color: #F3EFF6 !important; text-shadow: 0 2px 10px rgb(0 0 0 / .45) !important; }
 .head h1, .head h1 * { text-shadow: none !important; }
+/* телефон: мини-плеер — ровные кнопки с промежутком, play отдельной шайбой, без залипшего hover */
+@media (max-width: 900px) {
+  .bar .btns { gap: 8px !important; align-items: center; }
+  .bar .btns .ib { width: 40px !important; height: 40px !important; border-radius: 12px; background: none !important; }
+  .bar .pp { width: 44px !important; height: 44px !important; flex: 0 0 44px; margin: 0 2px;
+    box-shadow: 0 3px 10px rgb(0 0 0 / .35) !important; transform: none !important; animation: none !important; }
+  .bar .pp { color: #16111c !important; }
+  .bar .pp svg { width: 20px !important; height: 20px !important; }
+  #npArtist { pointer-events: none; }
+}
+@media (hover: none) { .pp:hover, .ib:hover, .btn:hover { transform: none !important; } .pp:active, .ib:active { transform: scale(.92) !important; } }
