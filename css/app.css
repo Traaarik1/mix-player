@@ -1522,3 +1522,4 @@ input[type=search]:focus, .search input:focus, select:focus { border-color: colo
   50% { transform: perspective(900px) rotateY(-90deg) rotateX(6deg) scale(.92); filter: brightness(.55); }
   100% { transform: perspective(900px) rotateY(0) scale(1); filter: none; } }
 .cxring { --rc: var(--c1); border-color: color-mix(in srgb, var(--rc) 75%, #fff) !important; box-shadow: 0 0 26px var(--rc), inset 0 0 20px var(--rc) !important; }
+.stack img, .stack .cov, .full #stack > * { transition: none !important; }
