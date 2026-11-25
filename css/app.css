@@ -1477,3 +1477,9 @@ input[type=search]:focus, .search input:focus, select:focus { border-color: colo
   #npArtist { pointer-events: none; }
 }
 @media (hover: none) { .pp:hover, .ib:hover, .btn:hover { transform: none !important; } .pp:active, .ib:active { transform: scale(.92) !important; } }
+#fSleep { position: relative; } #fSleep svg { width: 20px; height: 20px; }
+#fSleep small { position: absolute; right: -2px; bottom: 2px; font-size: 10px; font-weight: 700; color: color-mix(in srgb, var(--c1) 65%, #fff); }
+.bigheart { position: absolute; left: 50%; top: 50%; width: 110px; height: 110px; margin: -55px 0 0 -55px; z-index: 9; pointer-events: none;
+  color: #fff; filter: drop-shadow(0 6px 20px rgb(0 0 0 / .45)); animation: bigHeart .9s cubic-bezier(.2, .8, .2, 1) forwards; }
+.bigheart svg { width: 100%; height: 100%; fill: currentColor; }
+@keyframes bigHeart { 0% { transform: scale(.3); opacity: 0 } 25% { transform: scale(1.1); opacity: 1 } 60% { transform: scale(.95); opacity: 1 } 100% { transform: scale(1.2); opacity: 0 } }

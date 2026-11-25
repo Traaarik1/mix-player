@@ -730,6 +730,8 @@ function renderSettings() {
     <div class="presets"><button class="chip${settings.lang !== 'en' ? ' on' : ''}" data-act="lang:ru">Русский</button><button class="chip${settings.lang === 'en' ? ' on' : ''}" data-act="lang:en">English</button></div>
     <div class="sechead"><div><b>Тема фона</b></div></div>
     <div class="presets"><button class="chip${settings.bgTheme === 'lava' ? ' on' : ''}" data-act="bg:lava">Лава-лампа</button><button class="chip${settings.bgTheme !== 'lava' ? ' on' : ''}" data-act="bg:orbs">Шары</button></div>
+    <div class="sechead"><div><b>Таймер сна</b></div></div>
+    <div class="presets">${[15, 30, 60, 0].map(m => `<button class="chip" data-act="sleep:${m}">${m ? m + ' мин' : 'Выкл'}</button>`).join('')}</div>
     <div class="sechead"><div><b>Воспроизведение</b></div></div>
     ${row('data-act="setMix"', 'wave', 'Переход между треками', 'Плавный переход, срез тишины')}
     ${row('data-act="setEq"', 'eq', 'Эквалайзер', 'Частоты под твои наушники')}
@@ -2993,6 +2995,7 @@ document.addEventListener('click', async e => {
   else if (a === 'setEq') openEq();
   else if (a === 'about') window.open('about.html?lang=' + (document.documentElement.lang === 'en' ? 'en' : 'ru'), '_blank', 'noopener');
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
+  else if (a?.startsWith('sleep:')) window.setSleep(+a.slice(6));
   else if (a?.startsWith('bg:')) { settings.bgTheme = a.slice(3); await saveSettings(); setBgTheme(); render(); }
   else if (a?.startsWith('lang:')) { settings.lang = a.slice(5); await saveSettings(); location.reload(); }
   else if (a === 'invite') openInvite();
@@ -3503,4 +3506,37 @@ void main(){
   for (let i = 0; i < 3; i++) balls.push({ x: W * (.2 + i * .3), y: H * (.3 + Math.random() * .4), vx: 0, vy: 0, r: R() * (.05 + Math.random() * .06), heat: i % 2 ? .9 : .1, hr: .002, ph: Math.random() * 6, so: Math.random() * 6 });
   requestAnimationFrame(step);
   setBgTheme();
+})();
+
+// Таймер сна: тап переключает 15 → 30 → 60 → выкл; в конце громкость плавно уходит за 20 с и трек встаёт на паузу
+(() => {
+  const steps = [15, 30, 60, 0]; let i = 3, end = 0, tick = 0;
+  const show = () => { const b = $('#fSleep'), m = end ? Math.ceil((end - Date.now()) / 60000) : 0; b.classList.toggle('on', !!end); $('#fSleepT').textContent = end ? m + '′' : ''; };
+  const stop = () => { clearInterval(tick); end = 0; show(); };
+  window.setSleep = m => { i = steps.indexOf(m); if (i < 0) i = 3; run(); };
+  $('#fSleep').onclick = () => { i = (i + 1) % steps.length; run(); };
+  const run = () => {
+    clearInterval(tick);
+    if (!steps[i]) { stop(); toast('Таймер сна выключен'); return; }
+    end = Date.now() + steps[i] * 60000; toast(`Усну через ${steps[i]} мин`); show();
+    tick = setInterval(async () => {
+      const left = end - Date.now(); show();
+      if (left > 20000) return;
+      const v0 = engine.volume; clearInterval(tick);
+      for (let k = 20; k >= 0; k--) { engine.setVolume(v0 * k / 20); await new Promise(r => setTimeout(r, 1000)); }
+      await engine.pause(); engine.setVolume(v0); i = 3; stop(); toast('Спокойной ночи');
+    }, 5000);
+  };
+})();
+
+// Двойной тап по обложке в большом плеере — лайк с сердцем
+(() => {
+  let last = 0;
+  $('#stack').addEventListener('pointerup', e => {
+    const now = Date.now(); if (now - last > 320) { last = now; return; } last = 0;
+    if (!engine.track) return;
+    const liked = $('#fLike').classList.contains('on'); if (!liked) $('#fLike').click();
+    const h = document.createElement('div'); h.className = 'bigheart'; h.innerHTML = '<svg><use href="#i-heart"/></svg>';
+    $('#stack').append(h); setTimeout(() => h.remove(), 900);
+  });
 })();
