@@ -730,6 +730,8 @@ function renderSettings() {
     <div class="presets"><button class="chip${settings.lang !== 'en' ? ' on' : ''}" data-act="lang:ru">Русский</button><button class="chip${settings.lang === 'en' ? ' on' : ''}" data-act="lang:en">English</button></div>
     <div class="sechead"><div><b>Тема фона</b></div></div>
     <div class="presets"><button class="chip${settings.bgTheme === 'lava' ? ' on' : ''}" data-act="bg:lava">Лава-лампа</button><button class="chip${settings.bgTheme !== 'lava' ? ' on' : ''}" data-act="bg:orbs">Шары</button></div>
+    <div class="sechead"><div><b>Смена обложки</b></div></div>
+    <div class="presets">${[['blur', 'Наплыв'], ['flip', 'Переворот'], ['wave', 'Волна'], ['pixels', 'Пиксели']].map(([k, n]) => `<button class="chip${(settings.coverFx || 'blur') === k ? ' on' : ''}" data-act="cfx:${k}">${n}</button>`).join('')}</div>
     <div class="sechead"><div><b>Таймер сна</b></div></div>
     <div class="presets">${[15, 30, 60, 0].map(m => `<button class="chip" data-act="sleep:${m}">${m ? m + ' мин' : 'Выкл'}</button>`).join('')}</div>
     <div class="sechead"><div><b>Воспроизведение</b></div></div>
@@ -1698,8 +1700,23 @@ function paintStack() {
   const cur = engine.track, key = cur?.id || '';
   if (key === stackKey) return;
   stackKey = key;
-  $('#stack').innerHTML = cur ? coverHTML(cur) : '';
-  hydrateIn($('#stack'), true);
+  const st = $('#stack'), fx = settings.coverFx || 'blur', old = [...st.children].filter(e => !e.classList.contains('bigheart'));
+  const prev = old[old.length - 1];
+  // первая обложка, плеер закрыт или «меньше движения» — без перехода
+  if (!prev || !cur || !$('#full').classList.contains('open') || matchMedia('(prefers-reduced-motion: reduce)').matches) { st.innerHTML = cur ? coverHTML(cur) : ''; hydrateIn(st, true); return; }
+  for (const e of old.slice(0, -1)) e.remove();
+  st.insertAdjacentHTML('beforeend', coverHTML(cur)); hydrateIn(st, true);
+  const nu = st.lastElementChild;
+  // пиксели: старую обложку режем на плитки, они разлетаются с задержкой, под ними уже новая
+  if (fx === 'pixels') {
+    const src = prev.tagName === 'IMG' ? prev.currentSrc || prev.src : '', N = 9, box = document.createElement('div'); box.className = 'cxtiles';
+    if (src) for (let i = 0; i < N * N; i++) { const t = document.createElement('i'), x = i % N, y = i / N | 0, d = Math.hypot(x - 4, y - 4) * 45 + Math.random() * 140;
+      t.style.cssText = `left:${x * 100 / N}%;top:${y * 100 / N}%;width:${100 / N + .3}%;height:${100 / N + .3}%;background-image:url("${src}");background-size:${N * 100}%;background-position:${x * 100 / (N - 1)}% ${y * 100 / (N - 1)}%;animation-delay:${d}ms`; box.append(t); }
+    prev.replaceWith(box); nu.classList.add('cx-in-pixels'); setTimeout(() => box.remove(), 1300); return;
+  }
+  prev.classList.add('cx-out-' + fx); nu.classList.add('cx-in-' + fx);
+  if (fx === 'wave') { const r = document.createElement('span'); r.className = 'cxring'; st.append(r); setTimeout(() => r.remove(), 1000); }
+  setTimeout(() => { prev.remove(); nu.classList.remove('cx-in-' + fx); }, 1000);
 }
 function paintNext() {
   const n = engine.nextTrack || (curId && getT(neighbour(curId, 1)));
@@ -2995,6 +3012,7 @@ document.addEventListener('click', async e => {
   else if (a === 'setEq') openEq();
   else if (a === 'about') window.open('about.html?lang=' + (document.documentElement.lang === 'en' ? 'en' : 'ru'), '_blank', 'noopener');
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
+  else if (a?.startsWith('cfx:')) { settings.coverFx = a.slice(4); await saveSettings(); render(); }
   else if (a?.startsWith('sleep:')) window.setSleep(+a.slice(6));
   else if (a?.startsWith('bg:')) { settings.bgTheme = a.slice(3); await saveSettings(); setBgTheme(); render(); }
   else if (a?.startsWith('lang:')) { settings.lang = a.slice(5); await saveSettings(); location.reload(); }
