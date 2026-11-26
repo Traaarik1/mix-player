@@ -1547,3 +1547,17 @@ input[type=search]:focus, .search input:focus, select:focus { border-color: colo
 .full .btns .pp { width: 72px; height: 72px; box-shadow: 0 10px 30px rgb(0 0 0 / .4), 0 0 0 6px color-mix(in srgb, var(--c1) 14%, transparent), 0 0 40px color-mix(in srgb, var(--c1) 30%, transparent) !important; }
 .full .btns .pp svg { width: 28px; height: 28px; }
 .full .fadd [data-act=lyrics] { margin-left: auto; }
+/* ===== Шары в большом плеере: чётче и красочнее, а не сплошной размытый туман ===== */
+body:not(.hasglass) .full .fullbg { background: radial-gradient(120% 90% at 50% 110%, color-mix(in srgb, var(--c2) 35%, #07050c), #07050c 70%); }
+body:not(.hasglass) .full .fullbg i.on { opacity: .28 !important; }
+body:not(.hasglass) .full .fullbg::after { background: radial-gradient(80% 60% at 50% 50%, transparent, rgb(5 3 10 / .45)) !important; }
+body:not(.hasglass) .full .fullbg .orbs span { opacity: .95 !important; filter: saturate(1.6) brightness(1.1); mix-blend-mode: screen;
+  -webkit-mask: radial-gradient(circle, #000 0%, #000 22%, rgb(0 0 0 / .55) 40%, transparent 62%); mask: radial-gradient(circle, #000 0%, #000 22%, rgb(0 0 0 / .55) 40%, transparent 62%); }
+body:not(.hasglass) .full .fullbg .orbs span::before { opacity: .3; }
+body:not(.hasglass) .full .fullbg .orbs span:nth-child(n+4) { width: 22vmax; height: 22vmax; }
+@media (max-width: 900px) { body:not(.hasglass) .full .fullbg .orbs span { filter: none; mix-blend-mode: normal; } }
+body:not(.hasglass) .full .fullbg .orbs { inset: -10% !important; }
+body:not(.hasglass) .full .fullbg .orbs span { mix-blend-mode: normal; width: 34vmax !important; height: 34vmax !important; opacity: .9 !important;
+  -webkit-mask: radial-gradient(circle, #000 0%, #000 38%, rgb(0 0 0 / .5) 52%, transparent 68%); mask: radial-gradient(circle, #000 0%, #000 38%, rgb(0 0 0 / .5) 52%, transparent 68%);
+  box-shadow: none; }
+body:not(.hasglass) .full .fullbg .orbs span:nth-child(n+4) { width: 18vmax !important; height: 18vmax !important; }
