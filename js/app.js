@@ -43,7 +43,17 @@ let cloud = null;           // синхронизация через Telegram, �
 const saveTrack = t => { if (t.source === 'preview') return Promise.resolve(); const { dlp, ...rest } = t; cloud?.schedule(); return db.put('tracks', t.id, rest); };
 let libTimer;
 const writeLib = () => { clearTimeout(libTimer); return db.put('kv', 'library', { likes: [...lib.likes], playlists: lib.playlists, history: lib.history, listens: lib.listens, wave: waveFx }); };
-const saveLib = () => { clearTimeout(libTimer); cloud?.schedule(); libTimer = setTimeout(writeLib, 300); };
+const saveLib = () => { clearTimeout(libTimer); cloud?.schedule(); libTimer = setTimeout(writeLib, 300); clearTimeout(bakTimer); bakTimer = setTimeout(() => backupLib(), 30 * 60000); };
+let bakTimer = 0, bakHash = '';
+async function backupLib(why = '') {
+  if (!libReady || !tgCfg?.chatId || !tgCfg?.session || (!lib.likes.size && !lib.playlists.length)) return;
+  const name = id => { const t = tracks.get(id); return t ? { id, artist: t.artist, title: t.title } : { id }; };
+  const doc = { app: 'mix', kind: 'backup', at: new Date().toISOString(), why, likes: [...lib.likes].map(name), playlists: lib.playlists.map(p => ({ name: p.name, tracks: p.ids.map(name) })) };
+  const h = JSON.stringify([doc.likes.map(x => x.id), doc.playlists.map(p => [p.name, p.tracks.map(x => x.id)])]);
+  if (h === bakHash && !why) return;
+  try { const tg = await tgLib(); await tg.sendJson(await tg.peer(tgCfg.chatId), JSON.stringify(doc, null, 1), `mix-backup-${doc.at.slice(0, 10)}.json`); bakHash = h; }
+  catch (e) { console.warn('backup', e); }
+}
 const saveSettings = () => { cloud?.schedule(); return db.put('kv', 'settings', settings); };
 const saveTg = () => db.put('kv', 'tg', tgCfg);
 
@@ -1576,10 +1586,15 @@ async function copyName(s) {
 
 // ---------- синхронизация между устройствами (через «Избранное» в Telegram) ----------
 const waveForSync = () => ({ ...waveFx, ['listens:' + deviceId]: lib.listens.slice(-500) });
+let libReady = false; // пока библиотека не прочитана с диска, синхронизации нечего отдавать — иначе пустота выглядит как удаление
 function getLocal() {
+  if (!libReady) return {};
   return { likes: [...lib.likes], playlists: lib.playlists, history: lib.history, tracks: Object.fromEntries(tracks), settings, wave: waveForSync() };
 }
 function applyMerged(p, ch) {
+  const lost = (before, after) => before >= 5 && after < before * .3; // пропало больше 70% — это сбой, а не решение пользователя
+  if (ch.likes && lost(lib.likes.size, p.likes.length)) { ch = { ...ch, likes: false }; backupLib('перед подозрительной синхронизацией'); toast('Синхронизация хотела стереть «Любимое» — оставил как было'); }
+  if (ch.playlists && lost(lib.playlists.length, p.playlists.length)) { ch = { ...ch, playlists: false }; backupLib('перед подозрительной синхронизацией'); }
   if (ch.likes) lib.likes = new Set(p.likes);
   if (ch.playlists) { lib.playlists = p.playlists; if (view.startsWith('pl') && !lib.playlists.some(x => x.id === view)) view = 'all'; }
   if (ch.history) lib.history = p.history;
@@ -1607,6 +1622,7 @@ function applyMerged(p, ch) {
 let cloudStatus = null;
 async function initCloud() {
   if (cloud || !tgCfg?.session) return;
+  while (!libReady) await new Promise(r => setTimeout(r, 300));
   const [{ createSync }, tg] = await Promise.all([import('./sync.js'), tgLib()]);
   cloud ??= createSync({ tg, getLocal, applyMerged, debounceMs: 30000, maxWaitMs: 180000, store: { get: () => db.get('kv', 'sync'), set: v => db.put('kv', 'sync', v) }, onStatus: s => { if (s.state === 'idle') s.at = Date.now(); else if (cloudStatus?.at) s.at = cloudStatus.at; cloudStatus = s; updateUsage(); } });
   cloud.push();
@@ -3312,6 +3328,7 @@ async function boot() {
     setLang(settings.lang);
     const l = await db.get('kv', 'library');
     if (l) { lib.likes = new Set(l.likes); lib.playlists = l.playlists || []; lib.history = l.history || []; lib.listens = l.listens || []; waveFx = l.wave || {}; }
+    libReady = true;
     waveSeen = await db.get('kv', 'waveSeen') || [];
     userQueue = (await db.get('kv', 'userQueue') || []).filter(id => tracks.has(id) || String(id).startsWith('tg:') || String(id).startsWith('f:'));
     deviceId = await db.get('kv', 'deviceId') || Math.random().toString(36).slice(2, 10);

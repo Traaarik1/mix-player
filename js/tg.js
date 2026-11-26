@@ -100,6 +100,10 @@ export async function sendAudio(entity, { blob, fileName, mime, title, performer
   return msg.id;
 }
 
+// резервная копия библиотеки — обычным файлом в канал
+export async function sendJson(entity, text, fileName) {
+  await client.sendFile(entity, { file: new File([text], fileName, { type: 'application/json' }), forceDocument: true, workers: 1, caption: 'Mix: резервная копия «Любимого» и плейлистов' });
+}
 export async function editAudio(entity, msgId, { blob, fileName, mime, title, performer, duration, thumb }) {
   const { Api } = await lib();
   // Сначала убеждаемся, что под этим номером лежит именно аудио: чужой или текстовый пост не трогаем
