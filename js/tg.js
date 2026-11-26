@@ -203,3 +203,26 @@ export async function deleteSyncDocs(msgIds, { name = SYNC_NAME } = {}) {
   if (ids.length) await client.deleteMessages(SELF, ids, { revoke: true });
   return ids.length;
 }
+
+// ---------- файл библиотеки в канале с музыкой: одно закреплённое сообщение, которое правится на месте ----------
+export async function findChannelDoc(entity, name, hintId = null) {
+  if (hintId) { const [m] = await client.getMessages(entity, { ids: [hintId] }); if (isSyncMsg(m, name)) return syncItem(m); }
+  for await (const m of client.iterMessages(entity, { search: name, limit: 10 })) if (isSyncMsg(m, name)) return syncItem(m);
+  return null;
+}
+export async function putChannelDoc(entity, text, name, msgId = null) {
+  const { Api } = await lib();
+  const file = () => new File([text], name, { type: SYNC_MIME });
+  if (msgId) {
+    try {
+      const handle = await client.uploadFile({ file: file(), workers: 1 });
+      await client.invoke(new Api.messages.EditMessage({ peer: await client.getInputEntity(entity), id: msgId,
+        message: 'Mix: «Любимое» и плейлисты. Не удаляй — приложение берёт их отсюда.',
+        media: new Api.InputMediaUploadedDocument({ file: handle, mimeType: SYNC_MIME, forceFile: true, attributes: [new Api.DocumentAttributeFilename({ fileName: name })] }) }));
+      return msgId;
+    } catch (e) { if (e.errorMessage === 'MESSAGE_NOT_MODIFIED') return msgId; if (!e.errorMessage || e.seconds) throw e; }
+  }
+  const sent = await client.sendFile(entity, { file: file(), forceDocument: true, workers: 1, caption: 'Mix: «Любимое» и плейлисты. Не удаляй — приложение берёт их отсюда.' });
+  try { await client.pinMessage(entity, sent.id, { notify: false }); } catch {}
+  return sent.id;
+}

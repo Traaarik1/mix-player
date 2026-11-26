@@ -43,16 +43,53 @@ let cloud = null;           // синхронизация через Telegram, �
 const saveTrack = t => { if (t.source === 'preview') return Promise.resolve(); const { dlp, ...rest } = t; cloud?.schedule(); return db.put('tracks', t.id, rest); };
 let libTimer;
 const writeLib = () => { clearTimeout(libTimer); return db.put('kv', 'library', { likes: [...lib.likes], playlists: lib.playlists, history: lib.history, listens: lib.listens, wave: waveFx }); };
-const saveLib = () => { clearTimeout(libTimer); cloud?.schedule(); libTimer = setTimeout(writeLib, 300); clearTimeout(bakTimer); bakTimer = setTimeout(() => backupLib(), 30 * 60000); };
-let bakTimer = 0, bakHash = '';
-async function backupLib(why = '') {
-  if (!libReady || !tgCfg?.chatId || !tgCfg?.session || (!lib.likes.size && !lib.playlists.length)) return;
-  const name = id => { const t = tracks.get(id); return t ? { id, artist: t.artist, title: t.title } : { id }; };
-  const doc = { app: 'mix', kind: 'backup', at: new Date().toISOString(), why, likes: [...lib.likes].map(name), playlists: lib.playlists.map(p => ({ name: p.name, tracks: p.ids.map(name) })) };
-  const h = JSON.stringify([doc.likes.map(x => x.id), doc.playlists.map(p => [p.name, p.tracks.map(x => x.id)])]);
-  if (h === bakHash && !why) return;
-  try { const tg = await tgLib(); await tg.sendJson(await tg.peer(tgCfg.chatId), JSON.stringify(doc, null, 1), `mix-backup-${doc.at.slice(0, 10)}.json`); bakHash = h; }
-  catch (e) { console.warn('backup', e); }
+const saveLib = () => { clearTimeout(libTimer); cloud?.schedule(); libTimer = setTimeout(writeLib, 300); libChanged(); };
+
+// ---------- «Любимое» и плейлисты живут в файле mix-library.json в канале с музыкой ----------
+// Код трека — номер сообщения с ним в канале (у треков не из канала — полный id). Рядом записано «Исполнитель — Название».
+// При запуске файл главнее: берём его, если он новее последней правки на этом устройстве. Правка здесь → файл обновляется через 15 с.
+const LIB_FILE = 'mix-library.json';
+let libEditAt = 0, libHash = '', libPushT = 0, libFileBusy = false;
+const libSnap = () => JSON.stringify([[...lib.likes].sort(), lib.playlists.map(p => [p.id, p.name, p.ids])]);
+function libChanged() {
+  if (!libReady) return;
+  const h = libSnap(); if (h === libHash) return;
+  libHash = h; libEditAt = Date.now(); db.put('kv', 'libEditAt', libEditAt);
+  clearTimeout(libPushT); libPushT = setTimeout(pushLibFile, 15000);
+}
+const codeOf = id => { const m = String(id).match(/^tg:(-?\d+):m(\d+)$/); return m && m[1] === String(tgCfg?.chatId) ? +m[2] : String(id); };
+const idOf = c => typeof c === 'number' ? `tg:${tgCfg.chatId}:m${c}` : c;
+function libDoc() {
+  const names = {}, code = id => { const c = codeOf(id), t = tracks.get(id); if (t) names[c] = `${t.artist || '?'} — ${t.title || '?'}`; return c; };
+  const likes = [...lib.likes].map(code), playlists = lib.playlists.map(p => ({ id: p.id, name: p.name, tracks: p.ids.map(code) }));
+  return { app: 'mix-library', v: 1, updated: new Date(libEditAt || Date.now()).toISOString(), about: 'Код трека — номер сообщения с ним в этом канале', likes, playlists, names };
+}
+async function libEntity() { const tg = await ensureTg(); return [tg, await tg.peer(tgCfg.chatId)]; }
+async function pushLibFile() {
+  if (!libReady || !tgCfg?.chatId || !tgCfg?.session || libFileBusy) return;
+  libFileBusy = true;
+  try { const [tg, ent] = await libEntity(); const id = await tg.putChannelDoc(ent, JSON.stringify(libDoc(), null, 1), LIB_FILE, tgCfg.libMsgId);
+    if (id !== tgCfg.libMsgId) { tgCfg.libMsgId = id; db.put('kv', 'tg', tgCfg); } }
+  catch (e) { console.warn('lib file', e); clearTimeout(libPushT); libPushT = setTimeout(pushLibFile, 120000); }
+  finally { libFileBusy = false; }
+}
+async function pullLibFile() {
+  if (!libReady || !tgCfg?.chatId || !tgCfg?.session) return;
+  try {
+    const [tg, ent] = await libEntity(), item = await tg.findChannelDoc(ent, LIB_FILE, tgCfg.libMsgId);
+    if (!item) { if (lib.likes.size || lib.playlists.length) pushLibFile(); return; }
+    if (item.msgId !== tgCfg.libMsgId) { tgCfg.libMsgId = item.msgId; db.put('kv', 'tg', tgCfg); }
+    const doc = JSON.parse(await tg.downloadSyncDoc(item));
+    if (doc?.app !== 'mix-library') return;
+    const at = Date.parse(doc.updated) || 0;
+    if (libEditAt > at) { pushLibFile(); return; } // здесь правили позже — отправляем своё
+    const likes = new Set((doc.likes || []).map(idOf)), pls = (doc.playlists || []).map(p => ({ id: p.id || 'pl' + Math.random().toString(36).slice(2, 8), name: p.name, ids: (p.tracks || []).map(idOf) }));
+    const fresh = !libEditAt;
+    if (fresh) { for (const id of lib.likes) likes.add(id); for (const p of lib.playlists) if (!pls.some(q => q.id === p.id)) pls.push(p); } // первый запуск: ничего своего не теряем
+    lib.likes = likes; lib.playlists = pls; libHash = libSnap(); libEditAt = at; db.put('kv', 'libEditAt', at);
+    await writeLib(); rebuildOrder?.(); render(); renderNav(); paintLike();
+    if (fresh && (likes.size !== (doc.likes || []).length || pls.length !== (doc.playlists || []).length)) pushLibFile(); // дописали своё — обновим файл
+  } catch (e) { console.warn('lib file', e); }
 }
 const saveSettings = () => { cloud?.schedule(); return db.put('kv', 'settings', settings); };
 const saveTg = () => db.put('kv', 'tg', tgCfg);
@@ -1589,12 +1626,10 @@ const waveForSync = () => ({ ...waveFx, ['listens:' + deviceId]: lib.listens.sli
 let libReady = false; // пока библиотека не прочитана с диска, синхронизации нечего отдавать — иначе пустота выглядит как удаление
 function getLocal() {
   if (!libReady) return {};
-  return { likes: [...lib.likes], playlists: lib.playlists, history: lib.history, tracks: Object.fromEntries(tracks), settings, wave: waveForSync() };
+  return { history: lib.history, tracks: Object.fromEntries(tracks), settings, wave: waveForSync() };
 }
 function applyMerged(p, ch) {
-  const lost = (before, after) => before >= 5 && after < before * .3; // пропало больше 70% — это сбой, а не решение пользователя
-  if (ch.likes && lost(lib.likes.size, p.likes.length)) { ch = { ...ch, likes: false }; backupLib('перед подозрительной синхронизацией'); toast('Синхронизация хотела стереть «Любимое» — оставил как было'); }
-  if (ch.playlists && lost(lib.playlists.length, p.playlists.length)) { ch = { ...ch, playlists: false }; backupLib('перед подозрительной синхронизацией'); }
+  ch = { ...ch, likes: false, playlists: false };
   if (ch.likes) lib.likes = new Set(p.likes);
   if (ch.playlists) { lib.playlists = p.playlists; if (view.startsWith('pl') && !lib.playlists.some(x => x.id === view)) view = 'all'; }
   if (ch.history) lib.history = p.history;
@@ -3328,7 +3363,8 @@ async function boot() {
     setLang(settings.lang);
     const l = await db.get('kv', 'library');
     if (l) { lib.likes = new Set(l.likes); lib.playlists = l.playlists || []; lib.history = l.history || []; lib.listens = l.listens || []; waveFx = l.wave || {}; }
-    libReady = true;
+    libReady = true; libHash = libSnap(); libEditAt = await db.get('kv', 'libEditAt') || 0;
+    setTimeout(pullLibFile, 3000);
     waveSeen = await db.get('kv', 'waveSeen') || [];
     userQueue = (await db.get('kv', 'userQueue') || []).filter(id => tracks.has(id) || String(id).startsWith('tg:') || String(id).startsWith('f:'));
     deviceId = await db.get('kv', 'deviceId') || Math.random().toString(36).slice(2, 10);
@@ -3529,3 +3565,5 @@ void main(){
 
 // Текст песни — к кнопкам «В любимое / Добавить», чтобы play стоял ровно по центру ряда
 { const ly = $('.full .btns [data-act=lyrics]'), row = $('.full .fadd'); if (ly && row) row.append(ly); }
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden && libReady) pullLibFile(); });
