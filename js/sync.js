@@ -13,7 +13,7 @@ const SETTINGS = {
   cf: v => isNum(v) && v >= 0 && v <= 12, trim: isBool, norm: isBool, lite: isBool, speed: v => isNum(v) && v >= .5 && v <= 2, lang: v => v === 'ru' || v === 'en', refId: v => typeof v === 'string' && /^[a-z0-9]{4,16}$/.test(v), collabs: v => Array.isArray(v) && v.length < 50 && v.every(c => c && typeof c.id === 'string' && typeof c.title === 'string'), musicBot: v => typeof v === 'string' && /^\w{0,64}$/.test(v), skipFade: isBool, eqPreset: v => typeof v === 'string' && v.length < 100,
   eq: v => Array.isArray(v) && v.length <= 32 && v.every(x => isNum(x) && Math.abs(x) <= 40),
 };
-const TRACK_FIELDS = ['title', 'artist', 'album', 'verified', 'conf'];
+const TRACK_FIELDS = ['title', 'artist', 'album', 'verified', 'conf', 'fixedBy'];
 // Ключи не уходят в документ, даже если случайно окажутся в «непрозрачных» данных волны
 const SECRET = new Set(['apiid', 'apihash', 'session', 'acoustkey', 'auddtoken', 'token', 'api_token', 'password', 'phone', 'secret']);
 function scrub(v) {

@@ -50,7 +50,7 @@ const saveLib = () => { clearTimeout(libTimer); cloud?.schedule(); libTimer = se
 // При запуске файл главнее: берём его, если он новее последней правки на этом устройстве. Правка здесь → файл обновляется через 15 с.
 const LIB_FILE = 'mix-library.json';
 let libEditAt = 0, libHash = '', libPushT = 0, libFileBusy = false;
-const libSnap = () => JSON.stringify([[...lib.likes].sort(), lib.playlists.map(p => [p.id, p.name, p.ids])]);
+const libSnap = () => JSON.stringify([[...lib.likes].sort(), lib.playlists.map(p => [p.id, p.name, p.ids]), [...tracks.values()].filter(t => t.fixedBy === 'manual').map(t => [t.id, t.artist, t.title])]);
 function libChanged() {
   if (!libReady) return;
   const h = libSnap(); if (h === libHash) return;
@@ -62,7 +62,8 @@ const idOf = c => typeof c === 'number' ? `tg:${tgCfg.chatId}:m${c}` : c;
 function libDoc() {
   const names = {}, code = id => { const c = codeOf(id), t = tracks.get(id); if (t) names[c] = `${t.artist || '?'} — ${t.title || '?'}`; return c; };
   const likes = [...lib.likes].map(code), playlists = lib.playlists.map(p => ({ id: p.id, name: p.name, tracks: p.ids.map(code) }));
-  return { app: 'mix-library', v: 1, updated: new Date(libEditAt || Date.now()).toISOString(), about: 'Код трека — номер сообщения с ним в этом канале', likes, playlists, names };
+  const renamed = {}; for (const t of tracks.values()) if (t.fixedBy === 'manual') renamed[codeOf(t.id)] = { artist: t.artist, title: t.title };
+  return { app: 'mix-library', v: 1, updated: new Date(libEditAt || Date.now()).toISOString(), about: 'Код трека — номер сообщения с ним в этом канале. renamed — названия, исправленные вручную', likes, playlists, renamed, names };
 }
 async function libEntity() { const tg = await ensureTg(); return [tg, await tg.peer(tgCfg.chatId)]; }
 async function pushLibFile() {
@@ -86,6 +87,7 @@ async function pullLibFile() {
     const likes = new Set((doc.likes || []).map(idOf)), pls = (doc.playlists || []).map(p => ({ id: p.id || 'pl' + Math.random().toString(36).slice(2, 8), name: p.name, ids: (p.tracks || []).map(idOf) }));
     const fresh = !libEditAt;
     if (fresh) { for (const id of lib.likes) likes.add(id); for (const p of lib.playlists) if (!pls.some(q => q.id === p.id)) pls.push(p); } // первый запуск: ничего своего не теряем
+    for (const [c, n] of Object.entries(doc.renamed || {})) { const t = tracks.get(idOf(/^\d+$/.test(c) ? +c : c)); if (t && n?.title && (t.title !== n.title || t.artist !== n.artist || t.fixedBy !== 'manual')) { Object.assign(t, { title: n.title, artist: n.artist || '', fixedBy: 'manual', conf: true, verified: true, ident: { status: 'kept' } }); saveTrack(t); } }
     lib.likes = likes; lib.playlists = pls; libHash = libSnap(); libEditAt = at; db.put('kv', 'libEditAt', at);
     await writeLib(); rebuildOrder?.(); render(); renderNav(); paintLike();
     if (fresh && (likes.size !== (doc.likes || []).length || pls.length !== (doc.playlists || []).length)) pushLibFile(); // дописали своё — обновим файл
@@ -1646,7 +1648,8 @@ function applyMerged(p, ch) {
   for (const id of ch.tracks || []) {
     const t = tracks.get(id), m = p.tracks[id];
     if (!t || !m || !m.conf) continue;
-    Object.assign(t, { conf: true, title: m.title, artist: m.artist, album: m.album, verified: m.verified }, m.verified ? { ident: { status: 'done' } } : {});
+    if (t.fixedBy === 'manual' && m.fixedBy !== 'manual') continue;
+    Object.assign(t, { conf: true, title: m.title, artist: m.artist, album: m.album, verified: m.verified }, m.verified ? { ident: { status: 'done' } } : {}, m.fixedBy === 'manual' ? { fixedBy: 'manual', ident: { status: 'kept' } } : {});
     saveTrack(t);
     if (id === curId) { paintNow(); mediaMeta(t); }
   }
@@ -2358,6 +2361,7 @@ function renderFix() {
 }
 
 async function acceptFix(t, c) {
+  if (t.fixedBy === 'manual' && c.source !== 'manual') return; // переименовал сам — Mix это больше не трогает
   const renamed = t.title !== c.title || t.artist !== c.artist;
   if (renamed && !t.orig) t.orig = { title: t.title, artist: t.artist }; // чтобы можно было вернуть
   if (c.source === 'sound' || c.source === 'manual') t.conf = true; else delete t.conf;
@@ -2413,7 +2417,7 @@ function openFind(t) {
   $('#fm', d).onsubmit = async e => {
     e.preventDefault(); stopPreview(); closeLayer();
     await acceptFix(t, { title: e.target.t.value.trim(), artist: e.target.a.value.trim(), album: '', art: null, source: 'manual', score: 1 });
-    render(); toast('Сохранено');
+    libChanged(); render(); toast('Сохранено');
   };
   $('#fr', d).onclick = async e => {
     const pv = e.target.closest('[data-pv]'), pk = e.target.closest('[data-pick]');
@@ -2424,7 +2428,7 @@ function openFind(t) {
     } else if (pk) {
       stopPreview(); closeLayer();
       await acceptFix(t, { ...res[pk.dataset.pick], source: 'manual', score: 1 });
-      render(); toast('Сохранено');
+      libChanged(); render(); toast('Сохранено');
     }
   };
   new MutationObserver((_, o) => { if (!d.isConnected) { stopPreview(); o.disconnect(); } }).observe(layer, { childList: true });
@@ -2820,7 +2824,7 @@ async function startSync() {
         duration: it.duration, size: it.size, mime: it.mime, downloaded: false, addedAt: it.date * 1000 + (it.msgId % 1000) };
       // другое устройство уже могло исправить название этого трека
       const meta = cloud?.trackMeta(id);
-      if (meta?.conf) Object.assign(t, { conf: true, title: meta.title, artist: meta.artist, album: meta.album, verified: meta.verified }, meta.verified ? { ident: { status: 'done' } } : {});
+      if (meta?.conf) Object.assign(t, { conf: true, title: meta.title, artist: meta.artist, album: meta.album, verified: meta.verified }, meta.verified ? { ident: { status: 'done' } } : {}, meta.fixedBy === 'manual' ? { fixedBy: 'manual', ident: { status: 'kept' } } : {});
       tracks.set(id, t); await saveTrack(t);
       if (Date.now() - lastPaint > 4000) { lastPaint = Date.now(); rebuildOrder(); if (view === 'all') render(); renderTgCard(); }
     }
