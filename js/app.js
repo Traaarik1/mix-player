@@ -45,6 +45,8 @@ let libTimer;
 const writeLib = () => { clearTimeout(libTimer); return db.put('kv', 'library', { likes: [...lib.likes], playlists: lib.playlists, history: lib.history, listens: lib.listens, wave: waveFx }); };
 const saveLib = () => { clearTimeout(libTimer); cloud?.schedule(); libTimer = setTimeout(writeLib, 300); libChanged(); };
 
+const mixLog = () => { try { return JSON.parse(localStorage.getItem('mixLog') || '[]'); } catch { return []; } };
+const logText = () => { const a = mixLog(); return a.length ? 'Mix · ' + navigator.userAgent + '\n\n' + a.map(x => new Date(x.at).toLocaleString() + ' [' + x.k + (x.n > 1 ? ' x' + x.n : '') + '] ' + x.m).join('\n') : ''; };
 // ---------- «Любимое» и плейлисты живут в файле mix-library.json в канале с музыкой ----------
 // Код трека — номер сообщения с ним в канале (у треков не из канала — полный id). Рядом записано «Исполнитель — Название».
 // При запуске файл главнее: берём его, если он новее последней правки на этом устройстве. Правка здесь → файл обновляется через 15 с.
@@ -784,6 +786,8 @@ function renderSettings() {
     <div class="presets"><button class="chip${settings.bgTheme === 'lava' ? ' on' : ''}" data-act="bg:lava">Лава-лампа</button><button class="chip${settings.bgTheme !== 'lava' ? ' on' : ''}" data-act="bg:orbs">Шары</button></div>
     <div class="sechead"><div><b>Смена обложки</b></div></div>
     <div class="presets">${[['blur', 'Наплыв'], ['flip', 'Переворот'], ['wave', 'Волна'], ['pixels', 'Пиксели']].map(([k, n]) => `<button class="chip${(settings.coverFx || 'blur') === k ? ' on' : ''}" data-act="cfx:${k}">${n}</button>`).join('')}</div>
+    <div class="sechead"><div><b>Журнал ошибок</b><small>${(() => { const n = mixLog().length; return n ? 'Записей: ' + n + ', последняя ' + new Date(mixLog().at(-1).at).toLocaleString() : 'Пусто — всё работает'; })()}</small></div></div>
+    <div class="presets"><button class="chip" data-act="logShow">Показать</button><button class="chip" data-act="logCopy">Скопировать</button><button class="chip" data-act="logSend">Отправить себе в Telegram</button><button class="chip" data-act="logClear">Очистить</button></div>
     <div class="sechead"><div><b>Таймер сна</b></div></div>
     <div class="presets">${[15, 30, 60, 0].map(m => `<button class="chip" data-act="sleep:${m}">${m ? m + ' мин' : 'Выкл'}</button>`).join('')}</div>
     <div class="sechead"><div><b>Воспроизведение</b></div></div>
@@ -3090,6 +3094,13 @@ document.addEventListener('click', async e => {
   else if (a === 'about') window.open('about.html?lang=' + (document.documentElement.lang === 'en' ? 'en' : 'ru'), '_blank', 'noopener');
   else if (a === 'copyInvite') { try { await navigator.clipboard.writeText(guideUrl()); toast('Ссылка скопирована'); } catch { toast(guideUrl()); } }
   else if (a?.startsWith('cfx:')) { settings.coverFx = a.slice(4); await saveSettings(); render(); }
+  else if (a === 'logShow') modal(`<h2>Журнал ошибок</h2><pre class="logbox">${esc(logText() || 'Пусто')}</pre>`);
+  else if (a === 'logCopy') { try { await navigator.clipboard.writeText(logText()); toast('Скопировано'); } catch { toast('Не получилось скопировать'); } }
+  else if (a === 'logSend') {
+    if (!tgCfg?.session) toast('Сначала подключи Telegram');
+    else try { const tg = await ensureTg(); await tg.sendJson(await tg.peer('me'), logText(), `mix-log-${new Date().toISOString().slice(0, 10)}.txt`); toast('Отправлено в «Избранное»'); } catch (e) { toast('Не получилось: ' + (e.message || 'нет связи')); }
+  }
+  else if (a === 'logClear') { try { localStorage.removeItem('mixLog'); } catch {} render(); toast('Журнал очищен'); }
   else if (a?.startsWith('sleep:')) window.setSleep(+a.slice(6));
   else if (a?.startsWith('bg:')) { settings.bgTheme = a.slice(3); await saveSettings(); setBgTheme(); render(); }
   else if (a?.startsWith('lang:')) { settings.lang = a.slice(5); await saveSettings(); location.reload(); }

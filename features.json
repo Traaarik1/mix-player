@@ -1,5 +1,20 @@
 [
   {
+    "added": "2026-11-27",
+    "ru": "<b>Журнал ошибок</b> в Настройках: посмотреть, скопировать или отправить себе в Telegram, если что-то сломалось.",
+    "en": "<b>Error log</b> in Settings: view, copy or send it to yourself in Telegram if something breaks."
+  },
+  {
+    "added": "2026-11-26",
+    "ru": "<b>«Любимое», плейлисты и ручные названия</b> хранятся в файле в твоём канале — не пропадают и одинаковы на всех устройствах.",
+    "en": "<b>Likes, playlists and your manual track names</b> are kept in a file in your channel — they no longer get lost and match on every device."
+  },
+  {
+    "added": "2026-11-25",
+    "ru": "<b>Лава-лампа</b> в цветах обложки, смена обложек (наплыв, 3D-переворот, волна, пиксели), таймер сна, лайк двойным тапом, «+10 похожих» в очереди.",
+    "en": "<b>Lava lamp</b> in cover colours, cover transitions (fade, 3D flip, wave, pixels), sleep timer, double-tap to like, “+10 similar” in the queue."
+  },
+  {
     "added": "2026-11-24",
     "ru": "<b>Страница «О Mix»</b> — вопросы и ответы, конфиденциальность и условия. Меню разбито на группы «Слушать», «Библиотека», «Инструменты».",
     "en": "<b>“About Mix” page</b> — FAQ, privacy and terms. The menu is grouped into Listen, Library and Tools."
