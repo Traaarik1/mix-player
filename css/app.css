@@ -1561,3 +1561,6 @@ body:not(.hasglass) .full .fullbg .orbs span { mix-blend-mode: normal; width: 34
   -webkit-mask: radial-gradient(circle, #000 0%, #000 38%, rgb(0 0 0 / .5) 52%, transparent 68%); mask: radial-gradient(circle, #000 0%, #000 38%, rgb(0 0 0 / .5) 52%, transparent 68%);
   box-shadow: none; }
 body:not(.hasglass) .full .fullbg .orbs span:nth-child(n+4) { width: 18vmax !important; height: 18vmax !important; }
+.fyshelf > small { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.shelfall { font: inherit; font-size: 12px; color: var(--ink-soft); background: none; border: 0; padding: 2px 6px; border-radius: 8px; cursor: pointer; }
+.shelfall:hover { color: var(--paper); background: rgb(255 255 255 / .06); }

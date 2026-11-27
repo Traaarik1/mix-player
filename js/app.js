@@ -474,6 +474,9 @@ const SMART = {
   'smart:often': 'Часто слушаю',
   'smart:forgot': 'Давно не слушал',
   'smart:new': 'Новое в канале',
+  'smart:repeat': 'На повторе',
+  'smart:night': 'Ночное',
+  'smart:unheard': 'Ещё не слушал',
 };
 // Настроение — по темпу и громкости, жанры — самые частые в библиотеке
 const MOODS = { 'mood:calm': 'Спокойное', 'mood:energy': 'Энергичное' };
@@ -497,6 +500,12 @@ function smartIds(kind) {
   if (kind === 'smart:new') return order.filter(id => (tracks.get(id).addedAt || 0) > now - 14 * DAY && !tracks.get(id).previewOnly).sort((a, b) => tracks.get(b).addedAt - tracks.get(a).addedAt);
   if (kind === 'smart:month') return top(count(now - 30 * DAY)).slice(0, 50);
   if (kind === 'smart:often') return top(count()).filter(id => count().get(id) >= 3).slice(0, 50);
+  if (kind === 'smart:repeat') { const m = count(now - 7 * DAY); return top(m).filter(id => m.get(id) >= 3).slice(0, 30); }
+  if (kind === 'smart:night') { // что ты включаешь с 22:00 до 4:00
+    const m = new Map(); for (const l of lib.listens) { const h = new Date(l.at).getHours(); if ((h >= 22 || h < 4) && tracks.has(l.id) && l.played >= 30) m.set(l.id, (m.get(l.id) || 0) + 1); }
+    return top(m).slice(0, 50);
+  }
+  if (kind === 'smart:unheard') { const heard = new Set(lib.listens.map(l => l.id)); const a = order.filter(id => !heard.has(id) && !tracks.get(id).previewOnly); return shuffled(a).slice(0, 50); }
   if (kind === 'smart:forgot') {
     const all = count(), recent = count(now - 45 * DAY);
     return top(all).filter(id => all.get(id) >= 3 && !recent.has(id)).concat(order.filter(id => lib.likes.has(id) && !recent.has(id) && !all.has(id))).slice(0, 50);
@@ -1562,13 +1571,24 @@ function renderWave() {
 }
 function forYouHTML() {
   const rec = [...new Set(lib.history.map(h => h.id))].filter(id => tracks.has(id)).slice(0, 12);
-  if (!rec.length && !lib.playlists.length) return '';
   const tile = id => { const t = tracks.get(id); return `<button class="tile" data-play="${esc(id)}">${coverHTML(t)}<b>${esc(t.title)}</b><small>${esc(t.artist || 'Неизвестный артист')}</small></button>`; };
   const pls = lib.playlists.map(p => { const t = tracks.get(p.ids[0]); return `<button class="tile" data-view="${esc(p.id)}">${t ? coverHTML(t) : '<span class="cov"></span>'}<b>${esc(p.name)}</b><small>${tracksWord(p.ids.length)}</small></button>`; }).join('');
+  const shelves = smartShelves(tile);
+  if (!rec.length && !lib.playlists.length && !shelves) return '';
   return `<li class="sechead foryou"><div><b>Для тебя</b></div></li>`
     + (rec[0] ? `<li class="contcard" data-play="${esc(rec[0])}">${coverHTML(tracks.get(rec[0]))}<div><small>Продолжить</small><b>${esc(tracks.get(rec[0]).title)}</b><span>${esc(tracks.get(rec[0]).artist || '')}</span></div><svg><use href="#i-play"/></svg></li>` : '')
     + (rec.length > 1 ? `<li class="fyshelf"><small>Недавние</small><div class="shelf">${rec.slice(1).map(tile).join('')}</div></li>` : '')
-    + (pls ? `<li class="fyshelf"><small>Плейлисты</small><div class="shelf">${pls}</div></li>` : '');
+    + (pls ? `<li class="fyshelf"><small>Плейлисты</small><div class="shelf">${pls}</div></li>` : '')
+    + shelves;
+}
+// Умные полки: состав считается заново при каждом показе главной, «Ещё не слушал» перемешивается раз в сутки
+let shelfCache = { at: 0, html: '' };
+function smartShelves(tile) {
+  if (Date.now() - shelfCache.at < 60000 && shelfCache.html) return shelfCache.html;
+  const kinds = ['smart:repeat', 'smart:new', 'smart:month', 'smart:forgot', 'smart:night', 'smart:often', 'smart:unheard', 'mood:energy', 'mood:calm'];
+  const html = kinds.map(k => { const ids = smartIds(k).filter(id => tracks.has(id)); return ids.length >= 3
+    ? `<li class="fyshelf"><small>${esc(smartName(k))}<button class="shelfall" data-view="${k}">Все ${ids.length}</button></small><div class="shelf">${ids.slice(0, 12).map(tile).join('')}</div></li>` : ''; }).join('');
+  shelfCache = { at: Date.now(), html }; return html;
 }
 function paintOrb() {
   const o = $('.orb'); if (!o) return;

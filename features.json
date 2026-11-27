@@ -1,6 +1,11 @@
 [
   {
     "added": "2026-11-27",
+    "ru": "<b>Умные полки</b> на главной: «На повторе», «Новое в канале», «Любимое за месяц», «Давно не слушал», «Ночное», «Ещё не слушал» и другие.",
+    "en": "<b>Smart shelves</b> on the home page: On repeat, New in the channel, This month’s favourites, Forgotten, Night, Not heard yet and more."
+  },
+  {
+    "added": "2026-11-27",
     "ru": "<b>Журнал ошибок</b> в Настройках: посмотреть, скопировать или отправить себе в Telegram, если что-то сломалось.",
     "en": "<b>Error log</b> in Settings: view, copy or send it to yourself in Telegram if something breaks."
   },
